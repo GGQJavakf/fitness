@@ -1,0 +1,15 @@
+{
+  "miniprogramRoot": "miniprogram/dist/",
+  "projectname": "ai-fitness-miniprogram",
+  "description": "AI 健身助手微信小程序",
+  "appid": "touristappid",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": true,
+    "es6": false,
+    "enhance": false,
+    "compileHotReLoad": false,
+    "postcss": false,
+    "minified": false
+  }
+}
