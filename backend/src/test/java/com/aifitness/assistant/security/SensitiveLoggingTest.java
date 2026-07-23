@@ -7,6 +7,7 @@ import com.aifitness.assistant.FitnessAssistantApplication;
 import com.aifitness.assistant.common.api.RequestIdFilter;
 import com.aifitness.assistant.common.observability.SensitiveDataSanitizer;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,28 @@ class SensitiveLoggingTest {
         Map<String, Object> sanitized = SensitiveDataSanitizer.sanitize(diagnosticData);
 
         assertThat(sanitized).containsOnly(Map.entry("result", "failure"));
+    }
+
+    @Test
+    void retainsOnlyTheTrustedProfileRouteTemplate() {
+        assertThat(SensitiveDataSanitizer.sanitize(Map.of("route", "/api/v1/profile/{id}")))
+                .containsOnly(Map.entry("route", "/api/v1/profile/{id}"));
+    }
+
+    @Test
+    void dropsLiteralIdentifiersAndNonTemplateRouteValues() {
+        List<String> untrustedRoutes = List.of(
+                "/api/v1/profile/123456",
+                "13800138000",
+                "550e8400-e29b-41d4-a716-446655440000",
+                "39.9042,116.4074",
+                "/tmp/user-health-note",
+                "/" + "x".repeat(129));
+
+        for (String route : untrustedRoutes) {
+            assertThat(SensitiveDataSanitizer.sanitize(Map.of("route", route)))
+                    .doesNotContainKey("route");
+        }
     }
 
     @Test
