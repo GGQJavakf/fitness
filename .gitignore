@@ -1,0 +1,25 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+target/
+.taro/
+.swc/
+.learnings/
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+*.local
+.env
+.env.*
+!.env.example
+project.private.config.json
+application-local.yml
+
+# Logs and coverage
+*.log
+coverage/
