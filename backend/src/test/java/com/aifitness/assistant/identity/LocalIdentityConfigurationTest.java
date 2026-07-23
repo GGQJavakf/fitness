@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.identity.application.WechatLoginService;
 import com.aifitness.assistant.identity.infrastructure.LocalIdentityConfiguration;
+import com.aifitness.assistant.identity.infrastructure.LocalWechatIdentityProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -39,5 +40,16 @@ class LocalIdentityConfigurationTest {
                 .withPropertyValues(
                         "fitness.auth.local-substitute-enabled=false", "server.address=127.0.0.1")
                 .run(context -> assertThat(context).doesNotHaveBean(WechatLoginService.class));
+    }
+
+    @Test
+    void localProviderKeepsSameCodeStableAndDifferentCodesIsolatedWithoutExposingCodes() {
+        LocalWechatIdentityProvider provider = new LocalWechatIdentityProvider();
+
+        String first = provider.exchange("test-code-a").subject();
+        String repeated = provider.exchange("test-code-a").subject();
+        String second = provider.exchange("test-code-b").subject();
+
+        assertThat(first).isEqualTo(repeated).isNotEqualTo(second).doesNotContain("test-code-a");
     }
 }
