@@ -1,0 +1,88 @@
+CREATE TABLE workout_session (
+    id BINARY(16) NOT NULL,
+    user_id BINARY(16) NOT NULL,
+    plan_id BINARY(16) NOT NULL,
+    plan_version_id BINARY(16) NOT NULL,
+    training_day_id BINARY(16) NOT NULL,
+    client_session_key VARCHAR(128) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    started_at DATETIME(6) NOT NULL,
+    completed_at DATETIME(6) NULL,
+    sync_version BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_workout_session_user_key UNIQUE (user_id, client_session_key),
+    CONSTRAINT uq_workout_session_id_user UNIQUE (id, user_id),
+    CONSTRAINT uq_workout_session_id_version UNIQUE (id, plan_version_id),
+    KEY idx_workout_session_user_started (user_id, started_at DESC),
+    KEY idx_workout_session_user_status (user_id, status),
+    CONSTRAINT fk_workout_session_user FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_workout_session_plan_user FOREIGN KEY (plan_id, user_id) REFERENCES training_plan (id, user_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_workout_session_version_plan FOREIGN KEY (plan_version_id, plan_id) REFERENCES training_plan_version (id, plan_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_workout_session_day_version FOREIGN KEY (training_day_id, plan_version_id) REFERENCES training_day (id, plan_version_id) ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE workout_exercise_snapshot (
+    id BINARY(16) NOT NULL,
+    session_id BINARY(16) NOT NULL,
+    source_plan_exercise_id BINARY(16) NOT NULL,
+    exercise_order SMALLINT UNSIGNED NOT NULL,
+    exercise_snapshot_json JSON NOT NULL,
+    prescription_snapshot_json JSON NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_workout_snapshot_session_order UNIQUE (session_id, exercise_order),
+    KEY idx_workout_snapshot_source_plan_exercise (source_plan_exercise_id),
+    CONSTRAINT fk_workout_snapshot_session FOREIGN KEY (session_id) REFERENCES workout_session (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_workout_snapshot_plan_exercise FOREIGN KEY (source_plan_exercise_id) REFERENCES plan_exercise (id) ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE workout_set (
+    id BINARY(16) NOT NULL,
+    session_exercise_id BINARY(16) NOT NULL,
+    client_set_key VARCHAR(128) NOT NULL,
+    set_type VARCHAR(32) NOT NULL,
+    set_order SMALLINT UNSIGNED NOT NULL,
+    target_json JSON NOT NULL,
+    actual_weight DECIMAL(8,3) NULL,
+    unit VARCHAR(8) NOT NULL DEFAULT 'KG',
+    actual_reps SMALLINT UNSIGNED NULL,
+    remaining_reps SMALLINT UNSIGNED NULL,
+    completion_status VARCHAR(32) NOT NULL,
+    completed_at DATETIME(6) NULL,
+    server_revision BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    anomaly_status VARCHAR(32) NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_workout_set_client_key UNIQUE (session_exercise_id, client_set_key),
+    KEY idx_workout_set_session_exercise_order (session_exercise_id, set_order),
+    CONSTRAINT fk_workout_set_snapshot FOREIGN KEY (session_exercise_id) REFERENCES workout_exercise_snapshot (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_workout_set_unit CHECK (unit = 'KG'),
+    CONSTRAINT ck_workout_set_weight CHECK (actual_weight IS NULL OR actual_weight >= 0)
+) ENGINE = InnoDB;
+
+CREATE TABLE workout_set_revision (
+    id BINARY(16) NOT NULL,
+    workout_set_id BINARY(16) NOT NULL,
+    revision_no INT UNSIGNED NOT NULL,
+    before_json JSON NOT NULL,
+    after_json JSON NOT NULL,
+    reason VARCHAR(255) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_workout_set_revision_number UNIQUE (workout_set_id, revision_no),
+    CONSTRAINT fk_workout_set_revision_set FOREIGN KEY (workout_set_id) REFERENCES workout_set (id) ON DELETE RESTRICT
+) ENGINE = InnoDB;
+
+CREATE TABLE sync_conflict (
+    id BINARY(16) NOT NULL,
+    user_id BINARY(16) NOT NULL,
+    entity_type VARCHAR(64) NOT NULL,
+    entity_key VARCHAR(128) NOT NULL,
+    local_payload_json JSON NOT NULL,
+    server_payload_json JSON NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    resolved_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_sync_conflict_user_status_created (user_id, status, created_at),
+    CONSTRAINT fk_sync_conflict_user FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT
+) ENGINE = InnoDB;
