@@ -75,6 +75,15 @@ CREATE TABLE plan_field_lock (
 ) ENGINE = InnoDB;
 
 DELIMITER $$
+CREATE TRIGGER trg_training_plan_version_reject_presealed_insert
+BEFORE INSERT ON training_plan_version
+FOR EACH ROW
+BEGIN
+    IF NEW.sealed_at IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'training plan version must be created unsealed';
+    END IF;
+END$$
+
 CREATE TRIGGER trg_training_plan_version_seal_once
 BEFORE UPDATE ON training_plan_version
 FOR EACH ROW
@@ -114,9 +123,9 @@ FOR EACH ROW
 BEGIN
     IF NOT (NEW.active_version_id <=> OLD.active_version_id)
             AND NEW.active_version_id IS NOT NULL
-            AND NOT EXISTS (
+            AND EXISTS (
                 SELECT 1 FROM training_plan_version
-                WHERE id = NEW.active_version_id AND plan_id = NEW.id AND sealed_at IS NOT NULL
+                WHERE id = NEW.active_version_id AND plan_id = NEW.id AND sealed_at IS NULL
             ) THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'active training plan version must be sealed';
     END IF;

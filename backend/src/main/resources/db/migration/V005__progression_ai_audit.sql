@@ -86,4 +86,28 @@ BEGIN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'progression recommendation facts are immutable';
     END IF;
 END$$
+
+CREATE TRIGGER trg_progression_recommendation_applied_plan_must_be_sealed
+BEFORE UPDATE ON progression_recommendation
+FOR EACH ROW
+BEGIN
+    IF (NOT (NEW.applied_plan_id <=> OLD.applied_plan_id)
+            OR NOT (NEW.applied_plan_version_id <=> OLD.applied_plan_version_id))
+            AND NEW.applied_plan_id IS NOT NULL
+            AND EXISTS (
+                SELECT 1 FROM training_plan_version
+                WHERE id = NEW.applied_plan_version_id
+                    AND plan_id = NEW.applied_plan_id
+                    AND sealed_at IS NULL
+            ) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'applied progression plan version must be sealed';
+    END IF;
+END$$
+
+CREATE TRIGGER trg_progression_recommendation_history_immutable_delete
+BEFORE DELETE ON progression_recommendation
+FOR EACH ROW
+BEGIN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'progression recommendation history is immutable';
+END$$
 DELIMITER ;
