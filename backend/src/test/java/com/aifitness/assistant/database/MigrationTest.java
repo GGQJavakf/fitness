@@ -3,6 +3,7 @@ package com.aifitness.assistant.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
 import java.io.IOException;
@@ -77,6 +78,41 @@ class MigrationTest {
                         "jdbc:mysql://127.0.0.1:33306/mysql", "root", "secret-marker"))
                 .withMessage("External test database must be named fitness_m0")
                 .withMessageNotContaining("secret-marker");
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsUrlUserInfoQueryAndFragmentWithoutLeakingThem() {
+        List.of(
+                        "jdbc:mysql://secret-marker@127.0.0.1:33306/fitness_m0",
+                        "jdbc:mysql://127.0.0.1:33306/fitness_m0?secret-marker=true",
+                        "jdbc:mysql://127.0.0.1:33306/fitness_m0#secret-marker")
+                .forEach(jdbcUrl -> {
+                    Throwable failure = catchThrowable(() -> externalDataSource(
+                            jdbcUrl, "root", "secret-marker"));
+
+                    assertThat(failure)
+                            .isInstanceOf(IllegalArgumentException.class)
+                            .hasMessage("External MySQL JDBC URL must not include user-info, query, or fragment");
+                    assertThrowableChainDoesNotContain(failure, "secret-marker");
+                });
+    }
+
+    @Test
+    void externalMysqlConnectionFailuresDoNotExposeDriverDetails() throws SQLException {
+        DataSource failingDataSource = new MysqlDataSource() {
+            @Override
+            public Connection getConnection() throws SQLException {
+                throw new SQLException("secret-marker", "08001", 1045);
+            }
+        };
+
+        Throwable failure = catchThrowable(() -> validateExternalDatabase(failingDataSource));
+
+        assertThat(failure)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unable to validate external test database")
+                .hasNoCause();
+        assertThrowableChainDoesNotContain(failure, "secret-marker");
     }
 
     @Test
@@ -385,6 +421,10 @@ class MigrationTest {
         } catch (URISyntaxException exception) {
             throw new IllegalArgumentException("External MySQL JDBC URL is invalid", exception);
         }
+        if (uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
+            throw new IllegalArgumentException(
+                    "External MySQL JDBC URL must not include user-info, query, or fragment");
+        }
         if (!isLoopbackHost(uri.getHost())) {
             throw new IllegalArgumentException("External test database host must be loopback");
         }
@@ -446,14 +486,20 @@ class MigrationTest {
                     throw new IllegalArgumentException("External test database must be empty");
                 }
             }
-        } catch (SQLException exception) {
-            throw new IllegalArgumentException("Unable to validate external test database", exception);
+        } catch (SQLException ignored) {
+            throw new IllegalArgumentException("Unable to validate external test database");
         }
     }
 
     private static void validateMysql84Server(String productName, int majorVersion, int minorVersion) {
         if (!"MySQL".equalsIgnoreCase(productName) || majorVersion != 8 || minorVersion != 4) {
             throw new IllegalArgumentException("External test database server must be MySQL 8.4");
+        }
+    }
+
+    private static void assertThrowableChainDoesNotContain(Throwable throwable, String forbiddenText) {
+        for (Throwable current = throwable; current != null; current = current.getCause()) {
+            assertThat(current.getMessage()).doesNotContain(forbiddenText);
         }
     }
 
