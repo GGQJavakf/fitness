@@ -1,0 +1,134 @@
+components:
+  schemas:
+    WechatLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: 微信临时登录码，不得写入日志或持久化。
+    RefreshSessionRequest:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken:
+          type: string
+          minLength: 1
+    SessionData:
+      type: object
+      additionalProperties: false
+      required: [accessToken, expiresAt, refreshToken]
+      properties:
+        accessToken:
+          type: string
+        expiresAt:
+          $ref: './common.yaml#/components/schemas/UtcDateTime'
+        refreshToken:
+          type: string
+    ExperienceLevel:
+      type: string
+      enum: [BEGINNER, INTERMEDIATE, ADVANCED]
+    FitnessGoal:
+      type: string
+      enum: [STRENGTH, HYPERTROPHY, GENERAL_FITNESS]
+    TrainingLocation:
+      type: string
+      enum: [HOME, GYM, OTHER]
+    UserProfile:
+      type: object
+      additionalProperties: false
+      required: [experience, goal, weeklyFrequency, sessionMinutes, location, version]
+      properties:
+        experience:
+          $ref: '#/components/schemas/ExperienceLevel'
+        goal:
+          $ref: '#/components/schemas/FitnessGoal'
+        weeklyFrequency:
+          type: integer
+          minimum: 2
+          maximum: 6
+        sessionMinutes:
+          type: integer
+          enum: [30, 45, 60, 75, 90]
+        location:
+          $ref: '#/components/schemas/TrainingLocation'
+        version:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    UpdateProfileRequest:
+      allOf:
+        - $ref: '#/components/schemas/UserProfile'
+        - type: object
+          required: [expectedVersion]
+          properties:
+            expectedVersion:
+              $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    EquipmentItem:
+      type: object
+      additionalProperties: false
+      required: [equipmentType, minIncrement, availableLevels]
+      properties:
+        equipmentType:
+          type: string
+        minIncrement:
+          $ref: './common.yaml#/components/schemas/Weight'
+        availableLevels:
+          type: array
+          items:
+            $ref: './common.yaml#/components/schemas/Weight'
+    EquipmentProfile:
+      type: object
+      additionalProperties: false
+      required: [items, version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquipmentItem'
+        version:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    UpdateEquipmentRequest:
+      type: object
+      additionalProperties: false
+      required: [items, expectedVersion]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/EquipmentItem'
+        expectedVersion:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    ExercisePreference:
+      type: object
+      additionalProperties: false
+      required: [exerciseId, preferenceType]
+      properties:
+        exerciseId:
+          type: string
+        preferenceType:
+          type: string
+          enum: [PREFERRED, EXCLUDED]
+    PreferenceProfile:
+      type: object
+      additionalProperties: false
+      required: [items, version]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExercisePreference'
+        version:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    UpdatePreferencesRequest:
+      type: object
+      additionalProperties: false
+      required: [items, expectedVersion]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExercisePreference'
+        expectedVersion:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'

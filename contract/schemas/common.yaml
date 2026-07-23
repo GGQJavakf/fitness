@@ -1,0 +1,194 @@
+components:
+  schemas:
+    UtcDateTime:
+      type: string
+      format: date-time
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$'
+      example: '2026-07-23T10:30:00Z'
+    RequestId:
+      type: string
+      minLength: 10
+      maxLength: 64
+      pattern: '^[A-Za-z0-9_-]+$'
+    ExpectedVersion:
+      type: integer
+      format: int64
+      minimum: 0
+    WeightUnit:
+      type: string
+      enum: [KG]
+      description: P0 仅接受 KG；不得隐式换算或启用 LB。
+    Weight:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+          minimum: 0
+          multipleOf: 0.01
+        unit:
+          $ref: '#/components/schemas/WeightUnit'
+        equipmentProfileId:
+          type: string
+          minLength: 1
+    RuleReference:
+      type: object
+      additionalProperties: false
+      required: [ruleVersion, templateVersion, contentVersion]
+      properties:
+        ruleVersion:
+          type: string
+          minLength: 1
+        templateVersion:
+          type: string
+          minLength: 1
+        contentVersion:
+          type: string
+          minLength: 1
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [path, code]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+        parameters:
+          type: object
+          additionalProperties: true
+    ErrorCode:
+      type: string
+      enum:
+        - VALIDATION_FAILED
+        - AUTHENTICATION_REQUIRED
+        - ACCESS_DENIED
+        - RESOURCE_NOT_FOUND
+        - VERSION_CONFLICT
+        - IDEMPOTENCY_KEY_REUSED
+        - PLAN_VALIDATION_FAILED
+        - SESSION_ALREADY_TERMINAL
+        - SYNC_CONFLICT
+        - RATE_LIMITED
+        - INTERNAL_ERROR
+    ApiError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        message:
+          type: string
+        fieldErrors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+        details:
+          type: object
+          additionalProperties: true
+        retryable:
+          type: boolean
+    ResponseMeta:
+      type: object
+      additionalProperties: false
+      required: [requestId, serverTime]
+      properties:
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+        serverTime:
+          $ref: '#/components/schemas/UtcDateTime'
+    ErrorMeta:
+      type: object
+      additionalProperties: false
+      required: [requestId]
+      properties:
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+    ApiResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {}
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+    ApiErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error:
+          $ref: '#/components/schemas/ApiError'
+        meta:
+          $ref: '#/components/schemas/ErrorMeta'
+    GenericResource:
+      type: object
+      additionalProperties: false
+      required: [id, version]
+      properties:
+        id:
+          type: string
+        version:
+          $ref: '#/components/schemas/ExpectedVersion'
+    EmptyData:
+      type: object
+      additionalProperties: false
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 在已认证用户和操作类型范围内唯一；同键不同 payload 将被拒绝。
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+        pattern: '^[A-Za-z0-9._:-]+$'
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        maxLength: 256
+  responses:
+    Success:
+      description: 成功
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponse'
+    BadRequest:
+      description: 请求不合法
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    Unauthorized:
+      description: 未认证或会话失效
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    NotFound:
+      description: 资源不存在或不属于当前用户
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    VersionConflict:
+      description: expectedVersion 与当前资源版本不一致，错误码为 VERSION_CONFLICT。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
+    DefaultError:
+      description: 统一错误响应
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'

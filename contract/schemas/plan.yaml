@@ -1,0 +1,113 @@
+components:
+  schemas:
+    ValidationSeverity:
+      type: string
+      enum: [INFO, WARNING, ERROR]
+    AiExplanationStatus:
+      type: string
+      enum: [READY, PENDING, DEGRADED]
+    WeightStatus:
+      type: string
+      enum: [KNOWN, NEEDS_CALIBRATION, BODYWEIGHT]
+    LockStatus:
+      type: string
+      enum: [USER_LOCKED, RULE_LOCKED, UNLOCKED]
+    ValidationIssue:
+      type: object
+      additionalProperties: false
+      required: [severity, reasonCode, fieldPath]
+      properties:
+        severity:
+          $ref: '#/components/schemas/ValidationSeverity'
+        reasonCode:
+          type: string
+        fieldPath:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+    ExerciseCatalogItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, contentVersion]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        contentVersion: {type: string}
+    PlanTemplateSummary:
+      type: object
+      additionalProperties: false
+      required: [id, templateVersion, weeklyFrequency]
+      properties:
+        id: {type: string}
+        templateVersion: {type: string}
+        weeklyFrequency: {type: integer, minimum: 2, maximum: 6}
+    PlanDraft:
+      type: object
+      additionalProperties: false
+      required: [days, locks]
+      properties:
+        days:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        locks:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LockStatus'
+    PlanCandidateRequest:
+      type: object
+      additionalProperties: false
+      required: [profileVersion]
+      properties:
+        profileVersion:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
+        lockedFields:
+          type: object
+          additionalProperties: true
+    PlanCandidate:
+      type: object
+      additionalProperties: false
+      required: [candidateId, plan, validationIssues, ruleReference, lockedFieldOutcomes, explanationStatus, expiresAt]
+      properties:
+        candidateId: {type: string}
+        plan: {$ref: '#/components/schemas/PlanDraft'}
+        validationIssues:
+          type: array
+          items: {$ref: '#/components/schemas/ValidationIssue'}
+        ruleReference: {$ref: './common.yaml#/components/schemas/RuleReference'}
+        lockedFieldOutcomes:
+          type: object
+          additionalProperties: {$ref: '#/components/schemas/LockStatus'}
+        explanationStatus: {$ref: '#/components/schemas/AiExplanationStatus'}
+        expiresAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    ValidatePlanRequest:
+      type: object
+      additionalProperties: false
+      required: [plan, ruleReference]
+      properties:
+        plan: {$ref: '#/components/schemas/PlanDraft'}
+        ruleReference: {$ref: './common.yaml#/components/schemas/RuleReference'}
+    CreatePlanRequest:
+      type: object
+      additionalProperties: false
+      required: [candidateId]
+      properties:
+        candidateId: {type: string}
+    CreatePlanVersionRequest:
+      type: object
+      additionalProperties: false
+      required: [plan, expectedVersion]
+      properties:
+        plan: {$ref: '#/components/schemas/PlanDraft'}
+        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+    RebalancePlanRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion, lockedFields]
+      properties:
+        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        lockedFields:
+          type: object
+          additionalProperties: true

@@ -1,0 +1,40 @@
+components:
+  schemas:
+    ProgressionDecision:
+      type: string
+      enum: [INCREASE, KEEP, REDUCE, REVIEW]
+    RecommendationStatus:
+      type: string
+      enum: [PENDING, APPLIED, DISMISSED]
+    ApplyRecommendationRequest:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        acceptedWeight: {$ref: './common.yaml#/components/schemas/Weight'}
+    DismissRecommendationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reasonCode: {type: string}
+    AiPlanExplanationRequest:
+      type: object
+      additionalProperties: false
+      required: [candidateId]
+      properties:
+        candidateId: {type: string}
+    AiWorkoutSummaryRequest:
+      type: object
+      additionalProperties: false
+      required: [workoutSessionId]
+      properties:
+        workoutSessionId: {type: string}
+    CreateDeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [confirmation]
+      properties:
+        confirmation:
+          type: string
+          enum: [DELETE_MY_DATA]

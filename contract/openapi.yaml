@@ -1,0 +1,475 @@
+openapi: 3.1.0
+info:
+  title: AI 健身助手 P0 API
+  version: 1.0.0
+  description: >-
+    微信首发但渠道无关的业务契约。关键训练数字由版本化确定性规则产生，
+    AI 仅提供候选、排序和解释；用户归属始终由认证主体确定。
+servers:
+  - url: /
+    description: local/test relative base
+security:
+  - bearerAuth: []
+tags:
+  - {name: Auth}
+  - {name: Profile}
+  - {name: Content}
+  - {name: Plans}
+  - {name: Workouts}
+  - {name: Sync}
+  - {name: Progression}
+  - {name: AI}
+  - {name: Privacy}
+paths:
+  /api/v1/auth/wechat/login:
+    post:
+      tags: [Auth]
+      operationId: loginWithWechatCode
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/WechatLogin'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshSession
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/RefreshSession'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/profile:
+    get:
+      tags: [Profile]
+      operationId: getProfile
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        default: {$ref: '#/components/responses/DefaultError'}
+    put:
+      tags: [Profile]
+      operationId: updateProfile
+      requestBody: {$ref: '#/components/requestBodies/ProfileUpdate'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/profile/equipment:
+    get:
+      tags: [Profile]
+      operationId: getEquipmentProfile
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+    put:
+      tags: [Profile]
+      operationId: updateEquipmentProfile
+      requestBody: {$ref: '#/components/requestBodies/EquipmentUpdate'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/profile/preferences:
+    get:
+      tags: [Profile]
+      operationId: getExercisePreferences
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+    put:
+      tags: [Profile]
+      operationId: updateExercisePreferences
+      requestBody: {$ref: '#/components/requestBodies/PreferencesUpdate'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/exercises:
+    get:
+      tags: [Content]
+      operationId: listExercises
+      parameters:
+        - {name: equipmentType, in: query, required: false, schema: {type: string}}
+        - {name: movementPattern, in: query, required: false, schema: {type: string}}
+        - {name: muscleGroup, in: query, required: false, schema: {type: string}}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/exercises/{id}:
+    get:
+      tags: [Content]
+      operationId: getExercise
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plan-templates:
+    get:
+      tags: [Content]
+      operationId: listPlanTemplates
+      parameters:
+        - {name: weeklyFrequency, in: query, required: false, schema: {type: integer, minimum: 2, maximum: 6}}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/candidates:
+    post:
+      tags: [Plans]
+      operationId: generatePlanCandidates
+      description: 规则引擎生成合法结构和全部关键数字；AI 解释允许为空、异步或降级。
+      requestBody: {$ref: '#/components/requestBodies/PlanCandidates'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/validate:
+    post:
+      tags: [Plans]
+      operationId: validatePlanDraft
+      requestBody: {$ref: '#/components/requestBodies/PlanValidation'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans:
+    post:
+      tags: [Plans]
+      operationId: createInitialPlan
+      requestBody: {$ref: '#/components/requestBodies/PlanCreation'}
+      responses:
+        '201': {$ref: '#/components/responses/Success'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/active:
+    get:
+      tags: [Plans]
+      operationId: getActivePlan
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/versions/{versionNo}:
+    get:
+      tags: [Plans]
+      operationId: getPlanVersion
+      parameters:
+        - {$ref: '#/components/parameters/PlanIdPath'}
+        - {$ref: '#/components/parameters/VersionNoPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/versions:
+    post:
+      tags: [Plans]
+      operationId: createPlanVersion
+      parameters:
+        - {$ref: '#/components/parameters/PlanIdPath'}
+      requestBody: {$ref: '#/components/requestBodies/PlanVersionCreation'}
+      responses:
+        '201': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/rebalance:
+    post:
+      tags: [Plans]
+      operationId: previewPlanRebalance
+      description: 只返回预览；USER_LOCKED 字段不得被静默覆盖。
+      parameters:
+        - {$ref: '#/components/parameters/PlanIdPath'}
+      requestBody: {$ref: '#/components/requestBodies/PlanRebalance'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workouts/today:
+    get:
+      tags: [Workouts]
+      operationId: getTodayWorkout
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions:
+    post:
+      tags: [Workouts]
+      operationId: startWorkoutSession
+      parameters:
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
+      requestBody: {$ref: '#/components/requestBodies/WorkoutSessionStart'}
+      responses:
+        '201': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+    get:
+      tags: [Workouts]
+      operationId: listWorkoutSessions
+      parameters:
+        - {$ref: './schemas/common.yaml#/components/parameters/Cursor'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}:
+    get:
+      tags: [Workouts]
+      operationId: getWorkoutSession
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}/status:
+    put:
+      tags: [Workouts]
+      operationId: updateWorkoutSessionStatus
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      requestBody: {$ref: '#/components/requestBodies/WorkoutStatusUpdate'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}/exercises/{exerciseId}:
+    put:
+      tags: [Workouts]
+      operationId: updateWorkoutSessionExercise
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - {$ref: '#/components/parameters/ExerciseIdPath'}
+      requestBody: {$ref: '#/components/requestBodies/WorkoutExerciseUpdate'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}/sets/{clientSetKey}:
+    put:
+      tags: [Workouts]
+      operationId: upsertWorkoutSet
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - {$ref: '#/components/parameters/ClientSetKeyPath'}
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
+      requestBody: {$ref: '#/components/requestBodies/SetUpsert'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+    delete:
+      tags: [Workouts]
+      operationId: deleteUnfinishedWorkoutSet
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - {$ref: '#/components/parameters/ClientSetKeyPath'}
+      requestBody: {$ref: '#/components/requestBodies/SetDeletion'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}/complete:
+    post:
+      tags: [Workouts]
+      operationId: completeWorkoutSession
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
+      requestBody: {$ref: '#/components/requestBodies/WorkoutCompletion'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/sync/workout-operations:
+    post:
+      tags: [Sync]
+      operationId: syncWorkoutOperations
+      description: 每项独立返回 APPLIED、DUPLICATE、CONFLICT 或 REJECTED。
+      requestBody: {$ref: '#/components/requestBodies/WorkoutOperationSync'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/sync/conflicts:
+    get:
+      tags: [Sync]
+      operationId: listSyncConflicts
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/sync/conflicts/{id}/resolve:
+    post:
+      tags: [Sync]
+      operationId: resolveSyncConflict
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      requestBody: {$ref: '#/components/requestBodies/SyncConflictResolution'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{id}/summary:
+    get:
+      tags: [Workouts]
+      operationId: getWorkoutSessionSummary
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/progress/exercises/{exerciseId}:
+    get:
+      tags: [Progression]
+      operationId: getExerciseProgress
+      parameters:
+        - {$ref: '#/components/parameters/ExerciseIdPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/progression-recommendations:
+    get:
+      tags: [Progression]
+      operationId: listProgressionRecommendations
+      parameters:
+        - {name: status, in: query, required: false, schema: {$ref: './schemas/progression.yaml#/components/schemas/RecommendationStatus'}}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/progression-recommendations/{id}/apply:
+    post:
+      tags: [Progression]
+      operationId: applyProgressionRecommendation
+      description: USER_LOCKED 重量只允许提示；应用前必须显式确认并创建新计划版本。
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
+      requestBody: {$ref: '#/components/requestBodies/RecommendationApply'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/progression-recommendations/{id}/dismiss:
+    post:
+      tags: [Progression]
+      operationId: dismissProgressionRecommendation
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      requestBody: {$ref: '#/components/requestBodies/RecommendationDismiss'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/ai/plan-explanations:
+    post:
+      tags: [AI]
+      operationId: requestPlanExplanation
+      description: 仅请求解释，不得改变规则生成的关键数字。
+      requestBody: {$ref: '#/components/requestBodies/AiPlanExplanation'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/ai/workout-summaries:
+    post:
+      tags: [AI]
+      operationId: requestWorkoutSummary
+      description: 仅请求解释性总结，规则结论保持权威。
+      requestBody: {$ref: '#/components/requestBodies/AiWorkoutSummary'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/export:
+    get:
+      tags: [Privacy]
+      operationId: getOrStartPrivacyExport
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/deletion-requests:
+    post:
+      tags: [Privacy]
+      operationId: createPrivacyDeletionRequest
+      requestBody: {$ref: '#/components/requestBodies/PrivacyDeletion'}
+      responses:
+        '201': {$ref: '#/components/responses/Success'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/deletion-requests/{id}:
+    get:
+      tags: [Privacy]
+      operationId: getPrivacyDeletionRequest
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      responses:
+        '200': {$ref: '#/components/responses/Success'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
+components:
+  schemas:
+    ApiResponse: {$ref: './schemas/common.yaml#/components/schemas/ApiResponse'}
+    ApiError: {$ref: './schemas/common.yaml#/components/schemas/ApiError'}
+    ApiErrorResponse: {$ref: './schemas/common.yaml#/components/schemas/ApiErrorResponse'}
+    FieldError: {$ref: './schemas/common.yaml#/components/schemas/FieldError'}
+    ResponseMeta: {$ref: './schemas/common.yaml#/components/schemas/ResponseMeta'}
+    ErrorMeta: {$ref: './schemas/common.yaml#/components/schemas/ErrorMeta'}
+    RequestId: {$ref: './schemas/common.yaml#/components/schemas/RequestId'}
+    UtcDateTime: {$ref: './schemas/common.yaml#/components/schemas/UtcDateTime'}
+    ExpectedVersion: {$ref: './schemas/common.yaml#/components/schemas/ExpectedVersion'}
+    ErrorCode: {$ref: './schemas/common.yaml#/components/schemas/ErrorCode'}
+    Weight: {$ref: './schemas/common.yaml#/components/schemas/Weight'}
+    WeightUnit: {$ref: './schemas/common.yaml#/components/schemas/WeightUnit'}
+    RuleReference: {$ref: './schemas/common.yaml#/components/schemas/RuleReference'}
+    ValidationSeverity: {$ref: './schemas/plan.yaml#/components/schemas/ValidationSeverity'}
+    AiExplanationStatus: {$ref: './schemas/plan.yaml#/components/schemas/AiExplanationStatus'}
+    WeightStatus: {$ref: './schemas/plan.yaml#/components/schemas/WeightStatus'}
+    LockStatus: {$ref: './schemas/plan.yaml#/components/schemas/LockStatus'}
+    SessionStatus: {$ref: './schemas/workout.yaml#/components/schemas/SessionStatus'}
+    SyncOperationStatus: {$ref: './schemas/workout.yaml#/components/schemas/SyncOperationStatus'}
+    ProgressionDecision: {$ref: './schemas/progression.yaml#/components/schemas/ProgressionDecision'}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+  parameters:
+    IdPath: {name: id, in: path, required: true, schema: {type: string}}
+    PlanIdPath: {name: planId, in: path, required: true, schema: {type: string}}
+    VersionNoPath: {name: versionNo, in: path, required: true, schema: {type: integer, minimum: 1}}
+    ExerciseIdPath: {name: exerciseId, in: path, required: true, schema: {type: string}}
+    ClientSetKeyPath: {name: clientSetKey, in: path, required: true, schema: {type: string, minLength: 8, maxLength: 128}}
+  requestBodies:
+    WechatLogin: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/WechatLoginRequest'}}}}
+    RefreshSession: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/RefreshSessionRequest'}}}}
+    ProfileUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/UpdateProfileRequest'}}}}
+    EquipmentUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/UpdateEquipmentRequest'}}}}
+    PreferencesUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/UpdatePreferencesRequest'}}}}
+    PlanCandidates: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanCandidateRequest'}}}}
+    PlanValidation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/ValidatePlanRequest'}}}}
+    PlanCreation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/CreatePlanRequest'}}}}
+    PlanVersionCreation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/CreatePlanVersionRequest'}}}}
+    PlanRebalance: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/RebalancePlanRequest'}}}}
+    WorkoutSessionStart: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/StartWorkoutSessionRequest'}}}}
+    WorkoutStatusUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/UpdateSessionStatusRequest'}}}}
+    WorkoutExerciseUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/UpdateSessionExerciseRequest'}}}}
+    SetUpsert: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/UpsertSetRequest'}}}}
+    SetDeletion: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/DeleteSetRequest'}}}}
+    WorkoutCompletion: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/CompleteSessionRequest'}}}}
+    WorkoutOperationSync: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncWorkoutOperationsRequest'}}}}
+    SyncConflictResolution: {required: true, content: {application/json: {schema: {$ref: './schemas/workout.yaml#/components/schemas/ResolveSyncConflictRequest'}}}}
+    RecommendationApply: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/ApplyRecommendationRequest'}}}}
+    RecommendationDismiss: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/DismissRecommendationRequest'}}}}
+    AiPlanExplanation: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/AiPlanExplanationRequest'}}}}
+    AiWorkoutSummary: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/AiWorkoutSummaryRequest'}}}}
+    PrivacyDeletion: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/CreateDeletionRequest'}}}}
+  responses:
+    Success: {$ref: './schemas/common.yaml#/components/responses/Success'}
+    BadRequest: {$ref: './schemas/common.yaml#/components/responses/BadRequest'}
+    Unauthorized: {$ref: './schemas/common.yaml#/components/responses/Unauthorized'}
+    NotFound: {$ref: './schemas/common.yaml#/components/responses/NotFound'}
+    VersionConflict: {$ref: './schemas/common.yaml#/components/responses/VersionConflict'}
+    DefaultError: {$ref: './schemas/common.yaml#/components/responses/DefaultError'}

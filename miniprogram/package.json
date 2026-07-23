@@ -6,6 +6,8 @@
   "scripts": {
     "build:weapp": "taro build --type weapp",
     "dev:weapp": "taro build --type weapp --watch",
+    "generate:api-types": "openapi-typescript ../contract/openapi.yaml -o src/infrastructure/api/schema.generated.ts",
+    "check:api-types": "openapi-typescript ../contract/openapi.yaml -o src/infrastructure/api/schema.generated.ts --check",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -32,6 +34,7 @@
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
     "babel-preset-taro": "4.2.1",
+    "openapi-typescript": "7.13.0",
     "react-refresh": "0.14.2",
     "sass": "1.101.6",
     "typescript": "5.7.2",
