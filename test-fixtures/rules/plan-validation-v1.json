@@ -1,0 +1,86 @@
+{
+  "metadata": {
+    "fixtureVersion": "1.0.0",
+    "ruleVersion": "1.0.0",
+    "oracleVersion": "M0-04-1",
+    "ruleSet": "PLAN_VALIDATION",
+    "generationConstraints": [
+      "P0 accepts KG only",
+      "Key numeric boundaries come from versioned rule configuration",
+      "Unknown initial weight requires calibration rather than demographic estimation"
+    ],
+    "digestSha256": "dd8238d307a446923fd9a80c7347d7b115ab0f9b46486f3568f42f3a550587aa"
+  },
+  "cases": [
+    {
+      "id": "PLAN_VALID_BASELINE",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "VALID", "reasonCodes": ["PLAN_WITHIN_CONFIGURED_LIMITS"], "application": "ACCEPTED"}
+    },
+    {
+      "id": "PLAN_UNKNOWN_WEIGHT",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION"},
+      "expected": {"outcome": "WARNING", "reasonCodes": ["INITIAL_WEIGHT_NEEDS_CALIBRATION"], "application": "CALIBRATION_REQUIRED"}
+    },
+    {
+      "id": "PLAN_NON_KG_REJECTED",
+      "input": {"unit": "LB", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["P0_UNIT_NOT_SUPPORTED"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_FREQUENCY_TOO_HIGH",
+      "input": {"unit": "KG", "sessionsPerWeek": 6, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["SESSION_FREQUENCY_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_TOO_MANY_EXERCISES",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 9, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["EXERCISE_COUNT_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_TOO_MANY_WORK_SETS",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 5, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["WORK_SETS_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_REP_RANGE_TOO_HIGH",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 16, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["REP_RANGE_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_REST_TOO_LONG",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 300, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["REST_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_FREQUENCY_TOO_LOW",
+      "input": {"unit": "KG", "sessionsPerWeek": 1, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["SESSION_FREQUENCY_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_EXERCISE_COUNT_ZERO",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 0, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["EXERCISE_COUNT_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_TOO_FEW_WORK_SETS",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 1, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["WORK_SETS_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_REP_RANGE_TOO_LOW",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 4, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["REP_RANGE_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_REP_RANGE_INVERTED",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 12, "repMax": 8, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["REP_RANGE_OUT_OF_RANGE"], "application": "REJECTED"}
+    },
+    {
+      "id": "PLAN_REST_TOO_SHORT",
+      "input": {"unit": "KG", "sessionsPerWeek": 3, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 30, "weightStatus": "KNOWN"},
+      "expected": {"outcome": "ERROR", "reasonCodes": ["REST_OUT_OF_RANGE"], "application": "REJECTED"}
+    }
+  ]
+}

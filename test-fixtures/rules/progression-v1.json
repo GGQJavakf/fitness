@@ -1,0 +1,112 @@
+{
+  "metadata": {
+    "fixtureVersion": "1.0.0",
+    "ruleVersion": "1.0.0",
+    "oracleVersion": "M0-04-1",
+    "ruleSet": "PROGRESSION",
+    "generationConstraints": [
+      "Safety and data-quality signals take precedence over performance",
+      "The deterministic oracle owns numeric decisions and reason codes",
+      "A user-locked weight is never silently overwritten"
+    ],
+    "digestSha256": "ca98841b7d8619cd8da756ba3fd7fc1339ae7426ef1fdb3c85d050f50201aa4a"
+  },
+  "inputDefaults": {
+    "unit": "KG",
+    "historySufficient": true,
+    "painOrSafetyFlag": false,
+    "anomalousInput": false,
+    "conflictingInput": false,
+    "longTrainingGap": false,
+    "variantChanged": false,
+    "bodyweightRequiresConfirmation": false,
+    "consecutiveBelowMin": 0,
+    "multipleFailedSets": false,
+    "allSetsAtMax": false,
+    "consecutiveAllAtMax": 0,
+    "oneSessionBelowMin": false,
+    "weightUserLocked": false
+  },
+  "cases": [
+    {
+      "id": "PROGRESSION_ALL_MAX_ACCEPTABLE_RIR",
+      "input": {"unit": "KG", "historySufficient": true, "allSetsAtMax": true, "consecutiveAllAtMax": 1, "rir": 2},
+      "expected": {"outcome": "INCREASE", "reasonCodes": ["ALL_SETS_AT_MAX_WITH_ACCEPTABLE_RIR"], "application": "RECOMMENDATION_PENDING"}
+    },
+    {
+      "id": "PROGRESSION_ALL_MAX_TWICE_NO_RIR",
+      "input": {"unit": "KG", "historySufficient": true, "allSetsAtMax": true, "consecutiveAllAtMax": 2},
+      "expected": {"outcome": "INCREASE", "reasonCodes": ["ALL_SETS_AT_MAX_TWICE_WITHOUT_RIR"], "application": "RECOMMENDATION_PENDING"}
+    },
+    {
+      "id": "PROGRESSION_ALL_MAX_ONCE_NO_RIR",
+      "input": {"unit": "KG", "historySufficient": true, "allSetsAtMax": true, "consecutiveAllAtMax": 1},
+      "expected": {"outcome": "KEEP", "reasonCodes": ["PARTIAL_AT_MAX"], "application": "NO_CHANGE"}
+    },
+    {
+      "id": "PROGRESSION_ALL_MAX_RIR_ZERO",
+      "input": {"unit": "KG", "historySufficient": true, "allSetsAtMax": true, "consecutiveAllAtMax": 1, "rir": 0},
+      "expected": {"outcome": "KEEP", "reasonCodes": ["RIR_ZERO_AT_MAX"], "application": "NO_CHANGE"}
+    },
+    {
+      "id": "PROGRESSION_ONE_SESSION_BELOW",
+      "input": {"unit": "KG", "historySufficient": true, "oneSessionBelowMin": true, "consecutiveBelowMin": 1},
+      "expected": {"outcome": "KEEP", "reasonCodes": ["WITHIN_TARGET_RANGE"], "application": "NO_CHANGE"}
+    },
+    {
+      "id": "PROGRESSION_TWICE_BELOW",
+      "input": {"unit": "KG", "historySufficient": true, "consecutiveBelowMin": 2},
+      "expected": {"outcome": "REDUCE", "reasonCodes": ["CONSECUTIVE_BELOW_MIN"], "application": "RECOMMENDATION_PENDING"}
+    },
+    {
+      "id": "PROGRESSION_MULTIPLE_FAILED_SETS",
+      "input": {"unit": "KG", "historySufficient": true, "multipleFailedSets": true},
+      "expected": {"outcome": "REDUCE", "reasonCodes": ["MULTIPLE_FAILED_SETS"], "application": "RECOMMENDATION_PENDING"}
+    },
+    {
+      "id": "PROGRESSION_PAIN_OVERRIDES_MAX",
+      "input": {"unit": "KG", "historySufficient": true, "painOrSafetyFlag": true, "allSetsAtMax": true, "consecutiveAllAtMax": 2, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["PAIN_OR_SAFETY_FLAG"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_ANOMALY_OVERRIDES_MAX",
+      "input": {"unit": "KG", "historySufficient": true, "anomalousInput": true, "allSetsAtMax": true, "consecutiveAllAtMax": 2, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["ANOMALOUS_INPUT"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_LOCKED_INCREASE",
+      "input": {"unit": "KG", "historySufficient": true, "weightUserLocked": true, "allSetsAtMax": true, "consecutiveAllAtMax": 1, "rir": 2},
+      "expected": {"outcome": "KEEP", "reasonCodes": ["WEIGHT_USER_LOCKED"], "application": "SUGGEST_ONLY"}
+    },
+    {
+      "id": "PROGRESSION_INSUFFICIENT_HISTORY",
+      "input": {"unit": "KG", "historySufficient": false, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["INSUFFICIENT_HISTORY"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_LONG_GAP",
+      "input": {"unit": "KG", "historySufficient": true, "longTrainingGap": true, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["LONG_TRAINING_GAP"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_VARIANT_CHANGED",
+      "input": {"unit": "KG", "historySufficient": true, "variantChanged": true, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["VARIANT_CHANGED"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_UNIT_CHANGED",
+      "input": {"unit": "LB", "historySufficient": true, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["UNIT_CHANGED"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_CONFLICT_OVERRIDES_MAX",
+      "input": {"unit": "KG", "historySufficient": true, "conflictingInput": true, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["CONFLICTING_INPUT"], "application": "REVIEW_REQUIRED"}
+    },
+    {
+      "id": "PROGRESSION_BODYWEIGHT_CONFIRMATION",
+      "input": {"unit": "KG", "historySufficient": true, "bodyweightRequiresConfirmation": true, "allSetsAtMax": true, "rir": 2},
+      "expected": {"outcome": "REVIEW", "reasonCodes": ["BODYWEIGHT_REQUIRES_CONFIRMATION"], "application": "REVIEW_REQUIRED"}
+    }
+  ]
+}
