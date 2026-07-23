@@ -1,0 +1,11 @@
+server:
+  address: 127.0.0.1
+
+fitness:
+  auth:
+    local-substitute-enabled: true
+
+spring:
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
