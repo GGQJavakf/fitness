@@ -54,7 +54,11 @@ paths:
       tags: [Profile]
       operationId: getProfile
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户档案
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/UserProfileResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         default: {$ref: '#/components/responses/DefaultError'}
     put:
@@ -62,7 +66,11 @@ paths:
       operationId: updateProfile
       requestBody: {$ref: '#/components/requestBodies/ProfileUpdate'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 更新后的当前用户档案
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/UserProfileResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/profile/equipment:
@@ -70,14 +78,22 @@ paths:
       tags: [Profile]
       operationId: getEquipmentProfile
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户器械档案
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/EquipmentProfileResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
     put:
       tags: [Profile]
       operationId: updateEquipmentProfile
       requestBody: {$ref: '#/components/requestBodies/EquipmentUpdate'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 更新后的当前用户器械档案
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/EquipmentProfileResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/profile/preferences:
@@ -85,14 +101,22 @@ paths:
       tags: [Profile]
       operationId: getExercisePreferences
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户动作偏好
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/PreferenceProfileResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
     put:
       tags: [Profile]
       operationId: updateExercisePreferences
       requestBody: {$ref: '#/components/requestBodies/PreferencesUpdate'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 更新后的当前用户动作偏好
+          content:
+            application/json:
+              schema: {$ref: './schemas/profile.yaml#/components/schemas/PreferenceProfileResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/exercises:

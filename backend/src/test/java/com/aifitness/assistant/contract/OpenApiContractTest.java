@@ -63,12 +63,14 @@ class OpenApiContractTest {
     private static Path contractRoot;
     private static Map<String, Object> openApi;
     private static Map<String, Object> commonSchemas;
+    private static Map<String, Object> profileSchemas;
 
     @BeforeAll
     static void loadContract() throws IOException {
         contractRoot = Path.of(System.getProperty("user.dir"), "..", "contract").normalize();
         openApi = loadYaml(contractRoot.resolve("openapi.yaml"));
         commonSchemas = map(loadYaml(contractRoot.resolve("schemas/common.yaml")).get("components"));
+        profileSchemas = map(loadYaml(contractRoot.resolve("schemas/profile.yaml")).get("components"));
     }
 
     @Test
@@ -135,6 +137,41 @@ class OpenApiContractTest {
         assertThat(Class.forName("com.aifitness.assistant.common.api.FieldError")).isNotNull();
         assertThat(Class.forName("com.aifitness.assistant.common.domain.Weight")).isNotNull();
         assertThat(Class.forName("com.aifitness.assistant.common.domain.RuleReference")).isNotNull();
+    }
+
+    @Test
+    void profileOperationsExposeTheirTypedSuccessEnvelopes() {
+        assertThat(successSchemaRef("/api/v1/profile", "get")).endsWith("/UserProfileResponse");
+        assertThat(successSchemaRef("/api/v1/profile", "put")).endsWith("/UserProfileResponse");
+        assertThat(successSchemaRef("/api/v1/profile/equipment", "get"))
+                .endsWith("/EquipmentProfileResponse");
+        assertThat(successSchemaRef("/api/v1/profile/equipment", "put"))
+                .endsWith("/EquipmentProfileResponse");
+        assertThat(successSchemaRef("/api/v1/profile/preferences", "get"))
+                .endsWith("/PreferenceProfileResponse");
+        assertThat(successSchemaRef("/api/v1/profile/preferences", "put"))
+                .endsWith("/PreferenceProfileResponse");
+    }
+
+    @Test
+    void equipmentUpdateInputDoesNotExposeServerManagedProfileId() {
+        Map<String, Object> schemas = map(profileSchemas.get("schemas"));
+        Map<String, Object> inputWeight = map(schemas.get("EquipmentWeightInput"));
+        assertThat(map(inputWeight.get("properties"))).containsOnlyKeys("value", "unit");
+        assertThat(required(schemas, "EquipmentWeightInput")).containsExactlyInAnyOrder("value", "unit");
+        assertThat(map(map(schemas.get("EquipmentItemRequest")).get("properties")))
+                .containsKeys("clientEquipmentKey", "minIncrement", "availableLevels");
+        Map<String, Object> requestItems = map(
+                map(map(schemas.get("UpdateEquipmentRequest")).get("properties")).get("items"));
+        assertThat(map(requestItems.get("items")))
+                .containsEntry("$ref", "#/components/schemas/EquipmentItemRequest");
+    }
+
+    private static String successSchemaRef(String path, String method) {
+        Map<String, Object> operation = map(map(map(openApi.get("paths")).get(path)).get(method));
+        Map<String, Object> response = map(map(operation.get("responses")).get("200"));
+        Map<String, Object> content = map(response.get("content"));
+        return (String) map(map(content.get("application/json")).get("schema")).get("$ref");
     }
 
     private static Map<String, Object> loadYaml(Path path) throws IOException {

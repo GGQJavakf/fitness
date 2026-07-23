@@ -682,22 +682,68 @@ export interface components {
             location: components["schemas"]["TrainingLocation"];
             version: components["schemas"]["ExpectedVersion"];
         };
-        UpdateProfileRequest: components["schemas"]["UserProfile"] & {
+        UserProfileResponse: {
+            data: components["schemas"]["UserProfile"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        UpdateProfileRequest: {
+            experience: components["schemas"]["ExperienceLevel"];
+            goal: components["schemas"]["FitnessGoal"];
+            weeklyFrequency: number;
+            /** @enum {integer} */
+            sessionMinutes: 30 | 45 | 60 | 75 | 90;
+            location: components["schemas"]["TrainingLocation"];
             expectedVersion: components["schemas"]["ExpectedVersion"];
         };
         EquipmentItem: {
+            /**
+             * Format: uuid
+             * @description 客户端离线稳定键；服务端内部 user_equipment.id 不对外开放。
+             */
+            clientEquipmentKey: string;
             equipmentType: string;
             minIncrement: components["schemas"]["Weight"];
             availableLevels: components["schemas"]["Weight"][];
         };
-        UpdateEquipmentRequest: {
+        EquipmentProfile: {
             items: components["schemas"]["EquipmentItem"][];
+            version: components["schemas"]["ExpectedVersion"];
+        };
+        EquipmentProfileResponse: {
+            data: components["schemas"]["EquipmentProfile"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        EquipmentWeightInput: {
+            value: number;
+            unit: components["schemas"]["WeightUnit"];
+        };
+        EquipmentItemRequest: {
+            /**
+             * Format: uuid
+             * @description 客户端离线稳定键；服务端内部 user_equipment.id 不对外开放。
+             */
+            clientEquipmentKey: string;
+            equipmentType: string;
+            minIncrement: components["schemas"]["EquipmentWeightInput"];
+            availableLevels: components["schemas"]["EquipmentWeightInput"][];
+        };
+        UpdateEquipmentRequest: {
+            items: components["schemas"]["EquipmentItemRequest"][];
             expectedVersion: components["schemas"]["ExpectedVersion"];
         };
         ExercisePreference: {
+            /** Format: uuid */
             exerciseId: string;
             /** @enum {string} */
             preferenceType: "PREFERRED" | "EXCLUDED";
+        };
+        PreferenceProfile: {
+            items: components["schemas"]["ExercisePreference"][];
+            version: components["schemas"]["ExpectedVersion"];
+        };
+        PreferenceProfileResponse: {
+            data: components["schemas"]["PreferenceProfile"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         UpdatePreferencesRequest: {
             items: components["schemas"]["ExercisePreference"][];
@@ -1052,7 +1098,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户档案 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfileResponse"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             default: components["responses"]["DefaultError"];
         };
@@ -1066,7 +1120,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["ProfileUpdate"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 更新后的当前用户档案 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserProfileResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -1080,7 +1142,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户器械档案 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentProfileResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1093,7 +1163,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["EquipmentUpdate"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 更新后的当前用户器械档案 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentProfileResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -1107,7 +1185,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户动作偏好 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceProfileResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1120,7 +1206,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PreferencesUpdate"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 更新后的当前用户动作偏好 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreferenceProfileResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };

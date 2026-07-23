@@ -59,27 +59,90 @@ components:
           $ref: '#/components/schemas/TrainingLocation'
         version:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    UserProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/UserProfile'
+        meta:
+          $ref: './common.yaml#/components/schemas/ResponseMeta'
     UpdateProfileRequest:
-      allOf:
-        - $ref: '#/components/schemas/UserProfile'
-        - type: object
-          required: [expectedVersion]
-          properties:
-            expectedVersion:
-              $ref: './common.yaml#/components/schemas/ExpectedVersion'
+      type: object
+      additionalProperties: false
+      required: [experience, goal, weeklyFrequency, sessionMinutes, location, expectedVersion]
+      properties:
+        experience:
+          $ref: '#/components/schemas/ExperienceLevel'
+        goal:
+          $ref: '#/components/schemas/FitnessGoal'
+        weeklyFrequency:
+          type: integer
+          minimum: 2
+          maximum: 6
+        sessionMinutes:
+          type: integer
+          enum: [30, 45, 60, 75, 90]
+        location:
+          $ref: '#/components/schemas/TrainingLocation'
+        expectedVersion:
+          $ref: './common.yaml#/components/schemas/ExpectedVersion'
     EquipmentItem:
       type: object
       additionalProperties: false
-      required: [equipmentType, minIncrement, availableLevels]
+      required: [clientEquipmentKey, equipmentType, minIncrement, availableLevels]
       properties:
+        clientEquipmentKey:
+          type: string
+          format: uuid
+          description: 客户端离线稳定键；服务端内部 user_equipment.id 不对外开放。
         equipmentType:
           type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z][A-Z0-9_]*$'
         minIncrement:
           $ref: './common.yaml#/components/schemas/Weight'
         availableLevels:
           type: array
+          minItems: 1
+          maxItems: 500
           items:
             $ref: './common.yaml#/components/schemas/Weight'
+    EquipmentWeightInput:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      properties:
+        value:
+          type: number
+          exclusiveMinimum: 0
+          multipleOf: 0.01
+        unit:
+          $ref: './common.yaml#/components/schemas/WeightUnit'
+    EquipmentItemRequest:
+      type: object
+      additionalProperties: false
+      required: [clientEquipmentKey, equipmentType, minIncrement, availableLevels]
+      properties:
+        clientEquipmentKey:
+          type: string
+          format: uuid
+          description: 客户端离线稳定键；服务端内部 user_equipment.id 不对外开放。
+        equipmentType:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z][A-Z0-9_]*$'
+        minIncrement:
+          $ref: '#/components/schemas/EquipmentWeightInput'
+        availableLevels:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/EquipmentWeightInput'
     EquipmentProfile:
       type: object
       additionalProperties: false
@@ -87,10 +150,20 @@ components:
       properties:
         items:
           type: array
+          maxItems: 100
           items:
             $ref: '#/components/schemas/EquipmentItem'
         version:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    EquipmentProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/EquipmentProfile'
+        meta:
+          $ref: './common.yaml#/components/schemas/ResponseMeta'
     UpdateEquipmentRequest:
       type: object
       additionalProperties: false
@@ -98,8 +171,9 @@ components:
       properties:
         items:
           type: array
+          maxItems: 100
           items:
-            $ref: '#/components/schemas/EquipmentItem'
+            $ref: '#/components/schemas/EquipmentItemRequest'
         expectedVersion:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
     ExercisePreference:
@@ -109,6 +183,7 @@ components:
       properties:
         exerciseId:
           type: string
+          format: uuid
         preferenceType:
           type: string
           enum: [PREFERRED, EXCLUDED]
@@ -119,10 +194,20 @@ components:
       properties:
         items:
           type: array
+          maxItems: 500
           items:
             $ref: '#/components/schemas/ExercisePreference'
         version:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
+    PreferenceProfileResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: '#/components/schemas/PreferenceProfile'
+        meta:
+          $ref: './common.yaml#/components/schemas/ResponseMeta'
     UpdatePreferencesRequest:
       type: object
       additionalProperties: false
@@ -130,6 +215,7 @@ components:
       properties:
         items:
           type: array
+          maxItems: 500
           items:
             $ref: '#/components/schemas/ExercisePreference'
         expectedVersion:

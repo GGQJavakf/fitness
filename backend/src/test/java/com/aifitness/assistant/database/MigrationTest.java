@@ -138,13 +138,14 @@ class MigrationTest {
     }
 
     @Test
-    void shipsTheFiveAppendOnlyMigrationStepsRequiredForTheEmptyMysqlDatabase() {
+    void shipsTheAppendOnlyMigrationStepsRequiredForTheEmptyMysqlDatabase() {
         assertThat(List.of(
                 "db/migration/V001__identity_profile.sql",
                 "db/migration/V002__content_rules.sql",
                 "db/migration/V003__plan_versions.sql",
                 "db/migration/V004__workout_sync.sql",
-                "db/migration/V005__progression_ai_audit.sql"))
+                "db/migration/V005__progression_ai_audit.sql",
+                "db/migration/V006__equipment_client_key.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -183,6 +184,9 @@ class MigrationTest {
                 "trg_progression_recommendation_must_start_unapplied",
                 "trg_progression_recommendation_applied_plan_must_be_sealed",
                 "trg_progression_recommendation_history_immutable_delete");
+        assertThat(readMigration("V006__equipment_client_key.sql")).contains(
+                "client_equipment_key BINARY(16)",
+                "UNIQUE KEY uq_user_equipment_user_client_key (user_id, client_equipment_key)");
     }
 
     @Test
@@ -191,18 +195,32 @@ class MigrationTest {
         assertThat(flyway.info().applied())
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
-                .containsExactly("001", "002", "003", "004", "005");
+                .containsExactly("001", "002", "003", "004", "005", "006");
     }
 
     @Test
     void databaseEnforcesSealedPlanAndImmutableWorkoutAndProgressionFacts() throws Exception {
         migrateEmptyMysqlDatabase();
+        equipmentClientKeysAreScopedToTheirOwner();
         databaseEnforcesRequiredUniqueConstraintsAndCrossUserSessions();
         databaseAllowsBuildingThenSealingAndActivatingOnlyTheSamePlanVersion();
         databaseRejectsUnsealedSealingEntryPoints();
         databaseRejectsCrossPlanSnapshotsAndProtectsWorkoutFacts();
         progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser();
         databaseRejectsHistoricalDeletesAndRevisionRewrites();
+    }
+
+    private static void equipmentClientKeysAreScopedToTheirOwner() throws Exception {
+        String firstUser = createUser();
+        String secondUser = createUser();
+        String sharedClientKey = newId();
+        execute("INSERT INTO user_equipment (id, user_id, client_equipment_key, equipment_type, min_increment, unit) VALUES (%s, %s, %s, 'DUMBBELL', 2.50, 'KG')"
+                .formatted(binary(newId()), binary(firstUser), binary(sharedClientKey)));
+        execute("INSERT INTO user_equipment (id, user_id, client_equipment_key, equipment_type, min_increment, unit) VALUES (%s, %s, %s, 'DUMBBELL', 2.50, 'KG')"
+                .formatted(binary(newId()), binary(secondUser), binary(sharedClientKey)));
+        assertRejected("23000", null, () -> execute(
+                "INSERT INTO user_equipment (id, user_id, client_equipment_key, equipment_type, min_increment, unit) VALUES (%s, %s, %s, 'BARBELL', 2.50, 'KG')"
+                        .formatted(binary(newId()), binary(firstUser), binary(sharedClientKey))));
     }
 
     private static void databaseAllowsBuildingThenSealingAndActivatingOnlyTheSamePlanVersion() throws Exception {
@@ -394,7 +412,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(6);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
