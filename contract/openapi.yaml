@@ -128,7 +128,11 @@ paths:
         - {name: movementPattern, in: query, required: false, schema: {type: string}}
         - {name: muscleGroup, in: query, required: false, schema: {type: string}}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户器械可支持且符合当前环境发布级别的动作
+          content:
+            application/json:
+              schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseListResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/exercises/{id}:
     get:
@@ -137,7 +141,11 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/IdPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 动作详情、通俗解释、图片回退引用与合法替代动作
+          content:
+            application/json:
+              schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseDetailResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plan-templates:
@@ -147,7 +155,11 @@ paths:
       parameters:
         - {name: weeklyFrequency, in: query, required: false, schema: {type: integer, minimum: 2, maximum: 6}}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户器械可完整执行的版本化模板摘要
+          content:
+            application/json:
+              schema: {$ref: './schemas/content.yaml#/components/schemas/PlanTemplateListResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/candidates:
     post:

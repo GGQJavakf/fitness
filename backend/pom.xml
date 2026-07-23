@@ -79,6 +79,19 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../rule-config/validated</directory>
+                <targetPath>rule-config</targetPath>
+                <includes>
+                    <include>exercises-v1.json</include>
+                    <include>plan-templates-v1.json</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.openapitools</groupId>

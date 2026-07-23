@@ -749,6 +749,56 @@ export interface components {
             items: components["schemas"]["ExercisePreference"][];
             expectedVersion: components["schemas"]["ExpectedVersion"];
         };
+        ContentImage: {
+            primaryRef: string;
+            fallbackRef: string;
+        };
+        ExerciseAlternative: {
+            exerciseCode: string;
+            rank: number;
+        };
+        Exercise: {
+            id: string;
+            name: string;
+            plainLanguage: string;
+            movementPattern: string;
+            equipment: string[];
+            primaryMuscles: string[];
+            instructions: string[];
+            safetyCues: string[];
+            image: components["schemas"]["ContentImage"];
+            alternatives: components["schemas"]["ExerciseAlternative"][];
+            contentVersion: string;
+        };
+        ExerciseListData: {
+            items: components["schemas"]["Exercise"][];
+            contentVersion: string;
+        };
+        ExerciseListResponse: {
+            data: components["schemas"]["ExerciseListData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ExerciseDetailResponse: {
+            data: components["schemas"]["Exercise"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanTemplate: {
+            code: string;
+            name: string;
+            weeklyFrequency: number;
+            exerciseCodes: string[];
+            templateVersion: string;
+            contentVersion: string;
+        };
+        PlanTemplateListData: {
+            items: components["schemas"]["PlanTemplate"][];
+            templateVersion: string;
+            contentVersion: string;
+        };
+        PlanTemplateListResponse: {
+            data: components["schemas"]["PlanTemplateListData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         PlanCandidateRequest: {
             profileVersion: components["schemas"]["ExpectedVersion"];
             lockedFields?: {
@@ -1232,7 +1282,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户器械可支持且符合当前环境发布级别的动作 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseListResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1247,7 +1305,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 动作详情、通俗解释、图片回退引用与合法替代动作 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseDetailResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
@@ -1263,7 +1329,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户器械可完整执行的版本化模板摘要 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanTemplateListResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };

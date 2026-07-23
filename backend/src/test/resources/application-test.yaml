@@ -4,6 +4,8 @@ server:
 fitness:
   auth:
     local-substitute-enabled: true
+  content:
+    environment: test
 
 spring:
   jackson:

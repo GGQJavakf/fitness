@@ -1,0 +1,102 @@
+components:
+  schemas:
+    ContentImage:
+      type: object
+      additionalProperties: false
+      required: [primaryRef, fallbackRef]
+      properties:
+        primaryRef: {type: string, minLength: 1}
+        fallbackRef: {type: string, minLength: 1}
+    ExerciseAlternative:
+      type: object
+      additionalProperties: false
+      required: [exerciseCode, rank]
+      properties:
+        exerciseCode: {type: string, pattern: '^[A-Z0-9_]+$'}
+        rank: {type: integer, minimum: 1}
+    Exercise:
+      type: object
+      additionalProperties: false
+      required: [id, name, plainLanguage, movementPattern, equipment, primaryMuscles, instructions, safetyCues, image, alternatives, contentVersion]
+      properties:
+        id: {type: string, pattern: '^[A-Z0-9_]+$'}
+        name: {type: string, minLength: 2}
+        plainLanguage: {type: string, minLength: 8, maxLength: 100}
+        movementPattern: {type: string, pattern: '^[A-Z0-9_]+$'}
+        equipment:
+          type: array
+          uniqueItems: true
+          items: {type: string, pattern: '^[A-Z0-9_]+$'}
+        primaryMuscles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, pattern: '^[A-Z0-9_]+$'}
+        instructions:
+          type: array
+          minItems: 1
+          items: {type: string, minLength: 1}
+        safetyCues:
+          type: array
+          minItems: 1
+          items: {type: string, minLength: 1}
+        image: {$ref: '#/components/schemas/ContentImage'}
+        alternatives:
+          type: array
+          items: {$ref: '#/components/schemas/ExerciseAlternative'}
+        contentVersion: {type: string, minLength: 1}
+    ExerciseListData:
+      type: object
+      additionalProperties: false
+      required: [items, contentVersion]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Exercise'}
+        contentVersion: {type: string, minLength: 1}
+    ExerciseListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/ExerciseListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    ExerciseDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/Exercise'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    PlanTemplate:
+      type: object
+      additionalProperties: false
+      required: [code, name, weeklyFrequency, exerciseCodes, templateVersion, contentVersion]
+      properties:
+        code: {type: string, pattern: '^[A-Z0-9_]+$'}
+        name: {type: string, minLength: 2}
+        weeklyFrequency: {type: integer, minimum: 2, maximum: 6}
+        exerciseCodes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, pattern: '^[A-Z0-9_]+$'}
+        templateVersion: {type: string, minLength: 1}
+        contentVersion: {type: string, minLength: 1}
+    PlanTemplateListData:
+      type: object
+      additionalProperties: false
+      required: [items, templateVersion, contentVersion]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PlanTemplate'}
+        templateVersion: {type: string, minLength: 1}
+        contentVersion: {type: string, minLength: 1}
+    PlanTemplateListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanTemplateListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

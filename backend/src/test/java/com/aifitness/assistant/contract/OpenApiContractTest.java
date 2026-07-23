@@ -154,6 +154,16 @@ class OpenApiContractTest {
     }
 
     @Test
+    void contentOperationsExposeVersionedTypedSuccessEnvelopes() {
+        assertThat(successSchemaRef("/api/v1/exercises", "get"))
+                .endsWith("/ExerciseListResponse");
+        assertThat(successSchemaRef("/api/v1/exercises/{id}", "get"))
+                .endsWith("/ExerciseDetailResponse");
+        assertThat(successSchemaRef("/api/v1/plan-templates", "get"))
+                .endsWith("/PlanTemplateListResponse");
+    }
+
+    @Test
     void equipmentUpdateInputDoesNotExposeServerManagedProfileId() {
         Map<String, Object> schemas = map(profileSchemas.get("schemas"));
         Map<String, Object> inputWeight = map(schemas.get("EquipmentWeightInput"));
