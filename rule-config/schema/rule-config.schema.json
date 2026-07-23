@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aifitness.local/schema/rule-config-v1",
+  "title": "RuleConfigVersion V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "scope", "parameters"],
+  "properties": {
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "adultOnly", "medicalOrRehabPrescription"],
+      "properties": {
+        "unit": { "const": "KG" },
+        "adultOnly": { "const": true },
+        "medicalOrRehabPrescription": { "const": false }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planLimits", "prescription", "rest", "warmup", "initialWeight", "duration", "equipmentIncrements", "safety"],
+      "properties": {
+        "planLimits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimumSessionsPerWeek", "maximumSessionsPerWeek", "maximumExercisesPerSession", "maximumEstimatedMinutes"],
+          "properties": {
+            "minimumSessionsPerWeek": { "type": "integer", "minimum": 2, "maximum": 4 },
+            "maximumSessionsPerWeek": { "type": "integer", "minimum": 3, "maximum": 6 },
+            "maximumExercisesPerSession": { "type": "integer", "minimum": 3, "maximum": 10 },
+            "maximumEstimatedMinutes": { "type": "integer", "minimum": 30, "maximum": 120 }
+          }
+        },
+        "prescription": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimumWorkSets", "maximumWorkSets", "minimumReps", "maximumReps"],
+          "properties": {
+            "minimumWorkSets": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "maximumWorkSets": { "type": "integer", "minimum": 2, "maximum": 6 },
+            "minimumReps": { "type": "integer", "minimum": 1, "maximum": 12 },
+            "maximumReps": { "type": "integer", "minimum": 6, "maximum": 30 }
+          }
+        },
+        "rest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minimumSeconds", "defaultSeconds", "maximumSeconds"],
+          "properties": {
+            "minimumSeconds": { "type": "integer", "minimum": 30, "maximum": 120 },
+            "defaultSeconds": { "type": "integer", "minimum": 45, "maximum": 240 },
+            "maximumSeconds": { "type": "integer", "minimum": 60, "maximum": 300 }
+          }
+        },
+        "warmup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["maximumRampSets", "knownWorkWeightRatios", "unknownWeightResult", "countsTowardTrainingVolume"],
+          "properties": {
+            "maximumRampSets": { "type": "integer", "minimum": 1, "maximum": 4 },
+            "knownWorkWeightRatios": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": { "type": "number", "minimum": 0.4, "maximum": 0.9 }
+            },
+            "unknownWeightResult": { "const": "CALIBRATION_STEPS_ONLY" },
+            "countsTowardTrainingVolume": { "const": false }
+          }
+        },
+        "initialWeight": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourcePriority", "unknownResult", "demographicEstimationAllowed"],
+          "properties": {
+            "sourcePriority": {
+              "const": ["RECENT_VALID_RECORD", "USER_INPUT", "CALIBRATION", "BODYWEIGHT"]
+            },
+            "unknownResult": { "const": "NEEDS_CALIBRATION" },
+            "demographicEstimationAllowed": { "const": false }
+          }
+        },
+        "duration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["secondsPerWorkSet", "secondsPerWarmupSet", "secondsPerExerciseTransition"],
+          "properties": {
+            "secondsPerWorkSet": { "type": "integer", "minimum": 20, "maximum": 90 },
+            "secondsPerWarmupSet": { "type": "integer", "minimum": 15, "maximum": 60 },
+            "secondsPerExerciseTransition": { "type": "integer", "minimum": 15, "maximum": 180 }
+          }
+        },
+        "equipmentIncrements": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["equipmentType", "unit", "allowedSteps"],
+            "properties": {
+              "equipmentType": { "enum": ["BARBELL", "DUMBBELL", "MACHINE"] },
+              "unit": { "const": "KG" },
+              "allowedSteps": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "number", "exclusiveMinimum": 0, "maximum": 20 }
+              }
+            }
+          }
+        },
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["stopReasonCodes", "abnormalInputAction", "medicalAdviceAllowed"],
+          "properties": {
+            "stopReasonCodes": {
+              "type": "array",
+              "minItems": 4,
+              "uniqueItems": true,
+              "items": { "enum": ["PAIN", "INJURY", "CHEST_DISCOMFORT", "DIZZINESS", "SEVERE_UNWELL"] }
+            },
+            "abnormalInputAction": { "const": "BLOCK_AND_REQUEST_CORRECTION" },
+            "medicalAdviceAllowed": { "const": false }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "enum": ["AI_DRAFT", "RETIRED"] } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": false }, "environments": { "maxItems": 0 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "AI_VALIDATED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "items": { "enum": ["local", "test", "staging-experience"] }, "minItems": 1 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "PUBLIC_RELEASE_APPROVED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "contains": { "const": "public" } } } } } } } }
+    }
+  ],
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "version", "status", "generatedAt", "promptConstraints", "sourceReferences", "activation", "digestSha256"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "kind": { "const": "RULE_CONFIG" },
+        "version": { "const": "1.0.0" },
+        "status": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "promptConstraints": { "type": "array", "minItems": 4, "uniqueItems": true, "items": { "type": "string", "minLength": 8 } },
+        "sourceReferences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "activation": { "$ref": "#/$defs/activation" },
+        "digestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "url", "accessedAt", "usage"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Z0-9_-]+$" },
+        "title": { "type": "string", "minLength": 3 },
+        "url": { "type": "string", "format": "uri" },
+        "accessedAt": { "type": "string", "format": "date" },
+        "usage": { "type": "string", "minLength": 8 }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "environments"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "environments": { "type": "array", "uniqueItems": true, "items": { "enum": ["local", "test", "staging-experience", "public"] } }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0.0",
+    "kind": "RULE_CONFIG",
+    "version": "1.0.0",
+    "status": "AI_VALIDATED",
+    "generatedAt": "2026-07-23T12:00:00Z",
+    "promptConstraints": [
+      "仅面向成年一般健身用户",
+      "仅使用 KG 且不得生成 LB 运行值",
+      "不提供医疗诊断或康复处方",
+      "关键数字必须由确定性规则消费",
+      "不得按人口属性猜测绝对重量"
+    ],
+    "sourceReferences": [
+      {
+        "id": "ACSM_PTR_11",
+        "title": "ACSM Position Stand: Progression Models in Resistance Training for Healthy Adults",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/",
+        "accessedAt": "2026-07-23",
+        "usage": "仅用于健康成年人的一般抗阻训练范围候选；最终数值由本配置和自动测试固定"
+      }
+    ],
+    "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
+    "digestSha256": "fc434e68500f3bf83262e972e672a78ba4bb6de29616b7eb6739d512ec0088e6"
+  },
+  "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
+  "parameters": {
+    "planLimits": { "minimumSessionsPerWeek": 2, "maximumSessionsPerWeek": 5, "maximumExercisesPerSession": 8, "maximumEstimatedMinutes": 90 },
+    "prescription": { "minimumWorkSets": 2, "maximumWorkSets": 4, "minimumReps": 5, "maximumReps": 15 },
+    "rest": { "minimumSeconds": 45, "defaultSeconds": 90, "maximumSeconds": 240 },
+    "warmup": { "maximumRampSets": 3, "knownWorkWeightRatios": [0.5, 0.7, 0.85], "unknownWeightResult": "CALIBRATION_STEPS_ONLY", "countsTowardTrainingVolume": false },
+    "initialWeight": { "sourcePriority": ["RECENT_VALID_RECORD", "USER_INPUT", "CALIBRATION", "BODYWEIGHT"], "unknownResult": "NEEDS_CALIBRATION", "demographicEstimationAllowed": false },
+    "duration": { "secondsPerWorkSet": 45, "secondsPerWarmupSet": 30, "secondsPerExerciseTransition": 75 },
+    "equipmentIncrements": [
+      { "equipmentType": "BARBELL", "unit": "KG", "allowedSteps": [1.25, 2.5, 5] },
+      { "equipmentType": "DUMBBELL", "unit": "KG", "allowedSteps": [1, 2, 2.5] },
+      { "equipmentType": "MACHINE", "unit": "KG", "allowedSteps": [2.5, 5, 10] }
+    ],
+    "safety": { "stopReasonCodes": ["PAIN", "INJURY", "CHEST_DISCOMFORT", "DIZZINESS", "SEVERE_UNWELL"], "abnormalInputAction": "BLOCK_AND_REQUEST_CORRECTION", "medicalAdviceAllowed": false }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.0.0", "ruleVersion": "1.0.0", "contentVersion": "1.0.0", "status": "AI_VALIDATED",
+    "generatedAt": "2026-07-23T12:00:00Z",
+    "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写"],
+    "sourceReferences": [{ "id": "ACSM_PTR_11", "title": "ACSM Position Stand for Healthy Adults", "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/", "accessedAt": "2026-07-23", "usage": "用于模板频率和训练范围候选，不用于个体绝对重量" }],
+    "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
+    "digestSha256": "089a762981057230565cb0ead9611dfac77b253492ee2722d0633648a0eb0b29"
+  },
+  "templates": [
+    {
+      "code": "FULL_BODY_3_DAY_V1", "name": "全身训练每周三练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 3,
+      "days": [
+        { "code": "DAY_A", "name": "全身 A", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "DAY_B", "name": "全身 B", "exercises": [
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "LAT_PULLDOWN", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "DAY_C", "name": "全身 C", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]}
+      ]
+    }
+  ]
+}

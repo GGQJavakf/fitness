@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aifitness.local/schema/exercise-content-v1",
+  "title": "ContentVersion V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "exercises"],
+  "properties": {
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "exercises": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "name", "movementPattern", "equipment", "primaryMuscles", "instructions", "safetyCues", "sourceIds", "rightsStatus", "assetStatus", "active"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+          "name": { "type": "string", "minLength": 2 },
+          "movementPattern": { "enum": ["SQUAT", "HINGE", "HORIZONTAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PUSH", "VERTICAL_PULL", "CORE"] },
+          "equipment": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["BODYWEIGHT", "BARBELL", "DUMBBELL", "BENCH", "CABLE", "MACHINE"] } },
+          "primaryMuscles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z_]+$" } },
+          "instructions": { "type": "array", "minItems": 2, "maxItems": 6, "items": { "type": "string", "minLength": 4 } },
+          "safetyCues": { "type": "array", "minItems": 1, "maxItems": 5, "items": { "type": "string", "minLength": 4 } },
+          "sourceIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
+          "rightsStatus": { "const": "ORIGINAL_SUMMARY" },
+          "assetStatus": { "const": "PLACEHOLDER_ONLY" },
+          "active": { "const": true }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "enum": ["AI_DRAFT", "RETIRED"] } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": false }, "environments": { "maxItems": 0 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "AI_VALIDATED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "items": { "enum": ["local", "test", "staging-experience"] }, "minItems": 1 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "PUBLIC_RELEASE_APPROVED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "contains": { "const": "public" } } } } } } } }
+    }
+  ],
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "version", "status", "generatedAt", "promptConstraints", "sourceReferences", "activation", "digestSha256"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" }, "kind": { "const": "EXERCISE_CONTENT" }, "version": { "const": "1.0.0" },
+        "status": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] }, "generatedAt": { "type": "string", "format": "date-time" },
+        "promptConstraints": { "type": "array", "minItems": 4, "items": { "type": "string", "minLength": 8 } },
+        "sourceReferences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "activation": { "$ref": "#/$defs/activation" },
+        "digestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false, "required": ["id", "title", "url", "accessedAt", "usage"],
+      "properties": {
+        "id": { "type": "string" }, "title": { "type": "string" }, "url": { "type": "string", "format": "uri" },
+        "accessedAt": { "type": "string", "format": "date" }, "usage": { "type": "string", "minLength": 8 }
+      }
+    },
+    "activation": {
+      "type": "object", "additionalProperties": false, "required": ["enabled", "environments"],
+      "properties": { "enabled": { "type": "boolean" }, "environments": { "type": "array", "uniqueItems": true, "items": { "enum": ["local", "test", "staging-experience", "public"] } } }
+    }
+  }
+}
