@@ -2,17 +2,23 @@ package com.aifitness.assistant.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
+import com.mysql.cj.jdbc.MysqlDataSource;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import javax.sql.DataSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
@@ -24,9 +30,64 @@ import org.testcontainers.containers.MySQLContainer;
 
 class MigrationTest {
 
+    private static final String JDBC_URL_PROPERTY = "fitness.test.mysql.jdbc-url";
+    private static final String USERNAME_PROPERTY = "fitness.test.mysql.username";
+    private static final String PASSWORD_PROPERTY = "fitness.test.mysql.password";
+    private static final String EXTERNAL_DATABASE_NAME = "fitness_m0";
+
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
 
+    private static DataSource dataSource;
     private static Flyway flyway;
+
+    @Test
+    void externalMysqlConfigurationRequiresJdbcUrlAndUsername() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> externalDataSource("", "root", ""))
+                .withMessage("External MySQL JDBC URL must be configured");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> externalDataSource(
+                        "jdbc:mysql://127.0.0.1:33306/fitness_m0", " ", "secret-marker"))
+                .withMessage("External MySQL username must be configured")
+                .withMessageNotContaining("secret-marker");
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsNonMysqlJdbcUrls() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> externalDataSource(
+                        "jdbc:postgresql://127.0.0.1:33306/fitness_m0", "root", "secret-marker"))
+                .withMessage("External test database must use a MySQL JDBC URL")
+                .withMessageNotContaining("secret-marker");
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsNonLoopbackHosts() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> externalDataSource(
+                        "jdbc:mysql://database.internal:33306/fitness_m0", "root", "secret-marker"))
+                .withMessage("External test database host must be loopback")
+                .withMessageNotContaining("secret-marker");
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsOtherDatabaseNames() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> externalDataSource(
+                        "jdbc:mysql://127.0.0.1:33306/mysql", "root", "secret-marker"))
+                .withMessage("External test database must be named fitness_m0")
+                .withMessageNotContaining("secret-marker");
+    }
+
+    @Test
+    void externalMysqlServerMustBeMysql84() {
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> validateMysql84Server("MariaDB", 8, 4))
+                .withMessage("External test database server must be MySQL 8.4");
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> validateMysql84Server("MySQL", 8, 0))
+                .withMessage("External test database server must be MySQL 8.4");
+    }
 
     @Test
     void shipsTheFiveAppendOnlyMigrationStepsRequiredForTheEmptyMysqlDatabase() {
@@ -202,13 +263,15 @@ class MigrationTest {
         PlanFixture otherPlan = createPlanFixture(userId, exerciseId);
         seal(otherPlan);
         assertRejected(1452, "fk_workout_snapshot_plan_source", () ->
-                execute(snapshotInsert(newId(), sessionId, otherPlan.planExerciseId(), plan.dayId(), plan.versionId())));
+                execute(snapshotInsert(
+                        newId(), sessionId, otherPlan.planExerciseId(), plan.dayId(), plan.versionId(), 2)));
 
         String otherUserId = createUser();
         PlanFixture otherUserPlan = createPlanFixture(otherUserId, exerciseId);
         seal(otherUserPlan);
         assertRejected(1452, "fk_workout_snapshot_plan_source", () ->
-                execute(snapshotInsert(newId(), sessionId, otherUserPlan.planExerciseId(), plan.dayId(), plan.versionId())));
+                execute(snapshotInsert(
+                        newId(), sessionId, otherUserPlan.planExerciseId(), plan.dayId(), plan.versionId(), 2)));
     }
 
     private static void progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser() throws Exception {
@@ -275,19 +338,123 @@ class MigrationTest {
     }
 
     private static synchronized void migrateEmptyMysqlDatabase() {
-        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required only for the MySQL 8.4 Testcontainers acceptance tests");
         if (flyway != null) {
             return;
         }
-        MYSQL.start();
+        dataSource = selectDataSource();
         flyway = Flyway.configure()
-                .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
+                .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
         assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
+    }
+
+    private static DataSource selectDataSource() {
+        String externalJdbcUrl = System.getProperty(JDBC_URL_PROPERTY);
+        if (externalJdbcUrl != null) {
+            DataSource externalDataSource = externalDataSource(
+                    externalJdbcUrl,
+                    System.getProperty(USERNAME_PROPERTY),
+                    System.getProperty(PASSWORD_PROPERTY));
+            validateExternalDatabase(externalDataSource);
+            return externalDataSource;
+        }
+
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
+                "Docker is required only when no external MySQL 8.4 test database is configured");
+        MYSQL.start();
+        return mysqlDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+    }
+
+    private static DataSource externalDataSource(String jdbcUrl, String username, String password) {
+        if (jdbcUrl == null || jdbcUrl.isBlank()) {
+            throw new IllegalArgumentException("External MySQL JDBC URL must be configured");
+        }
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("External MySQL username must be configured");
+        }
+        if (!jdbcUrl.startsWith("jdbc:mysql://")) {
+            throw new IllegalArgumentException("External test database must use a MySQL JDBC URL");
+        }
+
+        URI uri;
+        try {
+            uri = new URI(jdbcUrl.substring("jdbc:".length()));
+        } catch (URISyntaxException exception) {
+            throw new IllegalArgumentException("External MySQL JDBC URL is invalid", exception);
+        }
+        if (!isLoopbackHost(uri.getHost())) {
+            throw new IllegalArgumentException("External test database host must be loopback");
+        }
+        if (!("/" + EXTERNAL_DATABASE_NAME).equals(uri.getPath())) {
+            throw new IllegalArgumentException("External test database must be named fitness_m0");
+        }
+        return mysqlDataSource(jdbcUrl, username, password);
+    }
+
+    private static DataSource mysqlDataSource(String jdbcUrl, String username, String password) {
+        MysqlDataSource mysqlDataSource = new MysqlDataSource();
+        mysqlDataSource.setURL(jdbcUrl);
+        mysqlDataSource.setUser(username);
+        mysqlDataSource.setPassword(password == null ? "" : password);
+        return mysqlDataSource;
+    }
+
+    private static boolean isLoopbackHost(String host) {
+        if (host == null) {
+            return false;
+        }
+        String normalizedHost = host.toLowerCase(Locale.ROOT);
+        if (normalizedHost.equals("localhost")
+                || normalizedHost.equals("::1")
+                || normalizedHost.equals("[::1]")) {
+            return true;
+        }
+        String[] octets = normalizedHost.split("\\.", -1);
+        if (octets.length != 4 || !octets[0].equals("127")) {
+            return false;
+        }
+        for (String octet : octets) {
+            try {
+                int value = Integer.parseInt(octet);
+                if (value < 0 || value > 255) {
+                    return false;
+                }
+            } catch (NumberFormatException exception) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void validateExternalDatabase(DataSource externalDataSource) {
+        try (Connection connection = externalDataSource.getConnection()) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            validateMysql84Server(
+                    metadata.getDatabaseProductName(),
+                    metadata.getDatabaseMajorVersion(),
+                    metadata.getDatabaseMinorVersion());
+            if (!EXTERNAL_DATABASE_NAME.equals(connection.getCatalog())) {
+                throw new IllegalArgumentException("External test database must be named fitness_m0");
+            }
+            try (var statement = connection.createStatement();
+                 ResultSet tables = statement.executeQuery(
+                         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE()")) {
+                if (!tables.next() || tables.getInt(1) != 0) {
+                    throw new IllegalArgumentException("External test database must be empty");
+                }
+            }
+        } catch (SQLException exception) {
+            throw new IllegalArgumentException("Unable to validate external test database", exception);
+        }
+    }
+
+    private static void validateMysql84Server(String productName, int majorVersion, int minorVersion) {
+        if (!"MySQL".equalsIgnoreCase(productName) || majorVersion != 8 || minorVersion != 4) {
+            throw new IllegalArgumentException("External test database server must be MySQL 8.4");
+        }
     }
 
     private static String createUser() throws Exception {
@@ -334,8 +501,24 @@ class MigrationTest {
 
     private static String snapshotInsert(
             String snapshotId, String sessionId, String sourcePlanExerciseId, String sourceDayId, String sourceVersionId) {
-        return "INSERT INTO workout_exercise_snapshot (id, session_id, source_plan_exercise_id, source_training_day_id, source_plan_version_id, exercise_order, exercise_snapshot_json, prescription_snapshot_json, status) VALUES (%s, %s, %s, %s, %s, 1, JSON_OBJECT(), JSON_OBJECT(), 'ACTIVE')"
-                .formatted(binary(snapshotId), binary(sessionId), binary(sourcePlanExerciseId), binary(sourceDayId), binary(sourceVersionId));
+        return snapshotInsert(snapshotId, sessionId, sourcePlanExerciseId, sourceDayId, sourceVersionId, 1);
+    }
+
+    private static String snapshotInsert(
+            String snapshotId,
+            String sessionId,
+            String sourcePlanExerciseId,
+            String sourceDayId,
+            String sourceVersionId,
+            int exerciseOrder) {
+        return "INSERT INTO workout_exercise_snapshot (id, session_id, source_plan_exercise_id, source_training_day_id, source_plan_version_id, exercise_order, exercise_snapshot_json, prescription_snapshot_json, status) VALUES (%s, %s, %s, %s, %s, %s, JSON_OBJECT(), JSON_OBJECT(), 'ACTIVE')"
+                .formatted(
+                        binary(snapshotId),
+                        binary(sessionId),
+                        binary(sourcePlanExerciseId),
+                        binary(sourceDayId),
+                        binary(sourceVersionId),
+                        exerciseOrder);
     }
 
     private static String createRecommendation(String userId, String exerciseId, String sessionId) throws Exception {
@@ -366,14 +549,14 @@ class MigrationTest {
     }
 
     private static void execute(String sql) throws Exception {
-        try (Connection connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+        try (Connection connection = dataSource.getConnection();
              var statement = connection.createStatement()) {
             statement.execute(sql);
         }
     }
 
     private static String queryOne(String sql) throws Exception {
-        try (Connection connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+        try (Connection connection = dataSource.getConnection();
              var statement = connection.createStatement();
              ResultSet results = statement.executeQuery(sql)) {
             assertThat(results.next()).isTrue();
