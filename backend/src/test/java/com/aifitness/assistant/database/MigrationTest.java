@@ -1,17 +1,19 @@
 package com.aifitness.assistant.database;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.AfterAll;
@@ -27,6 +29,44 @@ class MigrationTest {
     private static Flyway flyway;
 
     @Test
+    void shipsTheFiveAppendOnlyMigrationStepsRequiredForTheEmptyMysqlDatabase() {
+        assertThat(List.of(
+                "db/migration/V001__identity_profile.sql",
+                "db/migration/V002__content_rules.sql",
+                "db/migration/V003__plan_versions.sql",
+                "db/migration/V004__workout_sync.sql",
+                "db/migration/V005__progression_ai_audit.sql"))
+                .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
+                        .as("migration resource %s", resource)
+                        .isNotNull());
+    }
+
+    @Test
+    void migrationScriptsDeclareSealingOwnershipAndFactImmutabilityBoundaries() throws IOException {
+        assertThat(readMigration("V003__plan_versions.sql")).contains(
+                "sealed_at DATETIME(6) NULL",
+                "trg_training_plan_version_seal_once",
+                "trg_training_plan_active_version_must_be_sealed",
+                "trg_training_day_reject_write_when_sealed",
+                "trg_plan_exercise_reject_write_when_sealed",
+                "trg_plan_field_lock_reject_write_when_sealed");
+        assertThat(readMigration("V004__workout_sync.sql")).contains(
+                "source_training_day_id BINARY(16) NOT NULL",
+                "source_plan_version_id BINARY(16) NOT NULL",
+                "FOREIGN KEY (session_id, source_training_day_id, source_plan_version_id)",
+                "FOREIGN KEY (source_plan_exercise_id, source_training_day_id, source_plan_version_id)",
+                "trg_workout_session_source_immutable",
+                "trg_workout_snapshot_fact_immutable",
+                "trg_workout_set_fact_immutable");
+        assertThat(readMigration("V005__progression_ai_audit.sql")).contains(
+                "applied_plan_id BINARY(16) NULL",
+                "FOREIGN KEY (applied_plan_id, user_id) REFERENCES training_plan (id, user_id)",
+                "FOREIGN KEY (applied_plan_version_id, applied_plan_id) REFERENCES training_plan_version (id, plan_id)",
+                "ck_progression_recommendation_applied_plan_pair",
+                "trg_progression_recommendation_fact_immutable");
+    }
+
+    @Test
     void cleanMysql84DatabaseMigratesExactlyOnceAndValidates() {
         migrateEmptyMysqlDatabase();
         assertThat(flyway.info().applied())
@@ -35,9 +75,126 @@ class MigrationTest {
                 .containsExactly("001", "002", "003", "004", "005");
     }
 
+    @Test
+    void databaseEnforcesSealedPlanAndImmutableWorkoutAndProgressionFacts() throws Exception {
+        migrateEmptyMysqlDatabase();
+        databaseEnforcesRequiredUniqueConstraintsAndCrossUserSessions();
+        databaseAllowsBuildingThenSealingAndActivatingOnlyTheSamePlanVersion();
+        databaseRejectsCrossPlanSnapshotsAndProtectsWorkoutFacts();
+        progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser();
+    }
+
+    private static void databaseAllowsBuildingThenSealingAndActivatingOnlyTheSamePlanVersion() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId, exerciseId);
+
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(plan.versionId()), binary(plan.planId())));
+        assertThat(queryOne("SELECT BIN_TO_UUID(active_version_id) FROM training_plan WHERE id = %s".formatted(binary(plan.planId()))))
+                .isEqualTo(plan.versionId());
+
+        PlanFixture unsealed = createPlanFixture(userId, exerciseId);
+        assertRejected("45000", "active training plan version must be sealed", () ->
+                execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(unsealed.versionId()), binary(plan.planId()))));
+        assertRejected("45000", "training plan version is sealed", () ->
+                execute("INSERT INTO training_day (id, plan_version_id, day_order, name, estimated_minutes) VALUES (%s, %s, 2, 'extra', 45)".formatted(binary(newId()), binary(plan.versionId()))));
+        assertRejected("45000", "training plan version is sealed", () ->
+                execute("UPDATE plan_exercise SET status = 'SKIPPED' WHERE id = %s".formatted(binary(plan.planExerciseId()))));
+        assertRejected("45000", "training plan version is sealed", () ->
+                execute("DELETE FROM plan_field_lock WHERE plan_exercise_id = %s AND field_path = 'restSeconds'".formatted(binary(plan.planExerciseId()))));
+        assertRejected("45000", "training plan version may only transition from unsealed to sealed", () ->
+                execute("UPDATE training_plan_version SET sealed_at = UTC_TIMESTAMP(6) WHERE id = %s".formatted(binary(plan.versionId()))));
+    }
+
+    private static void databaseEnforcesRequiredUniqueConstraintsAndCrossUserSessions() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        execute("INSERT INTO user_identity (id, user_id, provider, subject_cipher, status, created_at) VALUES (%s, %s, 'WECHAT_MINI_PROGRAM', 'cipher', 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId)));
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO user_identity (id, user_id, provider, subject_cipher, status, created_at) VALUES (%s, %s, 'WECHAT_MINI_PROGRAM', 'cipher', 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId))));
+
+        PlanFixture plan = createPlanFixture(userId, exerciseId);
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, created_at) VALUES (%s, %s, 1, 'INITIAL', 'FULL_BODY', 3, 'template-v1', 'rule-v1', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(plan.planId()))));
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(plan.versionId()), binary(plan.planId())));
+        String sessionId = createSession(plan, userId);
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, '%s', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(newId()), binary(userId), binary(plan.planId()), binary(plan.versionId()), binary(plan.dayId()), sessionId)));
+        String otherUserId = createUser();
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, 'other-user-session', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(newId()), binary(otherUserId), binary(plan.planId()), binary(plan.versionId()), binary(plan.dayId()))));
+
+        String snapshotId = newId();
+        execute(snapshotInsert(snapshotId, sessionId, plan));
+        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(snapshotId)));
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 2, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(snapshotId))));
+        execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId)));
+        assertRejected("23000", null, () ->
+                execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId))));
+    }
+
+    private static void databaseRejectsCrossPlanSnapshotsAndProtectsWorkoutFacts() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId, exerciseId);
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(plan.versionId()), binary(plan.planId())));
+        String sessionId = createSession(plan, userId);
+
+        String snapshotId = newId();
+        execute(snapshotInsert(snapshotId, sessionId, plan));
+        assertRejected("45000", "workout session source fields are immutable", () ->
+                execute("UPDATE workout_session SET started_at = UTC_TIMESTAMP(6) WHERE id = %s".formatted(binary(sessionId))));
+        execute("UPDATE workout_session SET status = 'PAUSED' WHERE id = %s".formatted(binary(sessionId)));
+        assertThat(queryOne("SELECT status FROM workout_session WHERE id = %s".formatted(binary(sessionId)))).isEqualTo("PAUSED");
+        assertRejected("45000", "workout exercise snapshot facts are immutable", () ->
+                execute("UPDATE workout_exercise_snapshot SET exercise_snapshot_json = JSON_OBJECT('changed', true) WHERE id = %s".formatted(binary(snapshotId))));
+
+        String setId = newId();
+        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 1, JSON_OBJECT('reps', 8), 'KG', 'PENDING', 0)".formatted(binary(setId), binary(snapshotId)));
+        assertRejected("45000", "workout set facts are immutable", () ->
+                execute("UPDATE workout_set SET target_json = JSON_OBJECT('reps', 10) WHERE id = %s".formatted(binary(setId))));
+        execute("UPDATE workout_set SET actual_reps = 8, completion_status = 'COMPLETED', server_revision = 1 WHERE id = %s".formatted(binary(setId)));
+
+        PlanFixture otherPlan = createPlanFixture(userId, exerciseId);
+        seal(otherPlan);
+        assertRejected("23000", null, () -> execute(snapshotInsert(newId(), sessionId, otherPlan)));
+
+        String otherUserId = createUser();
+        PlanFixture otherUserPlan = createPlanFixture(otherUserId, exerciseId);
+        seal(otherUserPlan);
+        assertRejected("23000", null, () -> execute(snapshotInsert(newId(), sessionId, otherUserPlan)));
+    }
+
+    private static void progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId, exerciseId);
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(plan.versionId()), binary(plan.planId())));
+        String sessionId = createSession(plan, userId);
+        String recommendationId = newId();
+        execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(recommendationId), binary(userId), binary(exerciseId), binary(sessionId)));
+
+        execute("UPDATE progression_recommendation SET user_decision = 'APPLIED', applied_plan_id = %s, applied_plan_version_id = %s WHERE id = %s".formatted(binary(plan.planId()), binary(plan.versionId()), binary(recommendationId)));
+        assertThat(queryOne("SELECT user_decision FROM progression_recommendation WHERE id = %s".formatted(binary(recommendationId)))).isEqualTo("APPLIED");
+        assertRejected("45000", "progression recommendation facts are immutable", () ->
+                execute("UPDATE progression_recommendation SET current_json = JSON_OBJECT('weight', 30) WHERE id = %s".formatted(binary(recommendationId))));
+
+        String otherUserId = createUser();
+        PlanFixture otherUserPlan = createPlanFixture(otherUserId, exerciseId);
+        seal(otherUserPlan);
+        assertRejected("23000", null, () ->
+                execute("UPDATE progression_recommendation SET applied_plan_id = %s, applied_plan_version_id = %s WHERE id = %s".formatted(binary(otherUserPlan.planId()), binary(otherUserPlan.versionId()), binary(recommendationId))));
+        assertRejected(3819, "ck_progression_recommendation_applied_plan_pair", () ->
+                execute("UPDATE progression_recommendation SET applied_plan_id = NULL, applied_plan_version_id = %s WHERE id = %s".formatted(binary(plan.versionId()), binary(recommendationId))));
+    }
+
     private static synchronized void migrateEmptyMysqlDatabase() {
-        Assumptions.assumeTrue(
-                DockerClientFactory.instance().isDockerAvailable(),
+        Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
                 "Docker is required only for the MySQL 8.4 Testcontainers acceptance tests");
         if (flyway != null) {
             return;
@@ -47,100 +204,77 @@ class MigrationTest {
                 .dataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword())
                 .locations("classpath:db/migration")
                 .load();
-
         assertThat(flyway.migrate().migrationsExecuted).isEqualTo(5);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
 
-    @Test
-    void shipsTheFiveAppendOnlyMigrationStepsRequiredForTheEmptyMysqlDatabase() {
-        List<String> migrationFiles = List.of(
-                "db/migration/V001__identity_profile.sql",
-                "db/migration/V002__content_rules.sql",
-                "db/migration/V003__plan_versions.sql",
-                "db/migration/V004__workout_sync.sql",
-                "db/migration/V005__progression_ai_audit.sql");
-
-        assertThat(migrationFiles)
-                .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
-                        .as("migration resource %s", resource)
-                        .isNotNull());
-    }
-
-    @Test
-    void migrationScriptsDeclareTheRequiredMysqlBoundaryConstraints() throws IOException {
-        assertThat(readMigration("V001__identity_profile.sql"))
-                .contains("CREATE TABLE user_account", "CREATE TABLE user_identity", "UNIQUE (provider, subject_cipher)");
-        assertThat(readMigration("V003__plan_versions.sql"))
-                .contains(
-                        "UNIQUE (plan_id, version_no)",
-                        "FOREIGN KEY (active_version_id, id) REFERENCES training_plan_version (id, plan_id)",
-                        "trg_training_plan_version_immutable_update");
-        assertThat(readMigration("V004__workout_sync.sql"))
-                .contains(
-                        "UNIQUE (user_id, client_session_key)",
-                        "UNIQUE (session_exercise_id, client_set_key)",
-                        "FOREIGN KEY (plan_id, user_id) REFERENCES training_plan (id, user_id)");
-        assertThat(readMigration("V005__progression_ai_audit.sql"))
-                .contains("UNIQUE (source_session_id, exercise_id, algorithm_version)");
-    }
-
-    @Test
-    void databaseEnforcesRequiredUniquenessAndCrossUserSessionIsolation() throws Exception {
-        migrateEmptyMysqlDatabase();
+    private static String createUser() throws Exception {
         String userId = newId();
-        String secondUserId = newId();
-        String exerciseId = newId();
-        String planId = newId();
-        String versionId = newId();
-        String secondPlanId = newId();
-        String secondVersionId = newId();
-        String dayId = newId();
-        String planExerciseId = newId();
-        String sessionId = newId();
-        String sessionExerciseId = newId();
-
         execute("INSERT INTO user_account (id, status, created_at) VALUES (%s, 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(userId)));
-        execute("INSERT INTO user_account (id, status, created_at) VALUES (%s, 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(secondUserId)));
-        execute("INSERT INTO user_identity (id, user_id, provider, subject_cipher, status, created_at) VALUES (%s, %s, 'WECHAT_MINI_PROGRAM', 'cipher', 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId)));
-        assertThatThrownBy(() -> execute("INSERT INTO user_identity (id, user_id, provider, subject_cipher, status, created_at) VALUES (%s, %s, 'WECHAT_MINI_PROGRAM', 'cipher', 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId))))
-                .isInstanceOf(SQLException.class);
+        return userId;
+    }
 
+    private static String createExercise() throws Exception {
+        String exerciseId = newId();
         execute("INSERT INTO exercise (id, measurement_type, movement_pattern, difficulty, status, content_version, review_status) VALUES (%s, 'WEIGHTED', 'SQUAT', 'BEGINNER', 'ACTIVE', 'v1', 'AI_VALIDATED')".formatted(binary(exerciseId)));
-        execute("INSERT INTO training_plan (id, user_id, status, created_at) VALUES (%s, %s, 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(planId), binary(userId)));
-        execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, created_at) VALUES (%s, %s, 1, 'INITIAL', 'FULL_BODY', 3, 'template-v1', 'rule-v1', UTC_TIMESTAMP(6))".formatted(binary(versionId), binary(planId)));
-        assertThatThrownBy(() -> execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, created_at) VALUES (%s, %s, 1, 'INITIAL', 'FULL_BODY', 3, 'template-v1', 'rule-v1', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(planId))))
-                .isInstanceOf(SQLException.class);
-        assertThatThrownBy(() -> execute("UPDATE training_plan_version SET split_type = 'UPPER_LOWER' WHERE id = %s".formatted(binary(versionId))))
-                .isInstanceOf(SQLException.class);
-        execute("INSERT INTO training_plan (id, user_id, status, created_at) VALUES (%s, %s, 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(secondPlanId), binary(userId)));
-        execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, created_at) VALUES (%s, %s, 1, 'INITIAL', 'FULL_BODY', 3, 'template-v1', 'rule-v1', UTC_TIMESTAMP(6))".formatted(binary(secondVersionId), binary(secondPlanId)));
-        assertThatThrownBy(() -> execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s".formatted(binary(secondVersionId), binary(planId))))
-                .isInstanceOf(SQLException.class);
+        return exerciseId;
+    }
 
-        execute("INSERT INTO training_day (id, plan_version_id, day_order, name, estimated_minutes) VALUES (%s, %s, 1, 'Day 1', 45)".formatted(binary(dayId), binary(versionId)));
-        execute("INSERT INTO plan_exercise (id, training_day_id, exercise_id, exercise_order, prescription_json, weight_status, status) VALUES (%s, %s, %s, 1, JSON_OBJECT(), 'KNOWN', 'ACTIVE')".formatted(binary(planExerciseId), binary(dayId), binary(exerciseId)));
-        execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, 'session-key', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(sessionId), binary(userId), binary(planId), binary(versionId), binary(dayId)));
-        assertThatThrownBy(() -> execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, 'session-key', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(newId()), binary(userId), binary(planId), binary(versionId), binary(dayId))))
-                .isInstanceOf(SQLException.class);
-        assertThatThrownBy(() -> execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, 'other-user-key', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(newId()), binary(secondUserId), binary(planId), binary(versionId), binary(dayId))))
-                .isInstanceOf(SQLException.class);
+    private static PlanFixture createPlanFixture(String userId, String exerciseId) throws Exception {
+        PlanFixture fixture = new PlanFixture(newId(), newId(), newId(), newId());
+        execute("INSERT INTO training_plan (id, user_id, status, created_at) VALUES (%s, %s, 'ACTIVE', UTC_TIMESTAMP(6))".formatted(binary(fixture.planId()), binary(userId)));
+        execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, created_at) VALUES (%s, %s, 1, 'INITIAL', 'FULL_BODY', 3, 'template-v1', 'rule-v1', UTC_TIMESTAMP(6))".formatted(binary(fixture.versionId()), binary(fixture.planId())));
+        execute("INSERT INTO training_day (id, plan_version_id, day_order, name, estimated_minutes) VALUES (%s, %s, 1, 'Day 1', 45)".formatted(binary(fixture.dayId()), binary(fixture.versionId())));
+        execute("INSERT INTO plan_exercise (id, training_day_id, plan_version_id, exercise_id, exercise_order, prescription_json, weight_status, status) VALUES (%s, %s, %s, %s, 1, JSON_OBJECT(), 'KNOWN', 'ACTIVE')".formatted(binary(fixture.planExerciseId()), binary(fixture.dayId()), binary(fixture.versionId()), binary(exerciseId)));
+        execute("INSERT INTO plan_field_lock (plan_exercise_id, field_path, lock_status, locked_at) VALUES (%s, 'restSeconds', 'USER_LOCKED', UTC_TIMESTAMP(6))".formatted(binary(fixture.planExerciseId())));
+        return fixture;
+    }
 
-        execute("INSERT INTO workout_exercise_snapshot (id, session_id, source_plan_exercise_id, exercise_order, exercise_snapshot_json, prescription_snapshot_json, status) VALUES (%s, %s, %s, 1, JSON_OBJECT(), JSON_OBJECT(), 'ACTIVE')".formatted(binary(sessionExerciseId), binary(sessionId), binary(planExerciseId)));
-        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(sessionExerciseId)));
-        assertThatThrownBy(() -> execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 2, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(sessionExerciseId))))
-                .isInstanceOf(SQLException.class);
+    private static void seal(PlanFixture plan) throws Exception {
+        execute("UPDATE training_plan_version SET sealed_at = UTC_TIMESTAMP(6) WHERE id = %s".formatted(binary(plan.versionId())));
+    }
 
-        execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId)));
-        assertThatThrownBy(() -> execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId))))
-                .isInstanceOf(SQLException.class);
+    private static String createSession(PlanFixture plan, String userId) throws Exception {
+        String sessionId = newId();
+        execute("INSERT INTO workout_session (id, user_id, plan_id, plan_version_id, training_day_id, client_session_key, status, started_at, sync_version) VALUES (%s, %s, %s, %s, %s, '%s', 'IN_PROGRESS', UTC_TIMESTAMP(6), 0)".formatted(binary(sessionId), binary(userId), binary(plan.planId()), binary(plan.versionId()), binary(plan.dayId()), sessionId));
+        return sessionId;
+    }
+
+    private static String snapshotInsert(String snapshotId, String sessionId, PlanFixture plan) {
+        return "INSERT INTO workout_exercise_snapshot (id, session_id, source_plan_exercise_id, source_training_day_id, source_plan_version_id, exercise_order, exercise_snapshot_json, prescription_snapshot_json, status) VALUES (%s, %s, %s, %s, %s, 1, JSON_OBJECT(), JSON_OBJECT(), 'ACTIVE')"
+                .formatted(binary(snapshotId), binary(sessionId), binary(plan.planExerciseId()), binary(plan.dayId()), binary(plan.versionId()));
+    }
+
+    private static void assertRejected(String sqlState, String messageFragment, ThrowingCallable action) {
+        assertThatExceptionOfType(SQLException.class).isThrownBy(action).satisfies(error -> {
+            assertThat(error.getSQLState()).isEqualTo(sqlState);
+            if (messageFragment != null) {
+                assertThat(error.getMessage()).contains(messageFragment);
+            }
+        });
+    }
+
+    private static void assertRejected(int errorCode, String messageFragment, ThrowingCallable action) {
+        assertThatExceptionOfType(SQLException.class).isThrownBy(action).satisfies(error -> {
+            assertThat(error.getErrorCode()).isEqualTo(errorCode);
+            assertThat(error.getMessage()).contains(messageFragment);
+        });
     }
 
     private static void execute(String sql) throws Exception {
         try (Connection connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
              var statement = connection.createStatement()) {
             statement.execute(sql);
+        }
+    }
+
+    private static String queryOne(String sql) throws Exception {
+        try (Connection connection = DriverManager.getConnection(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
+             var statement = connection.createStatement();
+             ResultSet results = statement.executeQuery(sql)) {
+            assertThat(results.next()).isTrue();
+            return results.getString(1);
         }
     }
 
@@ -165,5 +299,8 @@ class MigrationTest {
         if (MYSQL.isRunning()) {
             MYSQL.stop();
         }
+    }
+
+    private record PlanFixture(String planId, String versionId, String dayId, String planExerciseId) {
     }
 }

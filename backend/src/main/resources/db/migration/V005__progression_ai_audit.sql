@@ -10,6 +10,7 @@ CREATE TABLE progression_recommendation (
     input_snapshot_json JSON NOT NULL,
     algorithm_version VARCHAR(64) NOT NULL,
     user_decision VARCHAR(32) NOT NULL,
+    applied_plan_id BINARY(16) NULL,
     applied_plan_version_id BINARY(16) NULL,
     created_at DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
@@ -18,7 +19,9 @@ CREATE TABLE progression_recommendation (
     CONSTRAINT fk_progression_recommendation_user FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT,
     CONSTRAINT fk_progression_recommendation_exercise FOREIGN KEY (exercise_id) REFERENCES exercise (id) ON DELETE RESTRICT,
     CONSTRAINT fk_progression_recommendation_session_user FOREIGN KEY (source_session_id, user_id) REFERENCES workout_session (id, user_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_progression_recommendation_plan_version FOREIGN KEY (applied_plan_version_id) REFERENCES training_plan_version (id) ON DELETE RESTRICT
+    CONSTRAINT fk_progression_recommendation_applied_plan_user FOREIGN KEY (applied_plan_id, user_id) REFERENCES training_plan (id, user_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_progression_recommendation_applied_plan_version FOREIGN KEY (applied_plan_version_id, applied_plan_id) REFERENCES training_plan_version (id, plan_id) ON DELETE RESTRICT,
+    CONSTRAINT ck_progression_recommendation_applied_plan_pair CHECK ((applied_plan_id IS NULL) = (applied_plan_version_id IS NULL))
 ) ENGINE = InnoDB;
 
 CREATE TABLE ai_interaction (
@@ -63,3 +66,24 @@ CREATE TABLE outbox_event (
     PRIMARY KEY (id),
     KEY idx_outbox_event_status_next_attempt (status, next_attempt_at)
 ) ENGINE = InnoDB;
+
+DELIMITER $$
+CREATE TRIGGER trg_progression_recommendation_fact_immutable
+BEFORE UPDATE ON progression_recommendation
+FOR EACH ROW
+BEGIN
+    IF NOT (NEW.id <=> OLD.id)
+            OR NOT (NEW.user_id <=> OLD.user_id)
+            OR NOT (NEW.exercise_id <=> OLD.exercise_id)
+            OR NOT (NEW.source_session_id <=> OLD.source_session_id)
+            OR NOT (NEW.decision <=> OLD.decision)
+            OR NOT (NEW.current_json <=> OLD.current_json)
+            OR NOT (NEW.recommended_json <=> OLD.recommended_json)
+            OR NOT (NEW.reason_code <=> OLD.reason_code)
+            OR NOT (NEW.input_snapshot_json <=> OLD.input_snapshot_json)
+            OR NOT (NEW.algorithm_version <=> OLD.algorithm_version)
+            OR NOT (NEW.created_at <=> OLD.created_at) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'progression recommendation facts are immutable';
+    END IF;
+END$$
+DELIMITER ;

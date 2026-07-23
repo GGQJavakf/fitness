@@ -5,6 +5,7 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 @AnalyzeClasses(
@@ -13,21 +14,10 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 class ModuleBoundaryTest {
 
     @ArchTest
-    static final ArchRule domainDoesNotDependOnFrameworkOrInfrastructurePackages = noClasses()
+    static final ArchRule domainDependsOnlyOnDomainAndJavaPackages = classes()
             .that().resideInAnyPackage("..domain..")
-            .should().dependOnClassesThat()
-            .resideInAnyPackage(
-                    "org.springframework..",
-                    "org.hibernate..",
-                    "jakarta.persistence..",
-                    "java.sql..",
-                    "javax.sql..",
-                    "org.flywaydb..",
-                    "com.mysql..",
-                    "com.zaxxer.hikari..",
-                    "dev.langchain4j..",
-                    "com.openai..")
-            .because("domain code must remain independent from Spring, persistence, SQL dialects, and AI SDKs");
+            .should().onlyDependOnClassesThat().resideInAnyPackage("java..", "com.aifitness.assistant..domain..")
+            .because("domain code has an explicit allowlist and remains independent from outer frameworks and adapters");
 
     @ArchTest
     static final ArchRule domainDoesNotDependOnOuterApplicationLayers = noClasses()
