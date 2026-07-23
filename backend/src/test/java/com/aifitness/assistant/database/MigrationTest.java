@@ -98,6 +98,18 @@ class MigrationTest {
     }
 
     @Test
+    void malformedExternalMysqlJdbcUrlDoesNotExposeOriginalInput() {
+        Throwable failure = catchThrowable(() -> externalDataSource(
+                "jdbc:mysql://127.0.0.1:33306/fitness_m0 secret-marker", "root", "secret-marker"));
+
+        assertThat(failure)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("External MySQL JDBC URL is invalid")
+                .hasNoCause();
+        assertThrowableChainDoesNotContain(failure, "secret-marker");
+    }
+
+    @Test
     void externalMysqlConnectionFailuresDoNotExposeDriverDetails() throws SQLException {
         DataSource failingDataSource = new MysqlDataSource() {
             @Override
@@ -418,8 +430,8 @@ class MigrationTest {
         URI uri;
         try {
             uri = new URI(jdbcUrl.substring("jdbc:".length()));
-        } catch (URISyntaxException exception) {
-            throw new IllegalArgumentException("External MySQL JDBC URL is invalid", exception);
+        } catch (URISyntaxException ignored) {
+            throw new IllegalArgumentException("External MySQL JDBC URL is invalid");
         }
         if (uri.getRawUserInfo() != null || uri.getRawQuery() != null || uri.getRawFragment() != null) {
             throw new IllegalArgumentException(
