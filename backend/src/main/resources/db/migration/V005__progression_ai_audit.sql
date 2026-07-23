@@ -68,6 +68,15 @@ CREATE TABLE outbox_event (
 ) ENGINE = InnoDB;
 
 DELIMITER $$
+CREATE TRIGGER trg_progression_recommendation_must_start_unapplied
+BEFORE INSERT ON progression_recommendation
+FOR EACH ROW
+BEGIN
+    IF NEW.applied_plan_id IS NOT NULL OR NEW.applied_plan_version_id IS NOT NULL THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'progression recommendation must start unapplied';
+    END IF;
+END$$
+
 CREATE TRIGGER trg_progression_recommendation_fact_immutable
 BEFORE UPDATE ON progression_recommendation
 FOR EACH ROW

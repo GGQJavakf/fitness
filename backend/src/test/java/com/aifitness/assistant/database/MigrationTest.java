@@ -71,6 +71,7 @@ class MigrationTest {
                 "FOREIGN KEY (applied_plan_version_id, applied_plan_id) REFERENCES training_plan_version (id, plan_id)",
                 "ck_progression_recommendation_applied_plan_pair",
                 "trg_progression_recommendation_fact_immutable",
+                "trg_progression_recommendation_must_start_unapplied",
                 "trg_progression_recommendation_applied_plan_must_be_sealed",
                 "trg_progression_recommendation_history_immutable_delete");
     }
@@ -168,6 +169,9 @@ class MigrationTest {
         seal(sourcePlan);
         String sourceSessionId = createSession(sourcePlan, userId);
         String recommendationId = createRecommendation(userId, exerciseId, sourceSessionId);
+        assertThat(queryOne("SELECT applied_plan_id FROM progression_recommendation WHERE id = %s".formatted(binary(recommendationId)))).isNull();
+        assertRejected("45000", "progression recommendation must start unapplied", () ->
+                execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, applied_plan_id, applied_plan_version_id, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'pre-applied-v1', 'PENDING', %s, %s, UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sourceSessionId), binary(unsealedPlan.planId()), binary(unsealedPlan.versionId()))));
         assertRejected("45000", "applied progression plan version must be sealed", () ->
                 execute("UPDATE progression_recommendation SET applied_plan_id = %s, applied_plan_version_id = %s WHERE id = %s".formatted(binary(unsealedPlan.planId()), binary(unsealedPlan.versionId()), binary(recommendationId))));
     }
