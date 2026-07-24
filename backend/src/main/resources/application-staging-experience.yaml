@@ -23,5 +23,7 @@ fitness:
     environment: staging-experience
   plan:
     repository: mysql
+  workout:
+    repository: mysql
   ai:
     enabled: false

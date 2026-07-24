@@ -102,3 +102,57 @@ components:
           type: string
           enum: [KEEP_LOCAL, KEEP_SERVER, KEEP_BOTH]
         expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+    WorkoutPrescriptionSnapshot:
+      type: object
+      additionalProperties: false
+      required: [workSets, repMin, repMax, restSeconds, weightStatus, unit]
+      properties:
+        workSets: {type: integer, minimum: 0}
+        repMin: {type: integer, minimum: 0}
+        repMax: {type: integer, minimum: 0}
+        restSeconds: {type: integer, minimum: 0}
+        weightStatus: {$ref: './plan.yaml#/components/schemas/WeightStatus'}
+        unit: {$ref: './common.yaml#/components/schemas/WeightUnit'}
+    WorkoutExerciseSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, order, exerciseCode, exerciseName, contentVersion, equipment, prescription, status]
+      properties:
+        id: {type: string, format: uuid}
+        order: {type: integer, minimum: 1}
+        exerciseCode: {type: string, minLength: 1}
+        exerciseName: {type: string, minLength: 1}
+        contentVersion: {type: string, minLength: 1}
+        equipment:
+          type: array
+          uniqueItems: true
+          items: {type: string}
+        prescription: {$ref: '#/components/schemas/WorkoutPrescriptionSnapshot'}
+        status:
+          type: string
+          enum: [PENDING, ACTIVE, COMPLETED, SKIPPED, ABORTED, REPLACED]
+    WorkoutSessionData:
+      type: object
+      additionalProperties: false
+      required: [id, planId, planVersionId, planVersionNo, planDayId, status, startedAt, version, exercises]
+      properties:
+        id: {type: string, format: uuid}
+        planId: {type: string, format: uuid}
+        planVersionId: {type: string, format: uuid}
+        planVersionNo: {type: integer, minimum: 1}
+        planDayId: {type: string, minLength: 1}
+        status: {$ref: '#/components/schemas/SessionStatus'}
+        startedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        version: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        exercises:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/WorkoutExerciseSnapshot'}
+    WorkoutSessionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutSessionData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

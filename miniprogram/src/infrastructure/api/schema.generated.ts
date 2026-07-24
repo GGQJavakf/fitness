@@ -995,6 +995,45 @@ export interface components {
             planVersionNo: number;
             planDayId: string;
         };
+        WorkoutPrescriptionSnapshot: {
+            workSets: number;
+            repMin: number;
+            repMax: number;
+            restSeconds: number;
+            weightStatus: components["schemas"]["WeightStatus"];
+            unit: components["schemas"]["WeightUnit"];
+        };
+        WorkoutExerciseSnapshot: {
+            /** Format: uuid */
+            id: string;
+            order: number;
+            exerciseCode: string;
+            exerciseName: string;
+            contentVersion: string;
+            equipment: string[];
+            prescription: components["schemas"]["WorkoutPrescriptionSnapshot"];
+            /** @enum {string} */
+            status: "PENDING" | "ACTIVE" | "COMPLETED" | "SKIPPED" | "ABORTED" | "REPLACED";
+        };
+        WorkoutSessionData: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            planVersionId: string;
+            planVersionNo: number;
+            planDayId: string;
+            status: components["schemas"]["SessionStatus"];
+            startedAt: components["schemas"]["UtcDateTime"];
+            completedAt?: components["schemas"]["UtcDateTime"];
+            version: components["schemas"]["ExpectedVersion"];
+            exercises: components["schemas"]["WorkoutExerciseSnapshot"][];
+        };
+        WorkoutSessionResponse: {
+            data: components["schemas"]["WorkoutSessionData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         UpdateSessionStatusRequest: {
             status: components["schemas"]["SessionStatus"];
             expectedVersion: components["schemas"]["ExpectedVersion"];
@@ -1779,7 +1818,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutSessionStart"];
         responses: {
-            201: components["responses"]["Success"];
+            /** @description 会话已创建；同一用户和 clientSessionKey 重试返回首次创建结果 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1794,7 +1841,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 用户归属的不可变训练快照 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
@@ -1810,7 +1865,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutStatusUpdate"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 状态转换后的会话 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };

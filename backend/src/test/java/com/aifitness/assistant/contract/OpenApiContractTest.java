@@ -68,6 +68,7 @@ class OpenApiContractTest {
     private static Map<String, Object> commonSchemas;
     private static Map<String, Object> profileSchemas;
     private static Map<String, Object> planSchemas;
+    private static Map<String, Object> workoutSchemas;
     private static Map<String, Object> privacySchemas;
 
     @BeforeAll
@@ -77,6 +78,7 @@ class OpenApiContractTest {
         commonSchemas = map(loadYaml(contractRoot.resolve("schemas/common.yaml")).get("components"));
         profileSchemas = map(loadYaml(contractRoot.resolve("schemas/profile.yaml")).get("components"));
         planSchemas = map(loadYaml(contractRoot.resolve("schemas/plan.yaml")).get("components"));
+        workoutSchemas = map(loadYaml(contractRoot.resolve("schemas/workout.yaml")).get("components"));
         privacySchemas = map(loadYaml(contractRoot.resolve("schemas/privacy.yaml")).get("components"));
     }
 
@@ -212,6 +214,25 @@ class OpenApiContractTest {
                 .doesNotContain("RULE_LOCKED");
         assertThat(required(schemas, "PlanVersionData"))
                 .contains("versionNumber", "plan", "ruleReference", "confirmedWarningCodes", "createdAt");
+    }
+
+    @Test
+    void workoutSessionOperationsExposeTypedImmutableSnapshots() {
+        assertThat(successSchemaRef("/api/v1/workout-sessions", "post"))
+                .endsWith("/WorkoutSessionResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}", "get"))
+                .endsWith("/WorkoutSessionResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/status", "put"))
+                .endsWith("/WorkoutSessionResponse");
+
+        Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
+        assertThat(required(schemas, "WorkoutSessionData"))
+                .contains("planVersionId", "planVersionNo", "planDayId", "status", "version", "exercises");
+        assertThat(required(schemas, "WorkoutExerciseSnapshot"))
+                .contains("exerciseCode", "exerciseName", "contentVersion", "equipment", "prescription");
+        assertThat(required(schemas, "WorkoutPrescriptionSnapshot"))
+                .containsExactlyInAnyOrder(
+                        "workSets", "repMin", "repMax", "restSeconds", "weightStatus", "unit");
     }
 
     @Test

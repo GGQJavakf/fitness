@@ -17,6 +17,7 @@ import com.aifitness.assistant.content.infrastructure.JdbcContentCatalogPublishe
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
+import com.aifitness.assistant.plan.infrastructure.JdbcPlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.profile.domain.EquipmentProfile;
 import com.aifitness.assistant.profile.domain.PreferenceProfile;
@@ -29,6 +30,11 @@ import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyAudit;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyDataReader;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyExportRepository;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyRepository;
+import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
+import com.aifitness.assistant.workout.domain.WorkoutSession;
+import com.aifitness.assistant.workout.domain.WorkoutStatus;
+import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSessionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.io.IOException;
@@ -543,6 +549,78 @@ class MigrationTest {
                 + binary(firstUserId.toString())
                 + " AND action='PRIVACY_ACCESS_REVOKED' AND entity_id="
                 + binary(requested.id().toString()))).isEqualTo("1");
+    }
+
+    @Test
+    void jdbcWorkoutRepositoryPersistsOwnedSnapshotsAndOptimisticStatus() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID userId = UUID.fromString(createUser());
+        UUID otherUserId = UUID.fromString(createUser());
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId.toString(), exerciseId);
+        execute("INSERT INTO exercise_i18n (exercise_id, locale, name, instructions_json) VALUES (%s, 'zh-CN', '哑铃深蹲', JSON_OBJECT())"
+                .formatted(binary(exerciseId)));
+        execute("INSERT INTO exercise_equipment (exercise_id, equipment_type) VALUES (%s, 'DUMBBELL')"
+                .formatted(binary(exerciseId)));
+        execute("""
+                UPDATE plan_exercise
+                SET prescription_json = JSON_OBJECT(
+                    'dayCode', 'DAY_1', 'exerciseCode', 'DB_SQUAT',
+                    'workSets', 3, 'repMin', 8, 'repMax', 12, 'restSeconds', 90)
+                WHERE id = %s
+                """.formatted(binary(plan.planExerciseId())));
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s"
+                .formatted(binary(plan.versionId()), binary(plan.planId())));
+
+        var source = new JdbcPlanWorkoutSnapshotQuery(dataSource, new ObjectMapper())
+                .load(userId, UUID.fromString(plan.planId()), 1, "DAY_1");
+        assertThat(source.planVersionId()).isEqualTo(UUID.fromString(plan.versionId()));
+        assertThat(source.trainingDayId()).isEqualTo(UUID.fromString(plan.dayId()));
+        assertThat(source.exercises()).singleElement().satisfies(exercise -> {
+            assertThat(exercise.sourcePlanExerciseId())
+                    .isEqualTo(UUID.fromString(plan.planExerciseId()));
+            assertThat(exercise.exerciseCode()).isEqualTo("DB_SQUAT");
+            assertThat(exercise.exerciseName()).isEqualTo("哑铃深蹲");
+            assertThat(exercise.equipment()).containsExactly("DUMBBELL");
+            assertThat(exercise.workSets()).isEqualTo(3);
+            assertThat(exercise.repMin()).isEqualTo(8);
+            assertThat(exercise.repMax()).isEqualTo(12);
+            assertThat(exercise.restSeconds()).isEqualTo(90);
+        });
+
+        JdbcWorkoutSessionRepository repository =
+                new JdbcWorkoutSessionRepository(dataSource, new ObjectMapper());
+        UUID sessionId = UUID.randomUUID();
+        WorkoutExerciseSnapshot snapshot = new WorkoutExerciseSnapshot(
+                UUID.randomUUID(), sessionId, UUID.fromString(plan.planExerciseId()), 1,
+                "DB_SQUAT", "哑铃深蹲", "content-v1", java.util.Set.of("DUMBBELL"),
+                new WorkoutExerciseSnapshot.Prescription(3, 8, 12, 90, "KNOWN", "KG"),
+                WorkoutExerciseSnapshot.Status.PENDING);
+        WorkoutSession created = new WorkoutSession(
+                sessionId, userId, UUID.fromString(plan.planId()), UUID.fromString(plan.versionId()), 1,
+                UUID.fromString(plan.dayId()), "DAY_1", "jdbc-session-key", WorkoutStatus.CREATED,
+                java.time.Instant.parse("2026-07-24T08:00:00Z"), java.util.Optional.empty(), 0,
+                List.of(snapshot));
+
+        assertThat(repository.create(created)).isEqualTo(created);
+        assertThat(repository.create(created)).isEqualTo(created);
+        assertThat(repository.findByUserAndClientKey(userId, "jdbc-session-key")).contains(created);
+        assertThat(repository.findByIdAndUser(sessionId, otherUserId)).isEmpty();
+
+        WorkoutSession active = created.transitionTo(
+                WorkoutStatus.IN_PROGRESS, java.time.Instant.parse("2026-07-24T08:01:00Z"));
+        assertThat(repository.update(active, 0)).isEqualTo(active);
+        assertThatThrownBy(() -> repository.update(
+                active.transitionTo(
+                        WorkoutStatus.PAUSED, java.time.Instant.parse("2026-07-24T08:02:00Z")),
+                0))
+                .isInstanceOfSatisfying(
+                        WorkoutSessionService.VersionConflictException.class,
+                        failure -> assertThat(failure.currentVersion()).isEqualTo(1));
+        assertThat(repository.findByIdAndUser(sessionId, userId)).contains(active);
+        assertThat(queryOne("SELECT COUNT(*) FROM workout_exercise_snapshot WHERE session_id="
+                + binary(sessionId.toString()))).isEqualTo("1");
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {

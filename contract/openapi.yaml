@@ -282,7 +282,11 @@ paths:
         - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/WorkoutSessionStart'}
       responses:
-        '201': {$ref: '#/components/responses/Success'}
+        '201':
+          description: 会话已创建；同一用户和 clientSessionKey 重试返回首次创建结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
     get:
       tags: [Workouts]
@@ -299,7 +303,11 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/IdPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 用户归属的不可变训练快照
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/status:
@@ -310,7 +318,11 @@ paths:
         - {$ref: '#/components/parameters/IdPath'}
       requestBody: {$ref: '#/components/requestBodies/WorkoutStatusUpdate'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 状态转换后的会话
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/exercises/{exerciseId}:

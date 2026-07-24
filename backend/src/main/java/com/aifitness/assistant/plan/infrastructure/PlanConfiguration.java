@@ -5,6 +5,7 @@ import com.aifitness.assistant.content.application.TemplateQueryService;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
 import com.aifitness.assistant.plan.application.PlanRepository;
 import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
 import com.aifitness.assistant.rules.domain.PlanRulePolicy;
@@ -72,5 +73,19 @@ public class PlanConfiguration {
     PlanVersionService planVersionService(
             PlanRepository repository, PlanCandidateService candidates, Clock clock) {
         return new PlanVersionService(repository, new RulesPlanPolicy(candidates), clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "fitness.plan", name = "repository", havingValue = "memory", matchIfMissing = true)
+    PlanWorkoutSnapshotQuery domainPlanWorkoutSnapshotQuery(
+            PlanVersionService plans, ExerciseQueryService exercises) {
+        return new DomainPlanWorkoutSnapshotQuery(plans, exercises);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.plan", name = "repository", havingValue = "mysql")
+    PlanWorkoutSnapshotQuery jdbcPlanWorkoutSnapshotQuery(DataSource dataSource, ObjectMapper objectMapper) {
+        return new JdbcPlanWorkoutSnapshotQuery(dataSource, objectMapper);
     }
 }
