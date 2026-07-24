@@ -102,6 +102,24 @@ class WechatLoginServiceTest {
     }
 
     @Test
+    void mapsRejectedWechatCodesToTheChannelIndependentAuthenticationFailure() {
+        WechatIdentityProvider rejectedProvider = code -> {
+            throw new WechatIdentityProvider.ExchangeRejectedException();
+        };
+        var rejectedService = new WechatLoginService(
+                rejectedProvider,
+                protector,
+                identities,
+                sessions,
+                Clock.fixed(NOW, ZoneOffset.UTC));
+
+        assertThatThrownBy(() -> rejectedService.login("expired-wechat-code"))
+                .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class)
+                .hasMessage("authentication required")
+                .hasMessageNotContaining("expired-wechat-code");
+    }
+
+    @Test
     void neverWritesTheOneTimeCodeToApplicationLogs() {
         String secretCode = "temporary-wechat-code-never-log";
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);

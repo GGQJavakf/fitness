@@ -29,7 +29,12 @@ public final class WechatLoginService {
 
     public SessionTokens login(String oneTimeCode) {
         requireCredential(oneTimeCode, 2048, "wechat code");
-        WechatIdentityProvider.ProviderSubject providerSubject = identityProvider.exchange(oneTimeCode);
+        WechatIdentityProvider.ProviderSubject providerSubject;
+        try {
+            providerSubject = identityProvider.exchange(oneTimeCode);
+        } catch (WechatIdentityProvider.ExchangeRejectedException rejected) {
+            throw new AuthenticationRequiredException();
+        }
         byte[] protectedSubject = subjectProtector.protect(providerSubject.subject());
         if (protectedSubject == null || protectedSubject.length == 0) {
             throw new IllegalStateException("subject protection failed");

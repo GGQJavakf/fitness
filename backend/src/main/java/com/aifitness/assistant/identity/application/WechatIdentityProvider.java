@@ -14,4 +14,10 @@ public interface WechatIdentityProvider {
             }
         }
     }
+
+    final class ExchangeRejectedException extends RuntimeException {
+        public ExchangeRejectedException() {
+            super("wechat credential exchange rejected");
+        }
+    }
 }

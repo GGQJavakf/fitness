@@ -9,6 +9,9 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import com.mysql.cj.jdbc.MysqlDataSource;
 import com.aifitness.assistant.common.domain.RuleReference;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
+import com.aifitness.assistant.identity.domain.UserIdentity;
+import com.aifitness.assistant.identity.infrastructure.JdbcIdentityRepository;
+import com.aifitness.assistant.identity.infrastructure.JdbcSessionStore;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
@@ -155,7 +158,8 @@ class MigrationTest {
                 "db/migration/V005__progression_ai_audit.sql",
                 "db/migration/V006__equipment_client_key.sql",
                 "db/migration/V007__privacy_requests.sql",
-                "db/migration/V008__privacy_retention_lifecycle.sql"))
+                "db/migration/V008__privacy_retention_lifecycle.sql",
+                "db/migration/V009__identity_sessions.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -210,6 +214,14 @@ class MigrationTest {
                 "trg_privacy_required_retention_controlled_update",
                 "privacy_retention_lifecycle_audit",
                 "PAYLOAD_PURGED");
+        assertThat(readMigration("V009__identity_sessions.sql")).contains(
+                "auth_session",
+                "access_token_digest VARBINARY(32) NOT NULL",
+                "refresh_token_digest VARBINARY(32) NOT NULL",
+                "CONSTRAINT uq_auth_session_access_digest UNIQUE",
+                "CONSTRAINT uq_auth_session_refresh_digest UNIQUE",
+                "KEY idx_auth_session_user_status",
+                "ck_auth_session_status");
     }
 
     @Test
@@ -218,7 +230,7 @@ class MigrationTest {
         assertThat(flyway.info().applied())
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
-                .containsExactly("001", "002", "003", "004", "005", "006", "007", "008");
+                .containsExactly("001", "002", "003", "004", "005", "006", "007", "008", "009");
     }
 
     @Test
@@ -322,6 +334,49 @@ class MigrationTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
                 + binary(created.id().toString()))).isEqualTo("2");
+    }
+
+    @Test
+    void jdbcIdentityAndSessionsPersistOnlyDigestsRotateAndBlockDeletedUsers() throws Exception {
+        migrateEmptyMysqlDatabase();
+        JdbcIdentityRepository identities = new JdbcIdentityRepository(dataSource);
+        JdbcSessionStore sessions = new JdbcSessionStore(dataSource);
+        byte[] protectedSubject = "protected-wechat-subject".getBytes(StandardCharsets.UTF_8);
+        java.time.Instant now = java.time.Instant.parse("2026-07-24T06:00:00Z");
+
+        AuthenticatedUserId user = identities.findOrCreate(
+                UserIdentity.Provider.WECHAT_MINI_PROGRAM, protectedSubject, now);
+        assertThat(identities.findOrCreate(
+                UserIdentity.Provider.WECHAT_MINI_PROGRAM, protectedSubject.clone(), now))
+                .isEqualTo(user);
+
+        var issued = sessions.issue(user, now);
+        assertThat(sessions.authenticate(issued.accessToken(), now.plusSeconds(1))).isEqualTo(user);
+        assertThat(queryOne("SELECT COUNT(*) FROM auth_session WHERE access_token_digest = "
+                + "UNHEX(SHA2('" + issued.accessToken() + "', 256))"))
+                .isEqualTo("1");
+        assertThat(queryOne("SELECT COUNT(*) FROM auth_session WHERE CAST(access_token_digest AS CHAR) = '"
+                + issued.accessToken() + "'"))
+                .isEqualTo("0");
+
+        var refreshed = sessions.refresh(issued.refreshToken(), now.plusSeconds(2));
+        assertThatThrownBy(() -> sessions.authenticate(issued.accessToken(), now.plusSeconds(3)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AuthenticationRequiredException.class);
+        assertThatThrownBy(() -> sessions.refresh(issued.refreshToken(), now.plusSeconds(3)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AuthenticationRequiredException.class);
+        assertThat(sessions.authenticate(refreshed.accessToken(), now.plusSeconds(3))).isEqualTo(user);
+
+        sessions.revokeAllSessionsAndBlockLogin(user, UUID.randomUUID());
+        assertThatThrownBy(() -> sessions.authenticate(refreshed.accessToken(), now.plusSeconds(4)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AuthenticationRequiredException.class);
+        assertThatThrownBy(() -> sessions.issue(user, now.plusSeconds(4)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AuthenticationRequiredException.class);
+        assertThat(queryOne("SELECT status FROM user_account WHERE id="
+                + binary(user.value().toString()))).isEqualTo("DELETED");
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -571,7 +626,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

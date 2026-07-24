@@ -1,0 +1,27 @@
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+spring:
+  datasource:
+    url: ${FITNESS_DB_URL}
+    username: ${FITNESS_DB_USERNAME}
+    password: ${FITNESS_DB_PASSWORD}
+  flyway:
+    enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+
+fitness:
+  auth:
+    wechat:
+      app-id: ${WECHAT_APP_ID}
+      app-secret: ${WECHAT_APP_SECRET}
+  content:
+    environment: staging-experience
+  plan:
+    repository: mysql
+  ai:
+    enabled: false

@@ -7,7 +7,7 @@ import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public class IdentityWebConfiguration implements WebMvcConfigurer {
 
     @Override

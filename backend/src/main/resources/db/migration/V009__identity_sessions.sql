@@ -1,0 +1,20 @@
+CREATE TABLE auth_session (
+    id BINARY(16) NOT NULL,
+    user_id BINARY(16) NOT NULL,
+    access_token_digest VARBINARY(32) NOT NULL,
+    refresh_token_digest VARBINARY(32) NOT NULL,
+    access_expires_at DATETIME(6) NOT NULL,
+    refresh_expires_at DATETIME(6) NOT NULL,
+    status VARCHAR(32) NOT NULL,
+    created_at DATETIME(6) NOT NULL,
+    updated_at DATETIME(6) NOT NULL,
+    revoked_at DATETIME(6) NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_auth_session_access_digest UNIQUE (access_token_digest),
+    CONSTRAINT uq_auth_session_refresh_digest UNIQUE (refresh_token_digest),
+    KEY idx_auth_session_user_status (user_id, status),
+    KEY idx_auth_session_refresh_expiry (refresh_expires_at, status),
+    CONSTRAINT fk_auth_session_user FOREIGN KEY (user_id) REFERENCES user_account (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_auth_session_status CHECK (status IN ('ACTIVE', 'ROTATED', 'REVOKED')),
+    CONSTRAINT ck_auth_session_expiry CHECK (access_expires_at <= refresh_expires_at)
+) ENGINE = InnoDB;

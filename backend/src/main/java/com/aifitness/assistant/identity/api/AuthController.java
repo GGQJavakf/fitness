@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/auth")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class AuthController {
 
     private final WechatLoginService loginService;

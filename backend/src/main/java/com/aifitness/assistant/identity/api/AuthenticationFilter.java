@@ -26,7 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public final class AuthenticationFilter extends OncePerRequestFilter {
 
