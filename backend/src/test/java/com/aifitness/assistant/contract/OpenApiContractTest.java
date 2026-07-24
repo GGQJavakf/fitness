@@ -31,6 +31,7 @@ class OpenApiContractTest {
             "GET /api/v1/exercises/{sourceCode}/replacements",
             "GET /api/v1/plan-templates",
             "POST /api/v1/plans/candidates",
+            "GET /api/v1/plans/{planId}/exercise-options",
             "POST /api/v1/plans/validate",
             "POST /api/v1/plans",
             "GET /api/v1/plans/active",

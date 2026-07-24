@@ -52,6 +52,11 @@ export interface PlanExercise {
   repMax: number
   restSeconds: number
   weightStatus: WeightStatus
+  targetWeightKg?: number
+}
+
+export interface PlanExerciseOption extends PlanExercise {
+  name: string
 }
 
 export interface PlanDay {

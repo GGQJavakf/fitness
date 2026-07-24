@@ -3,8 +3,10 @@ import type {
   ActivePlanData,
   PlanCandidateGenerationData,
   PlanValidationDraft,
+  PlanExerciseOption,
 } from './models'
 import {
+  addPlanExercise as addExercise,
   applyRebalancePreview,
   applyPreSaveValidation,
   applyValidation,
@@ -14,6 +16,9 @@ import {
   confirmWarnings,
   createPlanEditorState,
   markVersionConflict,
+  movePlanExercise as moveExercise,
+  removePlanExercise as removeExercise,
+  replacePlanExercise as replaceExercise,
   setFieldLock,
   type EditableNumericField,
   type PlanEditorState,
@@ -50,6 +55,11 @@ export interface FitnessApplication {
   saveEditor(): Promise<PlanEditorState>
   confirmEditorWarnings(): PlanEditorState
   previewRebalance(): Promise<PlanEditorState>
+  listPlanExerciseOptions(dayCode: string): Promise<readonly PlanExerciseOption[]>
+  addPlanExercise(dayCode: string, option: PlanExerciseOption): PlanEditorState
+  removePlanExercise(dayCode: string, exerciseCode: string): PlanEditorState
+  replacePlanExercise(dayCode: string, exerciseCode: string, option: PlanExerciseOption): PlanEditorState
+  movePlanExercise(dayCode: string, exerciseCode: string, direction: -1 | 1): PlanEditorState
 }
 
 export function createFitnessApplication(
@@ -257,6 +267,34 @@ export function createFitnessApplication(
       })
       const result = await planPort.previewRebalance(state.planId, command)
       editor = applyRebalancePreview(state, result)
+      return editor
+    },
+
+    async listPlanExerciseOptions(dayCode) {
+      const state = requireEditor()
+      if (!state.planId || !planPort.listExerciseOptions) {
+        throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再调整动作结构')
+      }
+      return planPort.listExerciseOptions(state.planId, dayCode)
+    },
+
+    addPlanExercise(dayCode, option) {
+      editor = addExercise(requireEditor(), dayCode, option)
+      return editor
+    },
+
+    removePlanExercise(dayCode, exerciseCode) {
+      editor = removeExercise(requireEditor(), dayCode, exerciseCode)
+      return editor
+    },
+
+    replacePlanExercise(dayCode, exerciseCode, option) {
+      editor = replaceExercise(requireEditor(), dayCode, exerciseCode, option)
+      return editor
+    },
+
+    movePlanExercise(dayCode, exerciseCode, direction) {
+      editor = moveExercise(requireEditor(), dayCode, exerciseCode, direction)
       return editor
     },
   }

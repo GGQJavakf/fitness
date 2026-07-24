@@ -5,6 +5,7 @@ import type {
   PlanCandidateGenerationData,
   PlanValidationData,
   PlanValidationDraft,
+  PlanExerciseOption,
   PlanVersionResultData,
   RuleReference,
   UpdateEquipmentRequest,
@@ -67,6 +68,7 @@ type CandidateResponse = components['schemas']['PlanCandidateGenerationResponse'
 type ValidationResponse = components['schemas']['PlanValidationResponse']
 type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
+type PlanExerciseOptionListResponse = components['schemas']['PlanExerciseOptionListResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
 type ReauthenticationProofResponse = components['schemas']['ReauthenticationProofResponse']
@@ -217,6 +219,14 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       request satisfies components['schemas']['RebalancePlanRequest'],
     )
     return requireData(response.data)
+  }
+
+  async listExerciseOptions(planId: string, dayCode: string): Promise<readonly PlanExerciseOption[]> {
+    const response = await this.request<PlanExerciseOptionListResponse>(
+      `/api/v1/plans/${encodeURIComponent(planId)}/exercise-options?dayCode=${encodeURIComponent(dayCode)}`,
+      'GET',
+    )
+    return requireData(response.data).items
   }
 
   async exportData(reauthenticationProof: string): Promise<PrivacyExportData> {

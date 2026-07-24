@@ -182,6 +182,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/{planId}/exercise-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回当前活动计划模板中可添加到指定训练日的规则处方；关键数字来自已验证模板，不由客户端或 AI 生成。 */
+        get: operations["listPlanExerciseOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans/validate": {
         parameters: {
             query?: never;
@@ -950,6 +967,22 @@ export interface components {
         };
         PlanCandidateGenerationResponse: {
             data: components["schemas"]["PlanCandidateGenerationData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanExerciseOption: {
+            exerciseCode: string;
+            name: string;
+            workSets: number;
+            repMin: number;
+            repMax: number;
+            restSeconds: number;
+            weightStatus: components["schemas"]["WeightStatus"];
+        };
+        PlanExerciseOptionListData: {
+            items: components["schemas"]["PlanExerciseOption"][];
+        };
+        PlanExerciseOptionListResponse: {
+            data: components["schemas"]["PlanExerciseOptionListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         PlanValidationDraft: {
@@ -1878,6 +1911,32 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["VersionConflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listPlanExerciseOptions: {
+        parameters: {
+            query: {
+                dayCode: string;
+            };
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前用户、器械、排除偏好和模板共同允许的动作处方 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanExerciseOptionListResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
     };

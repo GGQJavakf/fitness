@@ -3,6 +3,7 @@ package com.aifitness.assistant.plan.infrastructure;
 import com.aifitness.assistant.content.application.ExerciseQueryService;
 import com.aifitness.assistant.content.application.TemplateQueryService;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
+import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.application.PlanRepository;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
@@ -73,6 +74,15 @@ public class PlanConfiguration {
     PlanVersionService planVersionService(
             PlanRepository repository, PlanCandidateService candidates, Clock clock) {
         return new PlanVersionService(repository, new RulesPlanPolicy(candidates), clock);
+    }
+
+    @Bean
+    PlanExerciseOptionService planExerciseOptionService(
+            PlanVersionService plans,
+            TemplateQueryService templates,
+            ExerciseQueryService exercises,
+            ProfileService profiles) {
+        return new PlanExerciseOptionService(plans, templates, exercises, profiles);
     }
 
     @Bean

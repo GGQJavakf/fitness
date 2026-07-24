@@ -192,6 +192,22 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/exercise-options:
+    get:
+      tags: [Plans]
+      operationId: listPlanExerciseOptions
+      description: 返回当前活动计划模板中可添加到指定训练日的规则处方；关键数字来自已验证模板，不由客户端或 AI 生成。
+      parameters:
+        - {name: planId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: dayCode, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Z0-9_]+$'}}
+      responses:
+        '200':
+          description: 当前用户、器械、排除偏好和模板共同允许的动作处方
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanExerciseOptionListResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/validate:
     post:
       tags: [Plans]

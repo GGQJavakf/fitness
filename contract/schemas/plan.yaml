@@ -88,6 +88,34 @@ components:
         restSeconds: {type: integer, minimum: 0}
         weightStatus: {$ref: '#/components/schemas/WeightStatus'}
         targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
+    PlanExerciseOption:
+      type: object
+      additionalProperties: false
+      required: [exerciseCode, name, workSets, repMin, repMax, restSeconds, weightStatus]
+      properties:
+        exerciseCode: {type: string, minLength: 1}
+        name: {type: string, minLength: 2}
+        workSets: {type: integer, minimum: 1}
+        repMin: {type: integer, minimum: 1}
+        repMax: {type: integer, minimum: 1}
+        restSeconds: {type: integer, minimum: 1}
+        weightStatus: {$ref: '#/components/schemas/WeightStatus'}
+    PlanExerciseOptionListData:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 64
+          items: {$ref: '#/components/schemas/PlanExerciseOption'}
+    PlanExerciseOptionListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanExerciseOptionListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     PlanCandidateRequest:
       type: object
       additionalProperties: false

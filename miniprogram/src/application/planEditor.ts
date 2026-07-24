@@ -3,12 +3,14 @@ import type {
   LockCommandStatus,
   LockStatus,
   PlanDraft,
+  PlanExercise,
+  PlanExerciseOption,
   PlanValidationData,
   PlanValidationDraft,
   PlanVersionResultData,
 } from './models'
 
-export type EditableNumericField = 'workSets' | 'repMin' | 'repMax' | 'restSeconds'
+export type EditableNumericField = 'workSets' | 'repMin' | 'repMax' | 'restSeconds' | 'targetWeightKg'
 
 export interface PlanEditorState {
   planId: string
@@ -87,7 +89,7 @@ export function changeNumericField(
       },
     }
   }
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!validEditableNumber(field, value)) {
     return state
   }
 
@@ -99,6 +101,7 @@ export function changeNumericField(
     return state
   }
   exercise[field] = value
+  if (field === 'targetWeightKg') exercise.weightStatus = 'KNOWN'
 
   const lockCommands = { ...state.lockCommands }
   if (currentLock !== 'USER_LOCKED' && lockCommands[fieldPath] !== 'UNLOCKED') {
@@ -115,6 +118,84 @@ export function changeNumericField(
     warningConfirmed: false,
     conflict: undefined,
   }
+}
+
+export function addPlanExercise(
+  state: PlanEditorState,
+  dayCode: string,
+  option: PlanExerciseOption,
+): PlanEditorState {
+  const workingCopy = clonePlan(state.workingCopy)
+  const day = requireDay(workingCopy, dayCode)
+  if (day.exercises.some((exercise) => exercise.exerciseCode === option.exerciseCode)) {
+    throw new Error('动作已在当前训练日中')
+  }
+  if (day.exercises.length >= 8) throw new Error('每个训练日最多包含 8 个动作')
+  const { name: _name, ...exercise } = option
+  validatePrescribedExercise(exercise)
+  day.exercises.push({ ...exercise })
+  return afterStructuralEdit(state, workingCopy, state.lockCommands)
+}
+
+export function removePlanExercise(
+  state: PlanEditorState,
+  dayCode: string,
+  exerciseCode: string,
+): PlanEditorState {
+  const workingCopy = clonePlan(state.workingCopy)
+  const day = requireDay(workingCopy, dayCode)
+  if (day.exercises.length === 1) throw new Error('每个训练日至少保留一个动作')
+  const index = day.exercises.findIndex((exercise) => exercise.exerciseCode === exerciseCode)
+  if (index < 0) throw new Error('动作不存在')
+  const lockCommands = commandsWithoutExercise(state, dayCode, exerciseCode, '规则锁定动作不能删除')
+  day.exercises.splice(index, 1)
+  return afterStructuralEdit(state, workingCopy, lockCommands)
+}
+
+export function replacePlanExercise(
+  state: PlanEditorState,
+  dayCode: string,
+  exerciseCode: string,
+  option: PlanExerciseOption | PlanExercise,
+): PlanEditorState {
+  if (exerciseCode === option.exerciseCode) return state
+  const workingCopy = clonePlan(state.workingCopy)
+  const day = requireDay(workingCopy, dayCode)
+  const index = day.exercises.findIndex((exercise) => exercise.exerciseCode === exerciseCode)
+  if (index < 0) throw new Error('动作不存在')
+  if (day.exercises.some((exercise) => exercise.exerciseCode === option.exerciseCode)) {
+    throw new Error('动作已在当前训练日中')
+  }
+  const lockCommands = commandsWithoutExercise(state, dayCode, exerciseCode, '规则锁定动作不能替换')
+  const { exerciseCode: replacementCode, workSets, repMin, repMax, restSeconds } = option
+  const replacement: PlanExercise = {
+    exerciseCode: replacementCode,
+    workSets,
+    repMin,
+    repMax,
+    restSeconds,
+    weightStatus: 'NEEDS_CALIBRATION',
+  }
+  validatePrescribedExercise(replacement)
+  day.exercises[index] = replacement
+  return afterStructuralEdit(state, workingCopy, lockCommands)
+}
+
+export function movePlanExercise(
+  state: PlanEditorState,
+  dayCode: string,
+  exerciseCode: string,
+  direction: -1 | 1,
+): PlanEditorState {
+  const workingCopy = clonePlan(state.workingCopy)
+  const day = requireDay(workingCopy, dayCode)
+  const index = day.exercises.findIndex((exercise) => exercise.exerciseCode === exerciseCode)
+  if (index < 0) throw new Error('动作不存在')
+  const target = index + direction
+  if (target < 0 || target >= day.exercises.length) return state
+  const [exercise] = day.exercises.splice(index, 1)
+  day.exercises.splice(target, 0, exercise)
+  return afterStructuralEdit(state, workingCopy, state.lockCommands)
 }
 
 export function setFieldLock(
@@ -308,7 +389,7 @@ function toValidationDraft(plan: PlanDraft): PlanValidationDraft {
 }
 
 function findNumericDiffs(before: PlanDraft, after: PlanDraft): NumericFieldDiff[] {
-  const fields: readonly EditableNumericField[] = ['workSets', 'repMin', 'repMax', 'restSeconds']
+  const fields: readonly EditableNumericField[] = ['workSets', 'repMin', 'repMax', 'restSeconds', 'targetWeightKg']
   return before.days.flatMap((day) => {
     const afterDay = after.days.find((item) => item.code === day.code)
     if (!afterDay) return []
@@ -319,10 +400,11 @@ function findNumericDiffs(before: PlanDraft, after: PlanDraft): NumericFieldDiff
       if (!afterExercise) return []
       return fields.flatMap((field) => {
         const afterValue = afterExercise[field]
-        return typeof afterValue === 'number' && afterValue !== exercise[field]
+        const beforeValue = exercise[field]
+        return typeof beforeValue === 'number' && typeof afterValue === 'number' && afterValue !== beforeValue
           ? [{
               fieldPath: numericFieldPath(day.code, exercise.exerciseCode, field),
-              before: exercise[field],
+              before: beforeValue,
               after: afterValue,
             }]
           : []
@@ -346,7 +428,72 @@ function copyNumericField(source: PlanDraft, target: PlanDraft, fieldPath: strin
     .find((day) => day.code === dayCode)
     ?.exercises.find((exercise) => exercise.exerciseCode === exerciseCode)
   if (sourceExercise && targetExercise) {
-    targetExercise[field] = sourceExercise[field]
+    const value = sourceExercise[field]
+    if (typeof value === 'number') {
+      targetExercise[field] = value
+      if (field === 'targetWeightKg') targetExercise.weightStatus = 'KNOWN'
+    }
+  }
+}
+
+function validEditableNumber(field: EditableNumericField, value: number): boolean {
+  if (!Number.isFinite(value)) return false
+  if (field === 'targetWeightKg') {
+    return value >= 0 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-8
+  }
+  return Number.isInteger(value) && value > 0
+}
+
+function requireDay(plan: PlanDraft, dayCode: string) {
+  const day = plan.days.find((item) => item.code === dayCode)
+  if (!day) throw new Error('训练日不存在')
+  return day
+}
+
+function commandsWithoutExercise(
+  state: PlanEditorState,
+  dayCode: string,
+  exerciseCode: string,
+  ruleLockedMessage: string,
+): Record<string, LockCommandStatus> {
+  const prefix = `/days/${dayCode}/exercises/${exerciseCode}/`
+  if (Object.entries(state.baseLocks).some(([path, status]) => path.startsWith(prefix) && status === 'RULE_LOCKED')) {
+    throw new Error(ruleLockedMessage)
+  }
+  const commands = Object.fromEntries(
+    Object.entries(state.lockCommands).filter(([path]) => !path.startsWith(prefix)),
+  ) as Record<string, LockCommandStatus>
+  Object.entries(state.baseLocks).forEach(([path, status]) => {
+    if (path.startsWith(prefix) && status === 'USER_LOCKED') commands[path] = 'UNLOCKED'
+  })
+  return commands
+}
+
+function afterStructuralEdit(
+  state: PlanEditorState,
+  workingCopy: PlanDraft,
+  lockCommands: Record<string, LockCommandStatus>,
+): PlanEditorState {
+  return {
+    ...state,
+    workingCopy,
+    lockCommands,
+    locks: effectiveLocks(state.baseLocks, lockCommands),
+    validationResult: { valid: true, validationIssues: [] },
+    warningConfirmationToken: undefined,
+    warningConfirmed: false,
+    rebalanceDiffs: [],
+    conflict: undefined,
+  }
+}
+
+function validatePrescribedExercise(exercise: PlanExercise): void {
+  if (!exercise.exerciseCode || exercise.exerciseCode.includes('/')
+    || !Number.isInteger(exercise.workSets) || exercise.workSets <= 0
+    || !Number.isInteger(exercise.repMin) || exercise.repMin <= 0
+    || !Number.isInteger(exercise.repMax) || exercise.repMax < exercise.repMin
+    || !Number.isInteger(exercise.restSeconds) || exercise.restSeconds <= 0) {
+    throw new Error('服务端动作处方无效')
   }
 }
 

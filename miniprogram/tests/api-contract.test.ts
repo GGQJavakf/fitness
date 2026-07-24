@@ -58,5 +58,6 @@ describe('OpenAPI client contract', () => {
     const schema = readFileSync(generatedSchema, 'utf8')
     expect(schema).toContain('WeightUnit: "KG"')
     expect(schema).toContain('"/api/v1/workout-sessions"')
+    expect(schema).toContain('"/api/v1/plans/{planId}/exercise-options"')
   })
 })

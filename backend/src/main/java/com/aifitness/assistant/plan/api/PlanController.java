@@ -5,6 +5,7 @@ import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.common.domain.RuleReference;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.domain.FieldLock;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,10 +35,15 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile({"local", "test", "staging-experience"})
 public final class PlanController {
     private final PlanVersionService versions;
+    private final PlanExerciseOptionService exerciseOptions;
     private final Clock clock;
 
-    public PlanController(PlanVersionService versions, Clock clock) {
+    public PlanController(
+            PlanVersionService versions,
+            PlanExerciseOptionService exerciseOptions,
+            Clock clock) {
         this.versions = versions;
+        this.exerciseOptions = exerciseOptions;
         this.clock = clock;
     }
 
@@ -61,6 +68,14 @@ public final class PlanController {
             @PathVariable UUID planId,
             @PathVariable int versionNo) {
         return response(VersionData.from(versions.getVersion(user, planId, versionNo)));
+    }
+
+    @GetMapping("/{planId}/exercise-options")
+    public ApiResponse<ExerciseOptionListData> exerciseOptions(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId,
+            @RequestParam String dayCode) {
+        return response(new ExerciseOptionListData(exerciseOptions.list(user, planId, dayCode)));
     }
 
     @PostMapping("/{planId}/versions")
@@ -107,6 +122,12 @@ public final class PlanController {
     }
 
     public record CreatePlanRequest(String candidateId) {}
+
+    public record ExerciseOptionListData(List<PlanExerciseOptionService.Option> items) {
+        public ExerciseOptionListData {
+            items = List.copyOf(items);
+        }
+    }
 
     public record VersionRequest(
             int baseVersionNumber,

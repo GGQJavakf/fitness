@@ -13,6 +13,23 @@
   gap: 12px;
 }
 
+.editor-exercise__heading > view:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editor-structure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.editor-structure-actions button {
+  margin: 0;
+}
+
 .editor-field {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) 150px 150px;
@@ -30,7 +47,12 @@
 }
 
 .editor-field__lock { color: #65736d; font-size: 22px; }
+.editor-field__hint { color: #65736d; text-align: center; font-size: 24px; }
 .editor-diff { padding: 14px; border-radius: 12px; background: #eef3f1; font-size: 24px; }
+.editor-add-action { width: 100%; margin-top: 18px; }
+.exercise-option-panel { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; padding: 18px; border-radius: 16px; background: #f2f7f5; }
+.exercise-option { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; height: auto; padding: 16px 18px; text-align: left; }
+.danger-action { color: #a23b3b; border-color: #dba6a6; background: #fff3f3; }
 
 @media (max-width: 360px) {
   .editor-field { grid-template-columns: 1fr 120px; }
