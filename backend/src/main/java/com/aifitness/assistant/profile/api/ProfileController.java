@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/profile")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class ProfileController {
 
     private final ProfileService profiles;

@@ -15,7 +15,13 @@ import com.aifitness.assistant.identity.infrastructure.JdbcSessionStore;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
+import com.aifitness.assistant.profile.application.ProfileService;
+import com.aifitness.assistant.profile.domain.EquipmentProfile;
+import com.aifitness.assistant.profile.domain.PreferenceProfile;
+import com.aifitness.assistant.profile.domain.UserProfile;
+import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -159,7 +165,8 @@ class MigrationTest {
                 "db/migration/V006__equipment_client_key.sql",
                 "db/migration/V007__privacy_requests.sql",
                 "db/migration/V008__privacy_retention_lifecycle.sql",
-                "db/migration/V009__identity_sessions.sql"))
+                "db/migration/V009__identity_sessions.sql",
+                "db/migration/V010__profile_collection_versions.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -222,6 +229,13 @@ class MigrationTest {
                 "CONSTRAINT uq_auth_session_refresh_digest UNIQUE",
                 "KEY idx_auth_session_user_status",
                 "ck_auth_session_status");
+        assertThat(readMigration("V010__profile_collection_versions.sql")).contains(
+                "user_profile_collection_version",
+                "equipment_version BIGINT UNSIGNED NOT NULL DEFAULT 0",
+                "preference_version BIGINT UNSIGNED NOT NULL DEFAULT 0",
+                "FOREIGN KEY (user_id) REFERENCES user_account (id)",
+                "INSERT INTO user_profile_collection_version",
+                "THEN 1 ELSE 0 END");
     }
 
     @Test
@@ -230,7 +244,8 @@ class MigrationTest {
         assertThat(flyway.info().applied())
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
-                .containsExactly("001", "002", "003", "004", "005", "006", "007", "008", "009");
+                .containsExactly(
+                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010");
     }
 
     @Test
@@ -377,6 +392,64 @@ class MigrationTest {
                         .AuthenticationRequiredException.class);
         assertThat(queryOne("SELECT status FROM user_account WHERE id="
                 + binary(user.value().toString()))).isEqualTo("DELETED");
+    }
+
+    @Test
+    void jdbcProfileRepositoryPreservesVersionsCollectionsAndUserIsolation() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID firstUserId = UUID.fromString(createUser());
+        UUID secondUserId = UUID.fromString(createUser());
+        UUID exerciseId = UUID.fromString(createExercise());
+        JdbcProfileRepository profiles = new JdbcProfileRepository(dataSource, new ObjectMapper());
+
+        UserProfile.Details details = new UserProfile.Details(
+                UserProfile.ExperienceLevel.BEGINNER,
+                UserProfile.FitnessGoal.GENERAL_FITNESS,
+                3,
+                45,
+                UserProfile.TrainingLocation.HOME);
+        assertThat(profiles.replaceProfile(firstUserId, 0, details).version()).isEqualTo(1);
+        assertThat(profiles.findProfile(firstUserId)).isPresent();
+        assertThat(profiles.findProfile(secondUserId)).isEmpty();
+        assertThatThrownBy(() -> profiles.replaceProfile(firstUserId, 0, details))
+                .isInstanceOfSatisfying(
+                        ProfileService.VersionConflictException.class,
+                        failure -> assertThat(failure.currentVersion()).isEqualTo(1));
+
+        UUID clientEquipmentKey = UUID.randomUUID();
+        EquipmentProfile equipment = profiles.replaceEquipment(firstUserId, 0, List.of(
+                new EquipmentProfile.Item(
+                        clientEquipmentKey,
+                        "ADJUSTABLE_DUMBBELL",
+                        new BigDecimal("2.50"),
+                        "KG",
+                        List.of(new BigDecimal("2.50"), new BigDecimal("5.00")))));
+        assertThat(equipment.version()).isEqualTo(1);
+        assertThat(profiles.findEquipment(firstUserId).orElseThrow().items())
+                .extracting(EquipmentProfile.Item::clientEquipmentKey)
+                .containsExactly(clientEquipmentKey);
+        assertThat(profiles.findEquipment(secondUserId)).isEmpty();
+        assertThatThrownBy(() -> profiles.replaceEquipment(firstUserId, 0, List.of()))
+                .isInstanceOfSatisfying(
+                        ProfileService.VersionConflictException.class,
+                        failure -> assertThat(failure.currentVersion()).isEqualTo(1));
+
+        PreferenceProfile preferences = profiles.replacePreferences(firstUserId, 0, List.of(
+                new PreferenceProfile.Preference(
+                        exerciseId, PreferenceProfile.PreferenceType.EXCLUDED)));
+        assertThat(preferences.version()).isEqualTo(1);
+        assertThat(profiles.findPreferences(firstUserId).orElseThrow().preferences())
+                .extracting(PreferenceProfile.Preference::exerciseId)
+                .containsExactly(exerciseId);
+        assertThat(profiles.findPreferences(secondUserId)).isEmpty();
+        assertThatThrownBy(() -> profiles.replacePreferences(firstUserId, 0, List.of()))
+                .isInstanceOfSatisfying(
+                        ProfileService.VersionConflictException.class,
+                        failure -> assertThat(failure.currentVersion()).isEqualTo(1));
+        assertThat(queryOne("SELECT COUNT(*) FROM user_equipment WHERE user_id="
+                + binary(secondUserId.toString()))).isEqualTo("0");
+        assertThat(queryOne("SELECT COUNT(*) FROM user_exercise_preference WHERE user_id="
+                + binary(secondUserId.toString()))).isEqualTo("0");
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -626,7 +699,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(9);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
