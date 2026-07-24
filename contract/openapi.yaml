@@ -347,7 +347,11 @@ paths:
         - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/SetUpsert'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 幂等保存后的规范化组记录；重试返回首次保存结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSetResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
     delete:

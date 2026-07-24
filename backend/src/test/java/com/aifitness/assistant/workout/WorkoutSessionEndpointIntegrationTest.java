@@ -52,6 +52,7 @@ class WorkoutSessionEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.exercises[0].prescription.unit").value("KG"))
                 .andReturn().getResponse().getContentAsString());
         String sessionId = created.at("/data/id").asText();
+        String sessionExerciseId = created.at("/data/exercises/0/id").asText();
 
         mvc.perform(post("/api/v1/workout-sessions")
                         .header("Authorization", "Bearer " + token)
@@ -76,6 +77,43 @@ class WorkoutSessionEndpointIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("VERSION_CONFLICT"))
                 .andExpect(jsonPath("$.error.details.currentVersion").value(1));
+
+        String setKey = "workout-set-" + UUID.randomUUID();
+        String setBody = """
+                {"sessionExerciseId":"%s","clientOperationSeq":1,"setType":"WORK","setOrder":1,
+                 "target":{"weight":{"value":20,"unit":"KG"},"reps":10},
+                 "actual":{"weight":{"value":20,"unit":"KG"},"reps":9},
+                 "remainingReps":2,"completionStatus":"COMPLETED",
+                 "completedAt":"2026-07-24T08:00:00Z","expectedSessionVersion":1}
+                """.formatted(sessionExerciseId);
+        JsonNode savedSet = json(mvc.perform(put(
+                        "/api/v1/workout-sessions/{id}/sets/{clientSetKey}", sessionId, setKey)
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", setKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(setBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sessionVersion").value(2))
+                .andExpect(jsonPath("$.data.actual.weight.unit").value("KG"))
+                .andReturn().getResponse().getContentAsString());
+        String setId = savedSet.at("/data/setId").asText();
+
+        mvc.perform(put("/api/v1/workout-sessions/{id}/sets/{clientSetKey}", sessionId, setKey)
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", setKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(setBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.setId").value(setId))
+                .andExpect(jsonPath("$.data.sessionVersion").value(2));
+
+        mvc.perform(put("/api/v1/workout-sessions/{id}/sets/{clientSetKey}", sessionId, setKey)
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", setKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(setBody.replace("\"reps\":9", "\"reps\":8")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("IDEMPOTENCY_KEY_REUSED"));
 
         String otherToken = login();
         mvc.perform(get("/api/v1/workout-sessions/{id}", sessionId)

@@ -34,7 +34,9 @@ import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
+import com.aifitness.assistant.workout.domain.WorkoutSet;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSessionRepository;
+import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSetRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.io.IOException;
@@ -182,7 +184,8 @@ class MigrationTest {
                 "db/migration/V008__privacy_retention_lifecycle.sql",
                 "db/migration/V009__identity_sessions.sql",
                 "db/migration/V010__profile_collection_versions.sql",
-                "db/migration/V011__privacy_export_artifacts.sql"))
+                "db/migration/V011__privacy_export_artifacts.sql",
+                "db/migration/V012__workout_set_idempotency.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -257,6 +260,11 @@ class MigrationTest {
                 "payload_json JSON NOT NULL",
                 "idx_privacy_export_user_expires",
                 "trg_privacy_export_artifact_immutable_update");
+        assertThat(readMigration("V012__workout_set_idempotency.sql")).contains(
+                "client_operation_seq BIGINT UNSIGNED",
+                "payload_digest BINARY(32)",
+                "applied_session_version BIGINT UNSIGNED",
+                "trg_workout_set_fact_immutable");
     }
 
     @Test
@@ -266,7 +274,7 @@ class MigrationTest {
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
                 .containsExactly(
-                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011");
+                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012");
     }
 
     @Test
@@ -621,6 +629,29 @@ class MigrationTest {
         assertThat(repository.findByIdAndUser(sessionId, userId)).contains(active);
         assertThat(queryOne("SELECT COUNT(*) FROM workout_exercise_snapshot WHERE session_id="
                 + binary(sessionId.toString()))).isEqualTo("1");
+
+        JdbcWorkoutSetRepository sets = new JdbcWorkoutSetRepository(dataSource, new ObjectMapper());
+        WorkoutSet workoutSet = new WorkoutSet(
+                UUID.randomUUID(), sessionId, snapshot.id(), "jdbc-set-key-001", 1,
+                WorkoutSet.SetType.WORK, 1,
+                new WorkoutSet.Performance(new BigDecimal("40"), "KG", 10),
+                new WorkoutSet.Performance(new BigDecimal("40"), "KG", 9), 2,
+                WorkoutSet.CompletionStatus.COMPLETED,
+                java.util.Optional.of(java.time.Instant.parse("2026-07-24T08:03:00Z")),
+                0, java.util.Optional.empty(), "0".repeat(64));
+        var firstSet = sets.save(userId, workoutSet, 1);
+        assertThat(firstSet.sessionVersion()).isEqualTo(2);
+        assertThat(sets.save(userId, workoutSet, 1)).isEqualTo(firstSet);
+        assertThat(queryOne("SELECT COUNT(*) FROM workout_set WHERE payload_digest IS NOT NULL"
+                + " AND applied_session_version=2")).isEqualTo("1");
+        WorkoutSet conflicting = new WorkoutSet(
+                UUID.randomUUID(), sessionId, snapshot.id(), "jdbc-set-key-001", 1,
+                WorkoutSet.SetType.WORK, 1, workoutSet.target(),
+                new WorkoutSet.Performance(new BigDecimal("42"), "KG", 9), 2,
+                WorkoutSet.CompletionStatus.COMPLETED, workoutSet.completedAt(), 0,
+                java.util.Optional.empty(), "1".repeat(64));
+        assertThatThrownBy(() -> sets.save(userId, conflicting, 2))
+                .isInstanceOf(WorkoutSessionService.IdempotencyConflictException.class);
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -870,7 +901,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(12);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

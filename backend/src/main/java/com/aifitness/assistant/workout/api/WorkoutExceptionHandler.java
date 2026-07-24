@@ -6,6 +6,7 @@ import com.aifitness.assistant.common.api.ErrorCode;
 import com.aifitness.assistant.common.api.ErrorMeta;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutSetService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -16,7 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = WorkoutSessionController.class)
+@RestControllerAdvice(assignableTypes = {WorkoutSessionController.class, WorkoutSetController.class})
 @Profile({"local", "test", "staging-experience"})
 public final class WorkoutExceptionHandler {
 
@@ -37,6 +38,13 @@ public final class WorkoutExceptionHandler {
     @ExceptionHandler(WorkoutSessionService.IdempotencyConflictException.class)
     ResponseEntity<ApiErrorResponse> idempotencyConflict() {
         return error(HttpStatus.CONFLICT, ErrorCode.IDEMPOTENCY_KEY_REUSED, "幂等键已用于不同请求", Map.of());
+    }
+
+    @ExceptionHandler(WorkoutSetService.AnomalyConfirmationRequiredException.class)
+    ResponseEntity<ApiErrorResponse> anomalyConfirmation(
+            WorkoutSetService.AnomalyConfirmationRequiredException exception) {
+        return error(HttpStatus.CONFLICT, ErrorCode.ANOMALY_CONFIRMATION_REQUIRED,
+                "异常训练数据需要显式确认", Map.of("reasons", exception.reasons()));
     }
 
     @ExceptionHandler(IllegalStateException.class)

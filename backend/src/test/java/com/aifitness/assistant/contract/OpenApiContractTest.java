@@ -224,6 +224,8 @@ class OpenApiContractTest {
                 .endsWith("/WorkoutSessionResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/status", "put"))
                 .endsWith("/WorkoutSessionResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/sets/{clientSetKey}", "put"))
+                .endsWith("/WorkoutSetResponse");
 
         Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
         assertThat(required(schemas, "WorkoutSessionData"))
@@ -233,6 +235,12 @@ class OpenApiContractTest {
         assertThat(required(schemas, "WorkoutPrescriptionSnapshot"))
                 .containsExactlyInAnyOrder(
                         "workSets", "repMin", "repMax", "restSeconds", "weightStatus", "unit");
+        assertThat(required(schemas, "UpsertSetRequest"))
+                .contains("sessionExerciseId", "clientOperationSeq", "target", "actual", "expectedSessionVersion");
+        assertThat(required(schemas, "WorkoutSetData"))
+                .contains("setId", "sessionExerciseId", "clientSetKey", "serverRevision", "sessionVersion", "syncStatus");
+        assertThat(list(map(map(commonSchemas.get("schemas")).get("ErrorCode")).get("enum")))
+                .contains("ANOMALY_CONFIRMATION_REQUIRED");
     }
 
     @Test

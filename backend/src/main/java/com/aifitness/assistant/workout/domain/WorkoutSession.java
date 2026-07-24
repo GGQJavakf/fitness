@@ -62,6 +62,15 @@ public record WorkoutSession(
                 && trainingDayCode.equals(expectedDayCode);
     }
 
+    public WorkoutSession recordSet() {
+        if (status != WorkoutStatus.IN_PROGRESS && status != WorkoutStatus.PAUSED) {
+            throw new IllegalStateException("workout session does not accept set entries in " + status);
+        }
+        return new WorkoutSession(
+                id, userId, planId, planVersionId, planVersionNumber, trainingDayId, trainingDayCode,
+                clientSessionKey, status, startedAt, completedAt, version + 1, exercises);
+    }
+
     private static String required(String value, String name) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(name + " must not be blank");

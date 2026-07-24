@@ -48,8 +48,9 @@ components:
     UpsertSetRequest:
       type: object
       additionalProperties: false
-      required: [clientOperationSeq, setType, setOrder, target, actual, completionStatus, expectedSessionVersion]
+      required: [sessionExerciseId, clientOperationSeq, setType, setOrder, target, actual, completionStatus, expectedSessionVersion]
       properties:
+        sessionExerciseId: {type: string, format: uuid}
         clientOperationSeq: {type: integer, minimum: 1}
         setType: {$ref: '#/components/schemas/SetType'}
         setOrder: {type: integer, minimum: 1}
@@ -59,6 +60,7 @@ components:
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         expectedSessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        confirmAnomaly: {type: boolean, default: false}
     DeleteSetRequest:
       type: object
       additionalProperties: false
@@ -155,4 +157,35 @@ components:
       required: [data, meta]
       properties:
         data: {$ref: '#/components/schemas/WorkoutSessionData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutSetData:
+      type: object
+      additionalProperties: false
+      required: [setId, sessionExerciseId, clientSetKey, clientOperationSeq, setType, setOrder, target, actual, completionStatus, serverRevision, sessionVersion, syncStatus]
+      properties:
+        setId: {type: string, format: uuid}
+        sessionExerciseId: {type: string, format: uuid}
+        clientSetKey: {type: string, minLength: 8, maxLength: 128}
+        clientOperationSeq: {type: integer, format: int64, minimum: 1}
+        setType: {$ref: '#/components/schemas/SetType'}
+        setOrder: {type: integer, minimum: 1}
+        target: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetTarget'}
+        remainingReps: {type: integer, minimum: 0}
+        completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        serverRevision: {type: integer, format: int64, minimum: 0}
+        sessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        anomalyStatus:
+          type: string
+          enum: [CONFIRMED_EXCLUDED]
+        syncStatus:
+          type: string
+          enum: [APPLIED]
+    WorkoutSetResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutSetData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

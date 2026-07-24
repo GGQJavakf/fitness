@@ -681,7 +681,7 @@ export interface components {
         /** Format: int64 */
         ExpectedVersion: number;
         /** @enum {string} */
-        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "REAUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "REAUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "ANOMALY_CONFIRMATION_REQUIRED" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
         Weight: {
             value: number;
             unit: components["schemas"]["WeightUnit"];
@@ -1053,6 +1053,8 @@ export interface components {
         /** @enum {string} */
         CompletionStatus: "PLANNED" | "COMPLETED" | "SKIPPED";
         UpsertSetRequest: {
+            /** Format: uuid */
+            sessionExerciseId: string;
             clientOperationSeq: number;
             setType: components["schemas"]["SetType"];
             setOrder: number;
@@ -1062,6 +1064,35 @@ export interface components {
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];
             expectedSessionVersion: components["schemas"]["ExpectedVersion"];
+            /** @default false */
+            confirmAnomaly: boolean;
+        };
+        WorkoutSetData: {
+            /** Format: uuid */
+            setId: string;
+            /** Format: uuid */
+            sessionExerciseId: string;
+            clientSetKey: string;
+            /** Format: int64 */
+            clientOperationSeq: number;
+            setType: components["schemas"]["SetType"];
+            setOrder: number;
+            target: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetTarget"];
+            remainingReps?: number;
+            completionStatus: components["schemas"]["CompletionStatus"];
+            completedAt?: components["schemas"]["UtcDateTime"];
+            /** Format: int64 */
+            serverRevision: number;
+            sessionVersion: components["schemas"]["ExpectedVersion"];
+            /** @enum {string} */
+            anomalyStatus?: "CONFIRMED_EXCLUDED";
+            /** @enum {string} */
+            syncStatus: "APPLIED";
+        };
+        WorkoutSetResponse: {
+            data: components["schemas"]["WorkoutSetData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         DeleteSetRequest: {
             expectedSessionVersion: components["schemas"]["ExpectedVersion"];
@@ -1910,7 +1941,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["SetUpsert"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 幂等保存后的规范化组记录；重试返回首次保存结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSetResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
