@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = {PlanController.class})
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class PlanExceptionHandler {
 
     @ExceptionHandler(PlanVersionService.VersionConflictException.class)

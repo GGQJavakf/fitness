@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/exercises")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class ExerciseController {
 
     private final ExerciseQueryService exercises;

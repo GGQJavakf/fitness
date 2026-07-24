@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/plan-templates")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class TemplateController {
 
     private final TemplateQueryService templates;

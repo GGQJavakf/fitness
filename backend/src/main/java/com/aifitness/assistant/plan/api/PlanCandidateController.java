@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/plans")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class PlanCandidateController {
 
     private final PlanCandidateService candidates;

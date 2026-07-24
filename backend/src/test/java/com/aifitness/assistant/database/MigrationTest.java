@@ -12,6 +12,8 @@ import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.identity.domain.UserIdentity;
 import com.aifitness.assistant.identity.infrastructure.JdbcIdentityRepository;
 import com.aifitness.assistant.identity.infrastructure.JdbcSessionStore;
+import com.aifitness.assistant.content.infrastructure.ClasspathContentCatalogRepository;
+import com.aifitness.assistant.content.infrastructure.JdbcContentCatalogPublisher;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
@@ -298,10 +300,21 @@ class MigrationTest {
     void applicationRepositoryAtomicallyPersistsImmutablePlanVersionsAndRollsBackFailures() throws Exception {
         migrateEmptyMysqlDatabase();
         UUID userId = UUID.fromString(createUser());
+        ObjectMapper objectMapper = new ObjectMapper();
+        ClasspathContentCatalogRepository catalogs =
+                new ClasspathContentCatalogRepository(objectMapper);
+        JdbcContentCatalogPublisher publisher =
+                new JdbcContentCatalogPublisher(dataSource, objectMapper);
+        publisher.publish(catalogs.exercises(), catalogs.templates());
+        publisher.publish(catalogs.exercises(), catalogs.templates());
         UUID exerciseId = UUID.nameUUIDFromBytes(
-                "ai-fitness-exercise:SQUAT".getBytes(StandardCharsets.UTF_8));
-        createExercise(exerciseId.toString());
-        PlanDraft initial = planDraft("SQUAT", 90);
+                "ai-fitness-exercise:GOBLET_SQUAT".getBytes(StandardCharsets.UTF_8));
+        assertThat(queryOne("SELECT COUNT(*) FROM exercise WHERE id="
+                + binary(exerciseId.toString()))).isEqualTo("1");
+        assertThat(queryOne("SELECT COUNT(*) FROM plan_template_version "
+                + "WHERE template_code='FULL_BODY_3_DAY_V1' AND version='1.0.0'"))
+                .isEqualTo("1");
+        PlanDraft initial = planDraft("GOBLET_SQUAT", 90);
         PlanVersionService.PlanPolicy policy = new PlanVersionService.PlanPolicy() {
             @Override
             public PlanVersionService.CandidatePlan candidate(
@@ -317,20 +330,20 @@ class MigrationTest {
             }
         };
         JdbcPlanRepository repository = new JdbcPlanRepository(
-                dataSource, new ObjectMapper(), ignored -> exerciseId);
+                dataSource, objectMapper, ignored -> exerciseId);
         PlanVersionService service = new PlanVersionService(
                 repository, policy, java.time.Clock.systemUTC());
         AuthenticatedUserId user = new AuthenticatedUserId(userId);
 
         var created = service.createInitial(user, "candidate-db");
         var updated = service.createVersion(
-                user, created.id(), 1, planDraft("SQUAT", 120), Map.of(), null);
+                user, created.id(), 1, planDraft("GOBLET_SQUAT", 120), Map.of(), null);
 
         assertThat(updated.version()).get().extracting(version -> version.versionNumber()).isEqualTo(2);
         assertThat(repository.findByIdAndUser(created.id(), userId).orElseThrow().version(1)
-                .plan().valueAt("/days/DAY_A/exercises/SQUAT/restSeconds")).contains(90);
+                .plan().valueAt("/days/DAY_A/exercises/GOBLET_SQUAT/restSeconds")).contains(90);
         assertThat(repository.findActiveByUser(userId).orElseThrow().activeVersion()
-                .plan().valueAt("/days/DAY_A/exercises/SQUAT/restSeconds")).contains(120);
+                .plan().valueAt("/days/DAY_A/exercises/GOBLET_SQUAT/restSeconds")).contains(120);
         assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
                 + binary(created.id().toString()))).isEqualTo("2");
 

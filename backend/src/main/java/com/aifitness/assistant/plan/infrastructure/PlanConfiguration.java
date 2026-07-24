@@ -22,8 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 @Configuration
-@Profile({"local", "test"})
-public class LocalPlanConfiguration {
+@Profile({"local", "test", "staging-experience"})
+public class PlanConfiguration {
 
     @Bean
     PlanRulePolicy planRulePolicy(ObjectMapper objectMapper) {
