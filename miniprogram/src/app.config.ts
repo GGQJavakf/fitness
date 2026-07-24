@@ -5,7 +5,11 @@ export default defineAppConfig({
     'presentation/pages/plan-candidates/index',
     'presentation/pages/plan-editor/index',
     'presentation/pages/plan/index',
-    'presentation/pages/my/index'
+    'presentation/pages/my/index',
+    'presentation/pages/workout-prepare/index',
+    'presentation/pages/workout-session/index',
+    'presentation/pages/workout-summary/index',
+    'presentation/pages/sync-conflicts/index'
   ],
   window: {
     navigationBarTitleText: 'AI 健身助手',

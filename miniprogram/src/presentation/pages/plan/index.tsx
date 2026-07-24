@@ -40,7 +40,8 @@ export default function PlanPage() {
       <View className='card'>
         <Text className='title'>{plan.activeVersion.plan.name}</Text>
         <Text className='subtitle'>计划已生效 · 活动版本 v{plan.activeVersion.versionNumber}</Text>
-        <View className='info-box'>今日训练执行将在 M2 接入；当前仅展示生效计划与周安排。</View>
+        <View className='info-box'>训练会固定引用当前版本快照，后续计划编辑不会改变已开始训练。</View>
+        <Button className='primary-action' onClick={() => void application.navigation.open('WORKOUT_PREPARE')}>开始今日训练</Button>
       </View>
 
       {plan.activeVersion.plan.days.map((day) => (

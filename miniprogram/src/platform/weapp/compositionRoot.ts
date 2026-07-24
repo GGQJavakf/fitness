@@ -3,6 +3,7 @@ import { createStartupUseCases } from '../../application/onboarding'
 import { createFitnessApplication } from '../../application/useCases'
 import { createVerifiedPrivacyUseCases } from '../../application/privacy'
 import { WorkoutSyncService } from '../../application/use-cases/WorkoutSyncService'
+import { WorkoutFlowService } from '../../application/use-cases/WorkoutFlowService'
 import { FitnessApiClient } from '../../infrastructure/api/client'
 import {
   createWeappLogin,
@@ -38,7 +39,10 @@ const navigation = createNavigationUseCases(navigationPort)
 const privacy = createVerifiedPrivacyUseCases(api, {
   getProof: async () => api.issueReauthenticationProof(await reauthentication.getCode()),
 })
-const workoutSync = new WorkoutSyncService(createWechatWorkoutDraftStore(), () => new Date().toISOString())
+const workoutDrafts = createWechatWorkoutDraftStore()
+const clock = { nowUtc: () => new Date().toISOString() }
+const workoutSync = new WorkoutSyncService(workoutDrafts, () => clock.nowUtc())
+const workouts = new WorkoutFlowService(workoutDrafts, clock, api)
 
 export function getWeappApplication() {
   return {
@@ -47,5 +51,12 @@ export function getWeappApplication() {
     navigation,
     privacy,
     workoutSync,
+    workouts,
+    listSyncConflicts: () => api.listSyncConflicts(),
+    resolveSyncConflict: (
+      conflictId: string,
+      request: Parameters<typeof api.resolveSyncConflict>[1],
+    ) => api.resolveSyncConflict(conflictId, request),
+    startWorkoutSession: (request: Parameters<typeof api.startWorkoutSession>[0]) => api.startWorkoutSession(request),
   }
 }

@@ -5,6 +5,10 @@ export type PageDestination =
   | 'PLAN_EDITOR'
   | 'PLAN'
   | 'MY'
+  | 'WORKOUT_PREPARE'
+  | 'WORKOUT_SESSION'
+  | 'WORKOUT_SUMMARY'
+  | 'SYNC_CONFLICTS'
 
 export interface PageNavigationPort {
   open(destination: PageDestination): Promise<void> | void

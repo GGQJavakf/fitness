@@ -18,6 +18,10 @@ const pageRoutes: Record<PageDestination, string> = {
   PLAN_EDITOR: '/presentation/pages/plan-editor/index',
   PLAN: '/presentation/pages/plan/index',
   MY: '/presentation/pages/my/index',
+  WORKOUT_PREPARE: '/presentation/pages/workout-prepare/index',
+  WORKOUT_SESSION: '/presentation/pages/workout-session/index',
+  WORKOUT_SUMMARY: '/presentation/pages/workout-summary/index',
+  SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
 }
 
 export function createWeappTransport(): TransportPort {

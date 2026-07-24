@@ -67,6 +67,6 @@ public record WorkoutSet(
     }
 
     public enum SetType { WARMUP, WORK, EXTRA }
-    public enum CompletionStatus { PLANNED, COMPLETED, SKIPPED }
+    public enum CompletionStatus { PLANNED, COMPLETED, FAILED, SKIPPED }
     public enum AnomalyStatus { CONFIRMED_EXCLUDED }
 }

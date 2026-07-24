@@ -79,6 +79,23 @@ class WorkoutSetIdempotencyTest {
         }
     }
 
+    @Test
+    void failedSetRemainsAFirstClassNonCompletedFact() {
+        WorkoutSetTestFixture.Fixture fixture = WorkoutSetTestFixture.fixture();
+        WorkoutSetService.Command failed = new WorkoutSetService.Command(
+                WorkoutSetTestFixture.EXERCISE_ID, 1, WorkoutSet.SetType.WORK, 1,
+                new WorkoutSet.Performance(new BigDecimal("40.000"), "KG", 10),
+                new WorkoutSet.Performance(new BigDecimal("40.000"), "KG", 4), null,
+                WorkoutSet.CompletionStatus.FAILED, Optional.empty(), false);
+
+        WorkoutSet saved = fixture.service().upsert(
+                new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID,
+                "set-key-failed-0001", 1, failed).set();
+
+        assertThat(saved.completionStatus()).isEqualTo(WorkoutSet.CompletionStatus.FAILED);
+        assertThat(saved.completedAt()).isEmpty();
+    }
+
     private static WorkoutSetService.Command command(BigDecimal actualWeight, boolean confirmAnomaly) {
         return new WorkoutSetService.Command(
                 WorkoutSetTestFixture.EXERCISE_ID, 1, WorkoutSet.SetType.WORK, 1,

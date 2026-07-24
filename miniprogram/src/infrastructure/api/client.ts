@@ -17,6 +17,7 @@ import type {
   VersionedResource,
 } from '../../application/onboarding'
 import type { PlanPersistencePort } from '../../application/ports'
+import type { SyncWorkoutOperation, SyncWorkoutOperationResult, WorkoutOperationSyncPort } from '../../application/ports/WorkoutOperationSyncPort'
 import type {
   DeletionRequestData,
   PrivacyExportData,
@@ -59,10 +60,16 @@ type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
 type ReauthenticationProofResponse = components['schemas']['ReauthenticationProofResponse']
+type SyncConflictData = components['schemas']['SyncConflictData']
+type SyncConflictListResponse = components['schemas']['SyncConflictListResponse']
+type SyncConflictResponse = components['schemas']['SyncConflictResponse']
+type WorkoutSessionData = components['schemas']['WorkoutSessionData']
+type WorkoutSessionResponse = components['schemas']['WorkoutSessionResponse']
+type SyncWorkoutOperationsResponse = components['schemas']['SyncWorkoutOperationsResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
-export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort {
+export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort {
   private readonly baseUrl: string
 
   constructor(
@@ -233,6 +240,45 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       'GET',
     )
     return toDeletionRequestData(requireData(response.data))
+  }
+
+  async listSyncConflicts(): Promise<SyncConflictData[]> {
+    const response = await this.request<SyncConflictListResponse>('/api/v1/sync/conflicts', 'GET')
+    return response.data.items
+  }
+
+  async startWorkoutSession(
+    request: components['schemas']['StartWorkoutSessionRequest'],
+  ): Promise<WorkoutSessionData> {
+    const response = await this.request<WorkoutSessionResponse>(
+      '/api/v1/workout-sessions',
+      'POST',
+      request,
+      true,
+      { 'Idempotency-Key': request.clientSessionKey },
+    )
+    return response.data
+  }
+
+  async syncWorkoutOperations(operations: readonly SyncWorkoutOperation[]): Promise<readonly SyncWorkoutOperationResult[]> {
+    const response = await this.request<SyncWorkoutOperationsResponse>(
+      '/api/v1/sync/workout-operations',
+      'POST',
+      { operations },
+    )
+    return response.data.results
+  }
+
+  async resolveSyncConflict(
+    conflictId: string,
+    request: components['schemas']['ResolveSyncConflictRequest'],
+  ): Promise<SyncConflictData> {
+    const response = await this.request<SyncConflictResponse>(
+      `/api/v1/sync/conflicts/${encodeURIComponent(conflictId)}/resolve`,
+      'POST',
+      request,
+    )
+    return response.data
   }
 
   private async getVersionOrNull<Response extends { data: { version: number } }>(

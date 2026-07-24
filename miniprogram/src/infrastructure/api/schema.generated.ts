@@ -1050,8 +1050,12 @@ export interface components {
             weight: components["schemas"]["Weight"];
             reps: number;
         };
+        SetActual: {
+            weight: components["schemas"]["Weight"];
+            reps: number;
+        };
         /** @enum {string} */
-        CompletionStatus: "PLANNED" | "COMPLETED" | "SKIPPED";
+        CompletionStatus: "PLANNED" | "COMPLETED" | "FAILED" | "SKIPPED";
         UpsertSetRequest: {
             /** Format: uuid */
             sessionExerciseId: string;
@@ -1059,7 +1063,7 @@ export interface components {
             setType: components["schemas"]["SetType"];
             setOrder: number;
             target: components["schemas"]["SetTarget"];
-            actual: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetActual"];
             remainingReps?: number;
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];
@@ -1078,7 +1082,7 @@ export interface components {
             setType: components["schemas"]["SetType"];
             setOrder: number;
             target: components["schemas"]["SetTarget"];
-            actual: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetActual"];
             remainingReps?: number;
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];
@@ -1110,7 +1114,7 @@ export interface components {
             setType: components["schemas"]["SetType"];
             setOrder: number;
             target: components["schemas"]["SetTarget"];
-            actual: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetActual"];
             remainingReps?: number;
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];

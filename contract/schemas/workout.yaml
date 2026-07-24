@@ -8,7 +8,7 @@ components:
       enum: [WARMUP, WORK, EXTRA]
     CompletionStatus:
       type: string
-      enum: [PLANNED, COMPLETED, SKIPPED]
+      enum: [PLANNED, COMPLETED, FAILED, SKIPPED]
     SyncOperationStatus:
       type: string
       enum: [APPLIED, DUPLICATE, CONFLICT, REJECTED]
@@ -45,6 +45,13 @@ components:
       properties:
         weight: {$ref: './common.yaml#/components/schemas/Weight'}
         reps: {type: integer, minimum: 1}
+    SetActual:
+      type: object
+      additionalProperties: false
+      required: [weight, reps]
+      properties:
+        weight: {$ref: './common.yaml#/components/schemas/Weight'}
+        reps: {type: integer, minimum: 0}
     UpsertSetRequest:
       type: object
       additionalProperties: false
@@ -55,7 +62,7 @@ components:
         setType: {$ref: '#/components/schemas/SetType'}
         setOrder: {type: integer, minimum: 1}
         target: {$ref: '#/components/schemas/SetTarget'}
-        actual: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetActual'}
         remainingReps: {type: integer, minimum: 0}
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
@@ -95,7 +102,7 @@ components:
         setType: {$ref: '#/components/schemas/SetType'}
         setOrder: {type: integer, minimum: 1}
         target: {$ref: '#/components/schemas/SetTarget'}
-        actual: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetActual'}
         remainingReps: {type: integer, minimum: 0}
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
@@ -246,7 +253,7 @@ components:
         setType: {$ref: '#/components/schemas/SetType'}
         setOrder: {type: integer, minimum: 1}
         target: {$ref: '#/components/schemas/SetTarget'}
-        actual: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetActual'}
         remainingReps: {type: integer, minimum: 0}
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
