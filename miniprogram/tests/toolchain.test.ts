@@ -11,9 +11,11 @@ describe('Taro weapp toolchain', () => {
     expect(existsSync(resolve(projectRoot, 'src/presentation/pages/home/index.tsx'))).toBe(true)
   })
 
-  it('registers only the P0 home page in the initial skeleton', () => {
+  it('registers the P0 onboarding and plan pages without App release targets', () => {
     const config = readFileSync(resolve(projectRoot, 'src/app.config.ts'), 'utf8')
-    expect(config).toContain("presentation/pages/home/index")
+    for (const page of ['home', 'onboarding', 'plan-candidates', 'plan-editor', 'plan']) {
+      expect(config).toContain(`presentation/pages/${page}/index`)
+    }
     expect(config).not.toMatch(/android|ios|app-release/i)
   })
 

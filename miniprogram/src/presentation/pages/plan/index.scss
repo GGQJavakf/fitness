@@ -1,0 +1,12 @@
+.plan-day {
+  border-left: 8px solid #176b5b;
+}
+
+.plan-exercise {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  padding: 16px 0;
+  border-top: 2px solid #edf0f3;
+  font-size: 25px;
+}

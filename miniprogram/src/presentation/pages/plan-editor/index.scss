@@ -1,0 +1,26 @@
+.editor-field {
+  display: grid;
+  grid-template-columns: 1fr 160px 160px;
+  align-items: center;
+  gap: 12px;
+}
+
+.editor-field__input {
+  padding: 16px;
+  border: 2px solid #dfe5ec;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+}
+
+.editor-field__lock {
+  color: #5d6b7a;
+  font-size: 22px;
+}
+
+.editor-diff {
+  padding: 14px;
+  border-radius: 12px;
+  background: #f3f6f8;
+  font-size: 24px;
+}

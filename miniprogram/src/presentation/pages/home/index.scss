@@ -1,20 +1,13 @@
 .home-page {
-  display: flex;
-  min-height: 100vh;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-  padding: 48px;
-  box-sizing: border-box;
+  background: linear-gradient(160deg, #edf8f4 0%, #f7f8fa 45%);
 }
 
-.home-page__title {
-  font-size: 48px;
-  font-weight: 700;
+.home-page__hero {
+  margin-top: 40px;
 }
 
-.home-page__status {
-  color: #5d6b7a;
-  font-size: 28px;
+.home-page__eyebrow {
+  color: #176b5b;
+  font-size: 24px;
+  font-weight: 650;
 }
