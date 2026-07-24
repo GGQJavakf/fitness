@@ -50,7 +50,8 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
         List<ExerciseCatalog.Exercise> exercises = new ArrayList<>();
         document.path("exercises").forEach(node -> exercises.add(new ExerciseCatalog.Exercise(
                 node.path("code").asText(), node.path("name").asText(), node.path("plainLanguage").asText(),
-                node.path("movementPattern").asText(), texts(node.path("equipment")),
+                node.path("movementPattern").asText(), node.path("difficulty").asText(),
+                texts(node.path("equipment")),
                 texts(node.path("primaryMuscles")), textList(node.path("instructions")),
                 textList(node.path("safetyCues")), node.path("rightsStatus").asText(),
                 node.path("active").asBoolean(false), image(node), alternatives(node.path("alternatives")))));

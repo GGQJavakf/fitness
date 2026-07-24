@@ -3,9 +3,12 @@ import { acknowledgeOperation, enqueueOperation } from '../../domain/sync/Operat
 import type { Clock } from '../ports/Clock'
 import type { WorkoutDraftStore } from '../ports/WorkoutDraftStore'
 import type { WorkoutOperationSyncPort } from '../ports/WorkoutOperationSyncPort'
+import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionType } from '../ports/WorkoutCompletionPort'
+import type { ExerciseReplacementCandidate, WorkoutReplacementPort } from '../ports/WorkoutReplacementPort'
 import {
   createWorkoutFlow,
   recordWorkoutSet,
+  replaceExerciseForSession,
   type RecordWorkoutSetInput,
   type WorkoutExerciseSnapshot,
   type WorkoutFlowState,
@@ -17,6 +20,8 @@ export class WorkoutFlowService {
     private readonly drafts: WorkoutDraftStore,
     private readonly clock: Clock,
     private readonly remote?: WorkoutOperationSyncPort,
+    private readonly completion?: WorkoutCompletionPort,
+    private readonly replacements?: WorkoutReplacementPort,
   ) {}
 
   async start(input: {
@@ -139,6 +144,63 @@ export class WorkoutFlowService {
     const updated = { ...state, syncStatus }
     const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
     await this.drafts.save({ ...mapped, queue, lastServerVersion: serverVersion })
+    return updated
+  }
+
+  async complete(state: WorkoutFlowState, completionType: WorkoutCompletionType): Promise<WorkoutCompletionResult> {
+    if (!this.completion) throw new Error('workout completion is unavailable')
+    const synchronized = await this.flush(state)
+    const draft = await this.drafts.loadActive()
+    if (!draft || !draft.sessionId || draft.clientSessionKey !== state.clientSessionKey) {
+      throw new Error('server workout session is unavailable')
+    }
+    if (draft.queue.operations.some((operation) => operation.status === 'PENDING')
+      || synchronized.syncStatus === 'CONFLICT'
+      || synchronized.syncStatus === 'SYNC_REJECTED') {
+      throw new Error('workout facts must be synchronized before completion')
+    }
+    const result = await this.completion.completeWorkout(
+      draft.sessionId,
+      { expectedVersion: draft.lastServerVersion, completionType },
+      `${state.clientSessionKey}-complete-${completionType}`,
+    )
+    await this.drafts.save({ ...draft, lastServerVersion: result.session.version })
+    return result
+  }
+
+  async replacementCandidates(state: WorkoutFlowState): Promise<readonly ExerciseReplacementCandidate[]> {
+    if (!this.replacements) throw new Error('exercise replacement is unavailable')
+    return this.replacements.listExerciseReplacements(state.exercises[state.currentExerciseIndex].exerciseCode)
+  }
+
+  async replaceCurrentExercise(
+    state: WorkoutFlowState, candidate: ExerciseReplacementCandidate,
+  ): Promise<WorkoutFlowState> {
+    if (!this.replacements) throw new Error('exercise replacement is unavailable')
+    const synchronized = await this.flush(state)
+    const draft = await this.drafts.loadActive()
+    if (!draft || !draft.sessionId || draft.clientSessionKey !== state.clientSessionKey
+      || draft.queue.operations.some((operation) => operation.status === 'PENDING')
+      || synchronized.syncStatus === 'CONFLICT' || synchronized.syncStatus === 'SYNC_REJECTED') {
+      throw new Error('workout facts must be synchronized before replacement')
+    }
+    const index = state.currentExerciseIndex
+    const current = state.exercises[index]
+    const session = await this.replacements.replaceWorkoutExercise(
+      draft.sessionId, current.snapshotExerciseKey, candidate.code, draft.lastServerVersion,
+    )
+    const effective = session.exercises.find((exercise) => exercise.id === current.snapshotExerciseKey)
+    if (!effective) throw new Error('replacement response is missing the current exercise')
+    const updated = replaceExerciseForSession(synchronized, index, {
+      snapshotExerciseKey: effective.id,
+      exerciseCode: effective.exerciseCode,
+      name: effective.exerciseName,
+      targetWorkSets: effective.prescription.workSets,
+      targetReps: effective.prescription.repMax,
+      restSeconds: effective.prescription.restSeconds,
+    })
+    const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
+    await this.drafts.save({ ...mapped, lastServerVersion: session.version })
     return updated
   }
 

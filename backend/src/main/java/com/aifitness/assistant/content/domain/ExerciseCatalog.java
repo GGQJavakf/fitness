@@ -19,6 +19,7 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
             String name,
             String plainLanguage,
             String movementPattern,
+            String difficulty,
             Set<String> equipment,
             Set<String> primaryMuscles,
             List<String> instructions,
@@ -35,6 +36,7 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
             requiredText(name, "exercise name");
             requiredText(plainLanguage, "plain-language explanation");
             requiredCode(movementPattern, "movement pattern");
+            requiredCode(difficulty, "difficulty");
             equipment = Set.copyOf(Objects.requireNonNull(equipment, "equipment must not be null"));
             primaryMuscles = Set.copyOf(
                     Objects.requireNonNull(primaryMuscles, "primary muscles must not be null"));
@@ -58,7 +60,7 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
         }
 
         public Exercise withAlternatives(List<Alternative> eligibleAlternatives) {
-            return new Exercise(code, name, plainLanguage, movementPattern, equipment, primaryMuscles,
+            return new Exercise(code, name, plainLanguage, movementPattern, difficulty, equipment, primaryMuscles,
                     instructions, safetyCues, rightsStatus, active, image, eligibleAlternatives);
         }
 

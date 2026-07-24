@@ -9,6 +9,7 @@ export type PageDestination =
   | 'WORKOUT_SESSION'
   | 'WORKOUT_SUMMARY'
   | 'SYNC_CONFLICTS'
+  | 'HISTORY'
 
 export interface PageNavigationPort {
   open(destination: PageDestination): Promise<void> | void

@@ -44,13 +44,14 @@ public final class JdbcContentCatalogPublisher {
                     INSERT INTO exercise
                         (id, measurement_type, movement_pattern, difficulty, status,
                          content_version, review_status)
-                    VALUES (?, ?, ?, 'BEGINNER', ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                         movement_pattern = VALUES(movement_pattern),
+                        difficulty = VALUES(difficulty),
                         status = VALUES(status),
                         content_version = VALUES(content_version),
                         review_status = VALUES(review_status)
-                    """, exerciseId, measurementType(exercise), exercise.movementPattern(),
+                    """, exerciseId, measurementType(exercise), exercise.movementPattern(), exercise.difficulty(),
                     exercise.active() ? "ACTIVE" : "RETIRED",
                     catalog.metadata().version(), catalog.metadata().status().name());
             jdbc.update("DELETE FROM exercise_i18n WHERE exercise_id = ?", exerciseId);

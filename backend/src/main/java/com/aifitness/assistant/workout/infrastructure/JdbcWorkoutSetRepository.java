@@ -117,6 +117,18 @@ public final class JdbcWorkoutSetRepository implements WorkoutSetRepository {
                 bytes(sessionExerciseId), clientSetKey).stream().findFirst();
     }
 
+    @Override
+    public List<WorkoutSet> findBySession(UUID userId, UUID sessionId) {
+        return jdbc.query("""
+                SELECT s.*, ws.id AS owner_session_id
+                FROM workout_set s
+                JOIN workout_exercise_snapshot x ON x.id = s.session_exercise_id
+                JOIN workout_session ws ON ws.id = x.session_id
+                WHERE ws.id = ? AND ws.user_id = ?
+                ORDER BY x.exercise_order, s.set_order, s.client_operation_seq
+                """, (row, index) -> read(row).set(), bytes(sessionId), bytes(userId));
+    }
+
     private long currentVersion(UUID sessionId, UUID userId) {
         Long version = jdbc.queryForObject(
                 "SELECT sync_version FROM workout_session WHERE id = ? AND user_id = ?",

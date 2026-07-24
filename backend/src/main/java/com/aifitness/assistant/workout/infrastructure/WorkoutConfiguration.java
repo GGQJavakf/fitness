@@ -2,12 +2,17 @@ package com.aifitness.assistant.workout.infrastructure;
 
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
+import com.aifitness.assistant.workout.application.WorkoutCompletionService;
+import com.aifitness.assistant.workout.application.WorkoutHistoryQueryService;
+import com.aifitness.assistant.workout.application.ExerciseReplacementService;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.application.WorkoutSetRepository;
 import com.aifitness.assistant.workout.application.WorkoutSetService;
 import com.aifitness.assistant.workout.application.SyncConflictRepository;
 import com.aifitness.assistant.workout.application.WorkoutSyncService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aifitness.assistant.content.application.ExerciseQueryService;
+import com.aifitness.assistant.profile.application.ProfileService;
 import java.time.Clock;
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -87,5 +92,23 @@ public class WorkoutConfiguration {
     WorkoutSyncService workoutSyncService(
             WorkoutSetService sets, WorkoutSetRepository repository, SyncConflictRepository conflicts, Clock clock) {
         return new WorkoutSyncService(sets, repository, conflicts, clock, UUID::randomUUID);
+    }
+
+    @Bean
+    WorkoutCompletionService workoutCompletionService(
+            WorkoutSessionRepository sessions, WorkoutSetRepository sets, Clock clock) {
+        return new WorkoutCompletionService(sessions, sets, clock);
+    }
+
+    @Bean
+    WorkoutHistoryQueryService workoutHistoryQueryService(
+            WorkoutSessionRepository sessions, WorkoutSetRepository sets) {
+        return new WorkoutHistoryQueryService(sessions, sets);
+    }
+
+    @Bean
+    ExerciseReplacementService exerciseReplacementService(
+            ExerciseQueryService exercises, ProfileService profiles, WorkoutSessionRepository sessions) {
+        return new ExerciseReplacementService(exercises, profiles, sessions);
     }
 }

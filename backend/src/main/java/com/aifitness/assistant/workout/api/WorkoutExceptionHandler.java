@@ -7,6 +7,8 @@ import com.aifitness.assistant.common.api.ErrorMeta;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.application.WorkoutSetService;
+import com.aifitness.assistant.workout.application.WorkoutCompletionService;
+import com.aifitness.assistant.workout.application.ExerciseReplacementService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,7 +20,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = {
-        WorkoutSessionController.class, WorkoutSetController.class, WorkoutSyncController.class
+        WorkoutSessionController.class, WorkoutSetController.class, WorkoutSyncController.class,
+        WorkoutHistoryController.class, ExerciseReplacementController.class
 })
 @Profile({"local", "test", "staging-experience"})
 public final class WorkoutExceptionHandler {
@@ -29,6 +32,23 @@ public final class WorkoutExceptionHandler {
     })
     ResponseEntity<ApiErrorResponse> notFound() {
         return error(HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND, "资源不存在", Map.of());
+    }
+
+    @ExceptionHandler(ExerciseReplacementService.ExerciseNotFoundException.class)
+    ResponseEntity<ApiErrorResponse> exerciseNotFound() {
+        return error(HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND, "资源不存在", Map.of());
+    }
+
+    @ExceptionHandler(ExerciseReplacementService.IllegalReplacementException.class)
+    ResponseEntity<ApiErrorResponse> illegalReplacement() {
+        return error(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_FAILED,
+                "替代动作不符合当前训练条件", Map.of());
+    }
+
+    @ExceptionHandler(WorkoutCompletionService.IncompleteWorkoutException.class)
+    ResponseEntity<ApiErrorResponse> incompleteWorkout() {
+        return error(HttpStatus.CONFLICT, ErrorCode.VALIDATION_FAILED,
+                "训练尚未完整完成，可选择提前结束", Map.of("completionType", "EARLY_END"));
     }
 
     @ExceptionHandler(WorkoutSessionService.VersionConflictException.class)

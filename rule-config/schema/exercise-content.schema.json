@@ -13,12 +13,13 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["code", "name", "plainLanguage", "movementPattern", "equipment", "primaryMuscles", "instructions", "safetyCues", "sourceIds", "rightsStatus", "assetStatus", "active"],
+        "required": ["code", "name", "plainLanguage", "movementPattern", "difficulty", "equipment", "primaryMuscles", "instructions", "safetyCues", "sourceIds", "rightsStatus", "assetStatus", "active"],
         "properties": {
           "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
           "name": { "type": "string", "minLength": 2 },
           "plainLanguage": { "type": "string", "minLength": 8, "maxLength": 100 },
           "movementPattern": { "enum": ["SQUAT", "HINGE", "HORIZONTAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PUSH", "VERTICAL_PULL", "CORE"] },
+          "difficulty": { "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED"] },
           "equipment": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["BODYWEIGHT", "BARBELL", "DUMBBELL", "BENCH", "CABLE", "MACHINE"] } },
           "primaryMuscles": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z_]+$" } },
           "instructions": { "type": "array", "minItems": 2, "maxItems": 6, "items": { "type": "string", "minLength": 4 } },
@@ -26,7 +27,19 @@
           "sourceIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" } },
           "rightsStatus": { "const": "ORIGINAL_SUMMARY" },
           "assetStatus": { "const": "PLACEHOLDER_ONLY" },
-          "active": { "const": true }
+          "active": { "const": true },
+          "alternatives": {
+            "type": "array", "minItems": 2, "maxItems": 4,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["exerciseCode", "rank", "reviewStatus"],
+              "properties": {
+                "exerciseCode": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+                "rank": { "type": "integer", "minimum": 1, "maximum": 4 },
+                "reviewStatus": { "enum": ["AI_VALIDATED", "PUBLIC_RELEASE_APPROVED"] }
+              }
+            }
+          }
         }
       }
     }

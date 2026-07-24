@@ -8,6 +8,7 @@ import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,6 +56,17 @@ public final class InMemoryWorkoutSetRepository implements WorkoutSetRepository 
                 .filter(session -> session.exercises().stream().anyMatch(item -> item.id().equals(sessionExerciseId)))
                 .map(ignored -> sets.get(new SetKey(sessionExerciseId, clientSetKey)))
                 .map(SaveResult::set);
+    }
+
+    @Override
+    public synchronized List<WorkoutSet> findBySession(UUID userId, UUID sessionId) {
+        if (sessions.findByIdAndUser(sessionId, userId).isEmpty()) {
+            throw new WorkoutSessionService.SessionNotFoundException();
+        }
+        return sets.values().stream().map(SaveResult::set)
+                .filter(set -> set.sessionId().equals(sessionId))
+                .sorted(java.util.Comparator.comparingInt(WorkoutSet::setOrder))
+                .toList();
     }
 
     public synchronized int count() {

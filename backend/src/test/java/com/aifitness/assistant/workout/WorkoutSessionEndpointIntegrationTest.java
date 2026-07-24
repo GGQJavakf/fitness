@@ -156,6 +156,25 @@ class WorkoutSessionEndpointIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("VERSION_CONFLICT"));
 
+        String completionKey = "workout-complete-" + UUID.randomUUID();
+        mvc.perform(post("/api/v1/workout-sessions/{id}/complete", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", completionKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"expectedVersion\":2,\"completionType\":\"EARLY_END\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.session.status").value("ABORTED"))
+                .andExpect(jsonPath("$.data.completedWorkSets").value(1))
+                .andExpect(jsonPath("$.data.complete").value(false))
+                .andExpect(jsonPath("$.data.automaticProgressionEligible").value(false));
+        mvc.perform(get("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .queryParam("limit", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.items[0].status").value("ABORTED"))
+                .andExpect(jsonPath("$.data.items[0].completedWorkSets").value(1));
+
         String otherToken = login();
         mvc.perform(get("/api/v1/workout-sessions/{id}", sessionId)
                         .header("Authorization", "Bearer " + otherToken))
@@ -171,6 +190,53 @@ class WorkoutSessionEndpointIntegrationTest {
                         .content("{\"resolution\":\"KEEP_LOCAL\",\"expectedVersion\":0}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void appliesOnlyAnEligibleReplacementToTheCurrentWorkoutSnapshot() throws Exception {
+        String token = loginAndConfigure();
+        JsonNode plan = createPlan(token, candidate(token).at("/candidateId").asText());
+        String clientKey = "replacement-session-" + UUID.randomUUID();
+        JsonNode created = json(mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", clientKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of(
+                                "clientSessionKey", clientKey,
+                                "planId", plan.at("/data/planId").asText(),
+                                "planVersionNo", 1,
+                                "planDayId", plan.at("/data/activeVersion/plan/days/0/code").asText()))))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String sessionId = created.at("/data/id").asText();
+        String snapshotId = created.at("/data/exercises/0/id").asText();
+        String sourceCode = created.at("/data/exercises/0/exerciseCode").asText();
+        mvc.perform(put("/api/v1/workout-sessions/{id}/status", sessionId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_PROGRESS\",\"expectedVersion\":0}"))
+                .andExpect(status().isOk());
+        JsonNode candidates = json(mvc.perform(get("/api/v1/exercises/{sourceCode}/replacements", sourceCode)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andReturn().getResponse().getContentAsString());
+        String replacementCode = candidates.at("/data/items/0/code").asText();
+
+        mvc.perform(put("/api/v1/workout-sessions/{id}/exercises/{exerciseId}", sessionId, snapshotId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"REPLACE\",\"replacementExerciseId\":\""
+                                + replacementCode + "\",\"expectedVersion\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.version").value(2))
+                .andExpect(jsonPath("$.data.exercises[0].exerciseCode").value(replacementCode))
+                .andExpect(jsonPath("$.data.exercises[0].status").value("REPLACED"));
+        mvc.perform(put("/api/v1/workout-sessions/{id}/exercises/{exerciseId}", sessionId, snapshotId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"REPLACE\",\"replacementExerciseId\":\"UNKNOWN\",\"expectedVersion\":2}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
     }
 
     private JsonNode candidate(String token) throws Exception {

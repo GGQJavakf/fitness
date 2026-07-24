@@ -28,6 +28,7 @@ class OpenApiContractTest {
             "PUT /api/v1/profile/preferences",
             "GET /api/v1/exercises",
             "GET /api/v1/exercises/{id}",
+            "GET /api/v1/exercises/{sourceCode}/replacements",
             "GET /api/v1/plan-templates",
             "POST /api/v1/plans/candidates",
             "POST /api/v1/plans/validate",
@@ -224,8 +225,14 @@ class OpenApiContractTest {
                 .endsWith("/WorkoutSessionResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/status", "put"))
                 .endsWith("/WorkoutSessionResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/exercises/{exerciseId}", "put"))
+                .endsWith("/WorkoutSessionResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/sets/{clientSetKey}", "put"))
                 .endsWith("/WorkoutSetResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions", "get"))
+                .endsWith("/WorkoutHistoryResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/complete", "post"))
+                .endsWith("/WorkoutCompletionResponse");
 
         Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
         assertThat(required(schemas, "WorkoutSessionData"))

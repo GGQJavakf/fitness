@@ -22,6 +22,7 @@ const pageRoutes: Record<PageDestination, string> = {
   WORKOUT_SESSION: '/presentation/pages/workout-session/index',
   WORKOUT_SUMMARY: '/presentation/pages/workout-summary/index',
   SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
+  HISTORY: '/presentation/pages/history/index',
 }
 
 export function createWeappTransport(): TransportPort {

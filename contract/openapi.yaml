@@ -148,6 +148,21 @@ paths:
               schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseDetailResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/exercises/{sourceCode}/replacements:
+    get:
+      tags: [Content, Workouts]
+      operationId: listExerciseReplacements
+      description: 仅返回当前用户器械可用、未排除且审核状态合格的同模式、同难度、目标肌群替代动作；不修改计划或训练快照。
+      parameters:
+        - {name: sourceCode, in: path, required: true, schema: {type: string, pattern: '^[A-Z0-9_]+$'}}
+      responses:
+        '200':
+          description: 2 至 4 个安全替代候选；合法候选不足时宁缺毋滥
+          content:
+            application/json:
+              schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseReplacementResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plan-templates:
     get:
       tags: [Content]
@@ -293,8 +308,13 @@ paths:
       operationId: listWorkoutSessions
       parameters:
         - {$ref: './schemas/common.yaml#/components/parameters/Cursor'}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 50, default: 20}}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户的终态训练历史，使用稳定不透明游标分页
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutHistoryResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}:
     get:
@@ -334,7 +354,11 @@ paths:
         - {$ref: '#/components/parameters/ExerciseIdPath'}
       requestBody: {$ref: '#/components/requestBodies/WorkoutExerciseUpdate'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 仅当前训练生效的替换覆盖层；原计划版本和原始训练快照保持不变
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/sets/{clientSetKey}:
@@ -374,7 +398,11 @@ paths:
         - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/WorkoutCompletion'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 幂等训练结算；提前结束保留已完成组且不自动进入加重
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutCompletionResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/sync/workout-operations:

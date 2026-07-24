@@ -42,7 +42,7 @@ const privacy = createVerifiedPrivacyUseCases(api, {
 const workoutDrafts = createWechatWorkoutDraftStore()
 const clock = { nowUtc: () => new Date().toISOString() }
 const workoutSync = new WorkoutSyncService(workoutDrafts, () => clock.nowUtc())
-const workouts = new WorkoutFlowService(workoutDrafts, clock, api)
+const workouts = new WorkoutFlowService(workoutDrafts, clock, api, api, api)
 
 export function getWeappApplication() {
   return {
@@ -58,5 +58,6 @@ export function getWeappApplication() {
       request: Parameters<typeof api.resolveSyncConflict>[1],
     ) => api.resolveSyncConflict(conflictId, request),
     startWorkoutSession: (request: Parameters<typeof api.startWorkoutSession>[0]) => api.startWorkoutSession(request),
+    listWorkoutHistory: (cursor?: string, limit?: number) => api.listHistory(cursor, limit),
   }
 }

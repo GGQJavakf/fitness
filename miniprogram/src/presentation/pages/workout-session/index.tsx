@@ -2,6 +2,7 @@ import { Button, Input, Text, View } from '@tarojs/components'
 import { useState } from 'react'
 
 import type { WorkoutFlowState } from '../../../application/workoutFlow'
+import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { useWeappDidShow } from '../../../platform/weapp/lifecycle'
 
@@ -15,6 +16,7 @@ export default function WorkoutSessionPage() {
   const [reps, setReps] = useState('')
   const [remaining, setRemaining] = useState(0)
   const [message, setMessage] = useState('正在恢复训练草稿…')
+  const [replacements, setReplacements] = useState<readonly ExerciseReplacementCandidate[]>([])
 
   useWeappDidShow(() => {
     void application.workouts.load().then(async (loaded) => {
@@ -73,6 +75,28 @@ export default function WorkoutSessionPage() {
     setState(resumed.state); setRemaining(resumed.remainingSeconds)
   }
 
+  async function showReplacements(): Promise<void> {
+    if (!state) return
+    try {
+      const items = await application.workouts.replacementCandidates(state)
+      setReplacements(items)
+      setMessage(items.length ? '请选择仅用于本次训练的替代动作。' : '当前没有符合器械和安全条件的替代动作。')
+    } catch {
+      setMessage('替代动作暂时无法加载，请稍后重试。')
+    }
+  }
+
+  async function replace(candidate: ExerciseReplacementCandidate): Promise<void> {
+    if (!state) return
+    try {
+      const updated = await application.workouts.replaceCurrentExercise(state, candidate)
+      setState(updated); setReplacements([])
+      setMessage('已仅替换本次训练动作；原计划版本没有改变。')
+    } catch {
+      setMessage('替换未生效；本地事实和原计划均未被静默覆盖。')
+    }
+  }
+
   const exercise = state?.exercises[state.currentExerciseIndex]
   return <View className='screen'>
     <View className='card'>
@@ -87,6 +111,8 @@ export default function WorkoutSessionPage() {
       <Text className='section-title'>实际次数</Text>
       <Input className='metric-input' type='number' value={reps || String(exercise.targetReps)} onInput={(event) => setReps(event.detail.value)} />
       <Text className='subtitle'>“还能做几次”可暂不填写，系统会保持 UNKNOWN，不会替你猜测。</Text>
+      <Button className='secondary-action' onClick={() => void showReplacements()}>替换本次动作</Button>
+      {replacements.map((candidate) => <Button key={candidate.id} className='secondary-action' onClick={() => void replace(candidate)}>{candidate.name}</Button>)}
       <Button className='primary-action' onClick={() => void record('COMPLETED')}>完成本组</Button>
       <View className='action-row'>
         <Button className='secondary-action' onClick={() => void record('FAILED')}>本组失败</Button>

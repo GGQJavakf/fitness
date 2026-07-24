@@ -19,6 +19,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.time.Instant;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
@@ -99,6 +100,92 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         }));
     }
 
+    @Override
+    public WorkoutSession complete(WorkoutSession terminalSession, long expectedVersion) {
+        Objects.requireNonNull(terminalSession, "terminal session must not be null");
+        if (!terminalSession.status().terminal() || terminalSession.version() != expectedVersion + 2) {
+            throw new IllegalArgumentException("atomic completion must contain both validated transitions");
+        }
+        return Objects.requireNonNull(transactions.execute(ignored -> {
+            int updated = jdbc.update("""
+                    UPDATE workout_session
+                    SET status = ?, completed_at = ?, sync_version = ?
+                    WHERE id = ? AND user_id = ? AND sync_version = ?
+                      AND status IN ('IN_PROGRESS', 'PAUSED')
+                    """, terminalSession.status().name(),
+                    terminalSession.completedAt().map(Timestamp::from).orElseThrow(), terminalSession.version(),
+                    bytes(terminalSession.id()), bytes(terminalSession.userId()), expectedVersion);
+            if (updated == 1) {
+                return findByIdAndUser(terminalSession.id(), terminalSession.userId()).orElseThrow();
+            }
+            WorkoutSession current = findByIdAndUser(terminalSession.id(), terminalSession.userId())
+                    .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
+            if (current.version() != expectedVersion) {
+                throw new WorkoutSessionService.VersionConflictException(current.version());
+            }
+            throw new IllegalStateException("workout session cannot be completed from " + current.status());
+        }));
+    }
+
+    @Override
+    public WorkoutSession replaceExercise(
+            UUID userId, UUID sessionId, UUID snapshotId, long expectedVersion,
+            WorkoutExerciseSnapshot replacement) {
+        Objects.requireNonNull(replacement, "replacement must not be null");
+        return Objects.requireNonNull(transactions.execute(ignored -> {
+            int sessionUpdated = jdbc.update("""
+                    UPDATE workout_session
+                    SET sync_version = sync_version + 1
+                    WHERE id = ? AND user_id = ? AND sync_version = ?
+                      AND status IN ('IN_PROGRESS', 'PAUSED')
+                    """, bytes(sessionId), bytes(userId), expectedVersion);
+            if (sessionUpdated != 1) {
+                WorkoutSession current = findByIdAndUser(sessionId, userId)
+                        .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
+                if (current.version() != expectedVersion) {
+                    throw new WorkoutSessionService.VersionConflictException(current.version());
+                }
+                throw new IllegalStateException("workout session does not accept exercise replacement");
+            }
+            Map<String, Object> overlay = new LinkedHashMap<>();
+            overlay.put("exerciseCode", replacement.exerciseCode());
+            overlay.put("exerciseName", replacement.exerciseName());
+            overlay.put("contentVersion", replacement.contentVersion());
+            overlay.put("equipment", replacement.equipment().stream().sorted().toList());
+            int snapshotUpdated = jdbc.update("""
+                    UPDATE workout_exercise_snapshot
+                    SET replacement_snapshot_json = ?, replacement_revision = replacement_revision + 1,
+                        status = 'REPLACED'
+                    WHERE id = ? AND session_id = ?
+                    """, writeJson(overlay), bytes(snapshotId), bytes(sessionId));
+            if (snapshotUpdated != 1) {
+                throw new WorkoutSessionService.SessionNotFoundException();
+            }
+            return findByIdAndUser(sessionId, userId).orElseThrow();
+        }));
+    }
+
+    @Override
+    public List<WorkoutSession> findHistory(
+            UUID userId, Optional<Instant> beforeStartedAt, Optional<UUID> beforeId, int limit) {
+        if (limit < 1) throw new IllegalArgumentException("history limit must be positive");
+        if (beforeStartedAt.isPresent() != beforeId.isPresent()) {
+            throw new IllegalArgumentException("history cursor fields must be provided together");
+        }
+        if (beforeStartedAt.isPresent()) {
+            return query("""
+                    WHERE ws.user_id = ? AND ws.status IN ('COMPLETED', 'ABORTED')
+                      AND (ws.started_at < ? OR (ws.started_at = ? AND ws.id < ?))
+                    ORDER BY ws.started_at DESC, ws.id DESC LIMIT ?
+                    """, bytes(userId), Timestamp.from(beforeStartedAt.orElseThrow()),
+                    Timestamp.from(beforeStartedAt.orElseThrow()), bytes(beforeId.orElseThrow()), limit);
+        }
+        return query("""
+                WHERE ws.user_id = ? AND ws.status IN ('COMPLETED', 'ABORTED')
+                ORDER BY ws.started_at DESC, ws.id DESC LIMIT ?
+                """, bytes(userId), limit);
+    }
+
     private void insertSnapshot(WorkoutSession session, WorkoutExerciseSnapshot exercise) {
         Map<String, Object> facts = new LinkedHashMap<>();
         facts.put("trainingDayCode", session.trainingDayCode());
@@ -139,7 +226,8 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         UUID sessionId = uuid(row.getBytes("id"));
         List<WorkoutExerciseSnapshot> exercises = jdbc.query("""
                 SELECT id, source_plan_exercise_id, exercise_order,
-                       exercise_snapshot_json, prescription_snapshot_json, status
+                       exercise_snapshot_json, replacement_snapshot_json,
+                       prescription_snapshot_json, status
                 FROM workout_exercise_snapshot
                 WHERE session_id = ? ORDER BY exercise_order
                 """, (snapshotRow, ignored) -> readSnapshot(sessionId, snapshotRow), bytes(sessionId));
@@ -163,15 +251,17 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
 
     private WorkoutExerciseSnapshot readSnapshot(UUID sessionId, ResultSet row) throws SQLException {
         Map<String, Object> facts = readJson(row.getString("exercise_snapshot_json"));
+        String replacementJson = row.getString("replacement_snapshot_json");
+        Map<String, Object> effective = replacementJson == null ? facts : readJson(replacementJson);
         Map<String, Object> prescription = readJson(row.getString("prescription_snapshot_json"));
-        Object equipmentValue = facts.get("equipment");
+        Object equipmentValue = effective.get("equipment");
         Set<String> equipment = equipmentValue instanceof List<?> values
                 ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet())
                 : Set.of();
         return new WorkoutExerciseSnapshot(
                 uuid(row.getBytes("id")), sessionId, uuid(row.getBytes("source_plan_exercise_id")),
-                row.getInt("exercise_order"), text(facts, "exerciseCode"), text(facts, "exerciseName"),
-                text(facts, "contentVersion"), equipment,
+                row.getInt("exercise_order"), text(effective, "exerciseCode"), text(effective, "exerciseName"),
+                text(effective, "contentVersion"), equipment,
                 new WorkoutExerciseSnapshot.Prescription(
                         number(prescription, "workSets"), number(prescription, "repMin"),
                         number(prescription, "repMax"), number(prescription, "restSeconds"),

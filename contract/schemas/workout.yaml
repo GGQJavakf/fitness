@@ -272,3 +272,46 @@ components:
       properties:
         data: {$ref: '#/components/schemas/WorkoutSetData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutCompletionData:
+      type: object
+      additionalProperties: false
+      required: [session, completedWorkSets, complete, automaticProgressionEligible]
+      properties:
+        session: {$ref: '#/components/schemas/WorkoutSessionData'}
+        completedWorkSets: {type: integer, minimum: 0}
+        complete: {type: boolean}
+        automaticProgressionEligible: {type: boolean}
+    WorkoutCompletionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutCompletionData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutHistoryItem:
+      type: object
+      additionalProperties: false
+      required: [sessionId, trainingDayCode, status, startedAt, completedAt, completedWorkSets, completedVolumeKg]
+      properties:
+        sessionId: {type: string, format: uuid}
+        trainingDayCode: {type: string, minLength: 1}
+        status: {type: string, enum: [COMPLETED, ABORTED]}
+        startedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        completedWorkSets: {type: integer, minimum: 0}
+        completedVolumeKg: {type: number, minimum: 0}
+    WorkoutHistoryData:
+      type: object
+      additionalProperties: false
+      required: [items, hasMore]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/WorkoutHistoryItem'}}
+        nextCursor: {type: string, minLength: 1}
+        hasMore: {type: boolean}
+    WorkoutHistoryResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutHistoryData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

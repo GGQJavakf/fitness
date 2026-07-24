@@ -24,6 +24,9 @@ import type {
   PrivacyPort,
 } from '../../application/privacy'
 import type { ApiErrorResponse, ApiResponse } from './generated'
+import type { WorkoutHistoryPage, WorkoutHistoryPort } from '../../application/history'
+import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionType } from '../../application/ports/WorkoutCompletionPort'
+import type { ExerciseReplacementCandidate, ReplacedWorkoutSession, WorkoutReplacementPort } from '../../application/ports/WorkoutReplacementPort'
 import type { components } from './schema.generated'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT'
@@ -66,10 +69,13 @@ type SyncConflictResponse = components['schemas']['SyncConflictResponse']
 type WorkoutSessionData = components['schemas']['WorkoutSessionData']
 type WorkoutSessionResponse = components['schemas']['WorkoutSessionResponse']
 type SyncWorkoutOperationsResponse = components['schemas']['SyncWorkoutOperationsResponse']
+type WorkoutHistoryResponse = components['schemas']['WorkoutHistoryResponse']
+type WorkoutCompletionResponse = components['schemas']['WorkoutCompletionResponse']
+type ExerciseReplacementResponse = components['schemas']['ExerciseReplacementResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
-export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort {
+export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort {
   private readonly baseUrl: string
 
   constructor(
@@ -245,6 +251,46 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
   async listSyncConflicts(): Promise<SyncConflictData[]> {
     const response = await this.request<SyncConflictListResponse>('/api/v1/sync/conflicts', 'GET')
     return response.data.items
+  }
+
+  async listHistory(cursor?: string, limit = 20): Promise<WorkoutHistoryPage> {
+    const query = cursor
+      ? `cursor=${encodeURIComponent(cursor)}&limit=${encodeURIComponent(String(limit))}`
+      : `limit=${encodeURIComponent(String(limit))}`
+    const response = await this.request<WorkoutHistoryResponse>(
+      `/api/v1/workout-sessions?${query}`,
+      'GET',
+    )
+    return response.data
+  }
+
+  async completeWorkout(
+    sessionId: string,
+    request: { expectedVersion: number; completionType: WorkoutCompletionType },
+    idempotencyKey: string,
+  ): Promise<WorkoutCompletionResult> {
+    const response = await this.request<WorkoutCompletionResponse>(
+      `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}/complete`,
+      'POST', request, true, { 'Idempotency-Key': idempotencyKey },
+    )
+    return response.data as WorkoutCompletionResult
+  }
+
+  async listExerciseReplacements(sourceCode: string): Promise<readonly ExerciseReplacementCandidate[]> {
+    const response = await this.request<ExerciseReplacementResponse>(
+      `/api/v1/exercises/${encodeURIComponent(sourceCode)}/replacements`, 'GET',
+    )
+    return response.data.items
+  }
+
+  async replaceWorkoutExercise(
+    sessionId: string, snapshotId: string, replacementCode: string, expectedVersion: number,
+  ): Promise<ReplacedWorkoutSession> {
+    const response = await this.request<WorkoutSessionResponse>(
+      `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(snapshotId)}`,
+      'PUT', { action: 'REPLACE', replacementExerciseId: replacementCode, expectedVersion },
+    )
+    return response.data
   }
 
   async startWorkoutSession(

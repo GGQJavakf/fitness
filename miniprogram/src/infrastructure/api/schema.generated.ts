@@ -132,6 +132,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exercises/{sourceCode}/replacements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 仅返回当前用户器械可用、未排除且审核状态合格的同模式、同难度、目标肌群替代动作；不修改计划或训练快照。 */
+        get: operations["listExerciseReplacements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plan-templates": {
         parameters: {
             query?: never;
@@ -815,6 +832,8 @@ export interface components {
             name: string;
             plainLanguage: string;
             movementPattern: string;
+            /** @enum {string} */
+            difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
             equipment: string[];
             primaryMuscles: string[];
             instructions: string[];
@@ -833,6 +852,25 @@ export interface components {
         };
         ExerciseDetailResponse: {
             data: components["schemas"]["Exercise"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        ExerciseReplacementItem: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            movementPattern: string;
+            /** @enum {string} */
+            difficulty: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+            equipment: string[];
+            primaryMuscles: string[];
+        };
+        ExerciseReplacementData: {
+            sourceCode: string;
+            items: components["schemas"]["ExerciseReplacementItem"][];
+        };
+        ExerciseReplacementResponse: {
+            data: components["schemas"]["ExerciseReplacementData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         PlanTemplate: {
@@ -989,6 +1027,26 @@ export interface components {
                 [key: string]: components["schemas"]["LockCommandStatus"];
             };
         };
+        WorkoutHistoryItem: {
+            /** Format: uuid */
+            sessionId: string;
+            trainingDayCode: string;
+            /** @enum {string} */
+            status: "COMPLETED" | "ABORTED";
+            startedAt: components["schemas"]["UtcDateTime"];
+            completedAt: components["schemas"]["UtcDateTime"];
+            completedWorkSets: number;
+            completedVolumeKg: number;
+        };
+        WorkoutHistoryData: {
+            items: components["schemas"]["WorkoutHistoryItem"][];
+            nextCursor?: string;
+            hasMore: boolean;
+        };
+        WorkoutHistoryResponse: {
+            data: components["schemas"]["WorkoutHistoryData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         StartWorkoutSessionRequest: {
             clientSessionKey: string;
             planId: string;
@@ -1105,6 +1163,16 @@ export interface components {
             expectedVersion: components["schemas"]["ExpectedVersion"];
             /** @enum {string} */
             completionType: "FULL" | "EARLY_END";
+        };
+        WorkoutCompletionData: {
+            session: components["schemas"]["WorkoutSessionData"];
+            completedWorkSets: number;
+            complete: boolean;
+            automaticProgressionEligible: boolean;
+        };
+        WorkoutCompletionResponse: {
+            data: components["schemas"]["WorkoutCompletionData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         SyncSetPayload: {
             /** Format: uuid */
@@ -1676,6 +1744,30 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listExerciseReplacements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceCode: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 2 至 4 个安全替代候选；合法候选不足时宁缺毋滥 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseReplacementResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listPlanTemplates: {
         parameters: {
             query?: {
@@ -1889,6 +1981,7 @@ export interface operations {
         parameters: {
             query?: {
                 cursor?: components["parameters"]["Cursor"];
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -1896,7 +1989,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户的终态训练历史，使用稳定不透明游标分页 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutHistoryResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1984,7 +2085,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutExerciseUpdate"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 仅当前训练生效的替换覆盖层；原计划版本和原始训练快照保持不变 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -2048,7 +2157,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutCompletion"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 幂等训练结算；提前结束保留已完成组且不自动进入加重 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutCompletionResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };

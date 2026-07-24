@@ -40,8 +40,9 @@ class ContentEndpointIntegrationTest {
                         .queryParam("equipmentType", "dumbbell"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"))
-                .andExpect(jsonPath("$.data.items.length()").value(4))
+                .andExpect(jsonPath("$.data.items.length()").value(9))
                 .andExpect(jsonPath("$.data.items[0].plainLanguage").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].difficulty").value("BEGINNER"))
                 .andExpect(jsonPath("$.data.items[0].image.fallbackRef")
                         .value("asset://exercise-placeholder"));
 
@@ -51,6 +52,14 @@ class ContentEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.id").isNotEmpty())
                 .andExpect(jsonPath("$.data.code").value("GOBLET_SQUAT"))
                 .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"));
+
+        mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT/replacements")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sourceCode").value("GOBLET_SQUAT"))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[0].movementPattern").value("SQUAT"))
+                .andExpect(jsonPath("$.data.items[0].difficulty").value("BEGINNER"));
 
         mvc.perform(get("/api/v1/exercises/UNKNOWN")
                         .header("Authorization", "Bearer " + token))

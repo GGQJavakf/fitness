@@ -1,4 +1,4 @@
-import { Text, View } from '@tarojs/components'
+import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
 import { summarizeWorkout } from '../../../application/workoutFlow'
@@ -11,7 +11,22 @@ type Summary = ReturnType<typeof summarizeWorkout>
 
 export default function WorkoutSummaryPage() {
   const [summary, setSummary] = useState<Summary | null>(null)
+  const [message, setMessage] = useState('完成训练前会先同步本地事实。')
+  const [settling, setSettling] = useState(false)
   useEffect(() => { void application.workouts.load().then((state) => setSummary(state ? summarizeWorkout(state) : null)) }, [])
+  async function settle(): Promise<void> {
+    const state = await application.workouts.load()
+    if (!state || !summary || settling) return
+    setSettling(true)
+    try {
+      const result = await application.workouts.complete(state, summary.complete ? 'FULL' : 'EARLY_END')
+      setMessage(result.complete ? '训练已完整结算。' : '训练已提前结束；已完成组已保留，不会自动加重。')
+    } catch {
+      setMessage('结算暂未成功；本地事实仍保留，请检查网络或同步冲突后重试。')
+    } finally {
+      setSettling(false)
+    }
+  }
   return <View className='screen'><View className='card'>
     <Text className='title'>本次训练事实</Text>
     {summary ? <>
@@ -20,5 +35,7 @@ export default function WorkoutSummaryPage() {
       <Text>失败 {summary.failedSets} 组 · 跳过 {summary.skippedSets} 组</Text>
       <View className={summary.complete ? 'info-box' : 'warning-box'}>{summary.complete ? '训练已完整记录。' : '训练尚不完整，不会据此自动加重。'}</View>
     </> : <Text className='subtitle'>暂无可总结的训练草稿。</Text>}
-  </View></View>
+    <Text className='subtitle'>{message}</Text>
+    {summary && <Button className='primary-action' disabled={settling} onClick={() => void settle()}>{settling ? '正在同步并结算…' : summary.complete ? '完成训练' : '提前结束训练'}</Button>}
+  </View><Button className='secondary-action' onClick={() => void application.navigation.open('HISTORY')}>查看训练历史</Button></View>
 }

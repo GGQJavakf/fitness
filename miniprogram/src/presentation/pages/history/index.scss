@@ -1,0 +1,4 @@
+.history-card { display: flex; flex-direction: column; gap: 10px; }
+.history-row { display: flex; justify-content: space-between; align-items: center; }
+.history-status { color: #176b5b; font-weight: 600; }
+.history-status--incomplete { color: #a15c00; }

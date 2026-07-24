@@ -161,6 +161,7 @@ class EligibleContentFilterTest {
                 code + " 中文名",
                 "用日常语言解释这个动作",
                 "SQUAT",
+                "BEGINNER",
                 equipment,
                 Set.of("LEGS"),
                 List.of("保持稳定", "动作可控"),

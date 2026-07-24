@@ -4,6 +4,8 @@ import com.aifitness.assistant.common.api.ApiResponse;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutCompletionService;
+import com.aifitness.assistant.workout.application.ExerciseReplacementService;
 import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
@@ -31,10 +33,16 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile({"local", "test", "staging-experience"})
 public final class WorkoutSessionController {
     private final WorkoutSessionService sessions;
+    private final WorkoutCompletionService completion;
+    private final ExerciseReplacementService replacements;
     private final Clock clock;
 
-    public WorkoutSessionController(WorkoutSessionService sessions, Clock clock) {
+    public WorkoutSessionController(
+            WorkoutSessionService sessions, WorkoutCompletionService completion,
+            ExerciseReplacementService replacements, Clock clock) {
         this.sessions = sessions;
+        this.completion = completion;
+        this.replacements = replacements;
         this.clock = clock;
     }
 
@@ -68,6 +76,36 @@ public final class WorkoutSessionController {
                 sessions.transition(user, id, request.status(), request.expectedVersion())));
     }
 
+    @PostMapping("/{id}/complete")
+    public ApiResponse<CompletionData> complete(
+            AuthenticatedUserId user,
+            @PathVariable UUID id,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody CompletionRequest request) {
+        if (idempotencyKey == null || idempotencyKey.length() < 8 || idempotencyKey.length() > 128
+                || request == null || request.completionType() == null || request.expectedVersion() < 0) {
+            throw new IllegalArgumentException("valid completion request and idempotency key are required");
+        }
+        WorkoutCompletionService.Result result = completion.complete(
+                user, id, request.expectedVersion(), request.completionType());
+        return response(new CompletionData(
+                SessionData.from(result.session()), result.completedWorkSets(), result.complete(),
+                result.automaticProgressionEligible()));
+    }
+
+    @PutMapping("/{id}/exercises/{exerciseId}")
+    public ApiResponse<SessionData> updateExercise(
+            AuthenticatedUserId user, @PathVariable UUID id, @PathVariable UUID exerciseId,
+            @RequestBody ExerciseUpdateRequest request) {
+        if (request == null || request.action() != ExerciseAction.REPLACE
+                || request.replacementExerciseId() == null || request.replacementExerciseId().isBlank()
+                || request.expectedVersion() < 0) {
+            throw new IllegalArgumentException("a legal replacement and expectedVersion are required");
+        }
+        return response(SessionData.from(replacements.replace(
+                user, id, exerciseId, request.replacementExerciseId(), request.expectedVersion())));
+    }
+
     private <T> ApiResponse<T> response(T data) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {
@@ -80,6 +118,17 @@ public final class WorkoutSessionController {
             String clientSessionKey, UUID planId, int planVersionNo, String planDayId) {}
 
     public record StatusRequest(WorkoutStatus status, long expectedVersion) {}
+
+    public record CompletionRequest(
+            long expectedVersion, WorkoutCompletionService.CompletionType completionType) {}
+
+    public record CompletionData(
+            SessionData session, int completedWorkSets, boolean complete,
+            boolean automaticProgressionEligible) {}
+
+    public enum ExerciseAction { SKIP, REPLACE, COMPLETE }
+    public record ExerciseUpdateRequest(
+            ExerciseAction action, String replacementExerciseId, long expectedVersion) {}
 
     public record SessionData(
             UUID id,

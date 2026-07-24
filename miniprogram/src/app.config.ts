@@ -9,7 +9,8 @@ export default defineAppConfig({
     'presentation/pages/workout-prepare/index',
     'presentation/pages/workout-session/index',
     'presentation/pages/workout-summary/index',
-    'presentation/pages/sync-conflicts/index'
+    'presentation/pages/sync-conflicts/index',
+    'presentation/pages/history/index'
   ],
   window: {
     navigationBarTitleText: 'AI 健身助手',

@@ -3,9 +3,13 @@ package com.aifitness.assistant.workout.infrastructure;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
+import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.List;
+import java.time.Instant;
+import java.util.Comparator;
 import java.util.UUID;
 
 public final class InMemoryWorkoutSessionRepository implements WorkoutSessionRepository {
@@ -49,6 +53,58 @@ public final class InMemoryWorkoutSessionRepository implements WorkoutSessionRep
         }
         sessions.put(session.id(), session);
         return session;
+    }
+
+    @Override
+    public synchronized WorkoutSession complete(WorkoutSession terminalSession, long expectedVersion) {
+        if (!terminalSession.status().terminal() || terminalSession.version() != expectedVersion + 2) {
+            throw new IllegalArgumentException("atomic completion must contain both validated transitions");
+        }
+        return update(terminalSession, expectedVersion);
+    }
+
+    @Override
+    public synchronized WorkoutSession replaceExercise(
+            UUID userId, UUID sessionId, UUID snapshotId, long expectedVersion,
+            WorkoutExerciseSnapshot replacement) {
+        WorkoutSession current = findByIdAndUser(sessionId, userId)
+                .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
+        if (current.version() != expectedVersion) {
+            throw new WorkoutSessionService.VersionConflictException(current.version());
+        }
+        if (current.status() != com.aifitness.assistant.workout.domain.WorkoutStatus.IN_PROGRESS
+                && current.status() != com.aifitness.assistant.workout.domain.WorkoutStatus.PAUSED) {
+            throw new IllegalStateException("workout session does not accept exercise replacement");
+        }
+        boolean found = current.exercises().stream().anyMatch(exercise -> exercise.id().equals(snapshotId));
+        if (!found || !replacement.id().equals(snapshotId) || !replacement.sessionId().equals(sessionId)) {
+            throw new WorkoutSessionService.SessionNotFoundException();
+        }
+        WorkoutSession updated = new WorkoutSession(
+                current.id(), current.userId(), current.planId(), current.planVersionId(),
+                current.planVersionNumber(), current.trainingDayId(), current.trainingDayCode(),
+                current.clientSessionKey(), current.status(), current.startedAt(), current.completedAt(),
+                current.version() + 1, current.exercises().stream()
+                        .map(exercise -> exercise.id().equals(snapshotId) ? replacement : exercise).toList());
+        sessions.put(sessionId, updated);
+        return updated;
+    }
+
+    @Override
+    public synchronized List<WorkoutSession> findHistory(
+            UUID userId, Optional<Instant> beforeStartedAt, Optional<UUID> beforeId, int limit) {
+        if (limit < 1) throw new IllegalArgumentException("history limit must be positive");
+        Comparator<WorkoutSession> order = Comparator.comparing(WorkoutSession::startedAt).reversed()
+                .thenComparing(session -> session.id().toString(), Comparator.reverseOrder());
+        return sessions.values().stream()
+                .filter(session -> session.userId().equals(userId) && session.status().terminal())
+                .filter(session -> beforeStartedAt.map(before -> session.startedAt().isBefore(before)
+                        || session.startedAt().equals(before)
+                        && beforeId.map(id -> session.id().toString().compareTo(id.toString()) < 0).orElse(false))
+                        .orElse(true))
+                .sorted(order)
+                .limit(limit)
+                .toList();
     }
 
     private record UserKey(UUID userId, String clientSessionKey) {}

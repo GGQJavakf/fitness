@@ -188,7 +188,8 @@ class MigrationTest {
                 "db/migration/V010__profile_collection_versions.sql",
                 "db/migration/V011__privacy_export_artifacts.sql",
                 "db/migration/V012__workout_set_idempotency.sql",
-                "db/migration/V013__sync_conflict_resolution.sql"))
+                "db/migration/V013__sync_conflict_resolution.sql",
+                "db/migration/V014__workout_exercise_replacement_overlay.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -272,6 +273,12 @@ class MigrationTest {
                 "resolution VARCHAR(32)",
                 "sync_version BIGINT UNSIGNED",
                 "ck_sync_conflict_resolution_state");
+        assertThat(readMigration("V014__workout_exercise_replacement_overlay.sql")).contains(
+                "ALTER TABLE workout_exercise_snapshot",
+                "replacement_snapshot_json JSON NULL",
+                "replacement_revision BIGINT UNSIGNED NOT NULL DEFAULT 0",
+                "idx_workout_session_user_started_id",
+                "user_id, started_at DESC, id DESC");
     }
 
     @Test
@@ -931,7 +938,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(13);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(14);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
