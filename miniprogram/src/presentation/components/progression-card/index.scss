@@ -4,5 +4,5 @@
 .progression-card__weight { font-size: 34px; font-weight: 700; }
 .progression-card__algorithm { color: #778494; font-size: 22px; }
 .progression-card__editor { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.progression-card__input { min-width: 160px; padding: 14px 18px; border: 2px solid #dfe5ec; border-radius: 14px; text-align: right; }
+.progression-card__input { min-width: 160px; min-height: 72px; padding: 0 18px; border: 2px solid #dbe4df; border-radius: 14px; background: #f8faf9; text-align: right; }
 .progression-card__action { flex: 1 0 180px; }

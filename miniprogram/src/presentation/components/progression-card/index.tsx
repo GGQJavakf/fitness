@@ -2,6 +2,7 @@ import { Button, Input, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
 import type { ProgressionCardView } from '../../../application/progression'
+import { exerciseDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -25,7 +26,7 @@ export default function ProgressionCard({
   return <View className='card progression-card'>
     <View className='progression-card__heading'>
       <View className='progression-card__titles'>
-        <Text className='section-title'>{card.exerciseCode}</Text>
+        <View><Text className='section-title'>{exerciseDisplayName(card.exerciseCode)}</Text><Text className='code-label'>{card.exerciseCode}</Text></View>
         <Text className='progression-card__decision'>{card.title}</Text>
       </View>
       <Text className='progression-card__weight'>{card.weightLabel}</Text>

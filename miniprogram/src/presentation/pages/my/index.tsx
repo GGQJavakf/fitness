@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { privacyActionErrorMessage } from '../../../application/privacy'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import MainNavigation from '../../components/main-navigation'
 
 import './index.scss'
 
@@ -52,7 +53,7 @@ export default function MyPage() {
   }
 
   return (
-    <View className='screen my-page'>
+    <View className='screen screen--with-nav my-page'>
       <View className='card'>
         <Text className='title'>我的</Text>
         <Text className='subtitle'>P0 仅面向已满 18 周岁的成年人，单位固定为 KG。</Text>
@@ -81,13 +82,14 @@ export default function MyPage() {
           placeholder='输入 DELETE'
           onInput={(event) => setConfirmation(event.detail.value)}
         />
-        <Button className='danger-action' disabled={busy} onClick={() => void requestDeletion()}>提交删除申请</Button>
+        <Button className='danger-action' disabled={busy || confirmation !== 'DELETE'} onClick={() => void requestDeletion()}>提交删除申请</Button>
         {requestId && (
           <Button className='secondary-action' onClick={() => void refreshStatus()}>刷新申请状态</Button>
         )}
       </View>
 
       {message && <View className='info-box'><Text>{message}</Text></View>}
+      <MainNavigation current='MY' onNavigate={(destination) => void application.navigation.replace(destination)} />
     </View>
   )
 }

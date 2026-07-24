@@ -49,15 +49,15 @@ export default function HomePage() {
           <Button className='primary-action' onClick={() => void login()}>微信登录</Button>
         )}
         {destination === 'HOME' && (
-          <Button
-            className='primary-action'
-            onClick={() => void application.navigation.open('ONBOARDING')}
-          >完善档案并生成计划</Button>
+          <View className='action-row'>
+            <Button className='primary-action' onClick={() => void application.navigation.open('PLAN')}>进入我的计划</Button>
+            <Button className='secondary-action' onClick={() => void application.navigation.open('ONBOARDING')}>重新设置档案</Button>
+          </View>
         )}
       </View>
       <View className='card'>
         <Text className='section-title'>当前范围</Text>
-        <Text className='subtitle'>计划生效后会在这里显示状态。今日训练执行将在下一阶段 M2 接入，本阶段不会伪造训练入口。</Text>
+        <Text className='subtitle'>已支持建档、计划确认、训练记录、休息计时和历史查看。重量、组数、次数和进阶结论始终由确定性规则计算。</Text>
       </View>
       {destination !== 'LOADING' && (
         <Button

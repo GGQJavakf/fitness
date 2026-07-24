@@ -30,4 +30,16 @@ describe('Taro weapp toolchain', () => {
     expect(config.compileType).toBe('miniprogram')
     expect(config.miniprogramRoot).toBe('miniprogram/dist/')
   })
+
+  it('injects runtime configuration at build time without Node globals in app code', () => {
+    const taroConfig = readFileSync(resolve(projectRoot, 'config/index.ts'), 'utf8')
+    const compositionRoot = readFileSync(
+      resolve(projectRoot, 'src/platform/weapp/compositionRoot.ts'),
+      'utf8',
+    )
+
+    expect(taroConfig).toContain('defineConstants')
+    expect(compositionRoot).toContain('__FITNESS_API_BASE_URL__')
+    expect(compositionRoot).not.toMatch(/\bprocess\s*\./)
+  })
 })

@@ -9,6 +9,7 @@ import {
 } from '../../../application/progression'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import ProgressionCard from '../../components/progression-card'
+import MainNavigation from '../../components/main-navigation'
 
 import './index.scss'
 
@@ -92,7 +93,7 @@ export default function HistoryPage() {
     void loadRecommendations()
   }, [])
 
-  return <View className='screen'>
+  return <View className='screen screen--with-nav'>
     <View className='card'><Text className='title'>进阶建议</Text><Text className='subtitle'>{recommendationMessage}</Text></View>
     {recommendations.map((item) => {
       const card = toProgressionCard(item)
@@ -111,7 +112,9 @@ export default function HistoryPage() {
         <Text className={item.incomplete ? 'history-status history-status--incomplete' : 'history-status'}>{item.statusLabel}</Text></View>
       <Text>{item.factsLabel}</Text><Text className='subtitle'>{item.timeLabel}</Text>
     </View>)}
+    {!loading && items.length === 0 && !message.includes('无法加载') && <View className='card empty-state'><Text className='section-title'>还没有训练记录</Text><Text className='subtitle'>完成第一次训练后，这里会显示组数、容量和进阶建议。</Text><Button className='primary-action' onClick={() => void application.navigation.replace('PLAN')}>去看计划</Button></View>}
     {cursor && <Button className='secondary-action' disabled={loading} onClick={() => void load(cursor)}>{loading ? '加载中…' : '加载更多'}</Button>}
     {!cursor && message.includes('无法加载') && <Button className='secondary-action' disabled={loading} onClick={() => void load()}>重试</Button>}
+    <MainNavigation current='HISTORY' onNavigate={(destination) => void application.navigation.replace(destination)} />
   </View>
 }

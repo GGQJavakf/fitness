@@ -1,26 +1,38 @@
+.editor-exercise {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 0;
+  border-top: 2px solid #edf1ef;
+}
+
+.editor-exercise__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .editor-field {
   display: grid;
-  grid-template-columns: 1fr 160px 160px;
+  grid-template-columns: minmax(130px, 1fr) 150px 150px;
   align-items: center;
   gap: 12px;
 }
 
 .editor-field__input {
-  padding: 16px;
-  border: 2px solid #dfe5ec;
+  min-height: 72px;
+  padding: 0 14px;
+  border: 2px solid #dbe4df;
   border-radius: 14px;
-  background: #fff;
+  background: #f8faf9;
   text-align: center;
 }
 
-.editor-field__lock {
-  color: #5d6b7a;
-  font-size: 22px;
-}
+.editor-field__lock { color: #65736d; font-size: 22px; }
+.editor-diff { padding: 14px; border-radius: 12px; background: #eef3f1; font-size: 24px; }
 
-.editor-diff {
-  padding: 14px;
-  border-radius: 12px;
-  background: #f3f6f8;
-  font-size: 24px;
+@media (max-width: 360px) {
+  .editor-field { grid-template-columns: 1fr 120px; }
+  .editor-field > :last-child { grid-column: 1 / -1; }
 }

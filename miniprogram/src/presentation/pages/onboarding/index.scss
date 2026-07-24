@@ -18,3 +18,17 @@
   gap: 12px;
   font-size: 27px;
 }
+
+.onboarding .card:first-child {
+  gap: 10px;
+}
+
+.onboarding .card:nth-child(2) {
+  gap: 24px;
+}
+
+@media (max-width: 360px) {
+  .onboarding .choice-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -5,6 +5,13 @@
   gap: 12px;
 }
 
+.candidate-exercise__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .candidate-day {
   padding-top: 16px;
   border-top: 2px solid #edf0f3;

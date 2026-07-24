@@ -1,0 +1,32 @@
+.main-navigation {
+  position: fixed;
+  z-index: 20;
+  right: 24px;
+  bottom: 0;
+  left: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  border: 2px solid #e7ece9;
+  border-bottom: 0;
+  border-radius: 28px 28px 0 0;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -10px 32px rgba(20, 49, 42, 0.09);
+}
+
+.main-navigation__item {
+  min-height: 72px;
+  padding: 0;
+  background: transparent;
+  color: #69756f;
+  font-size: 25px;
+}
+
+.main-navigation__item--active,
+.main-navigation__item--active[disabled] {
+  background: #e5f4ee;
+  color: #12614f;
+  font-weight: 700;
+  opacity: 1;
+}

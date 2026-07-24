@@ -105,27 +105,26 @@ export default function WorkoutSessionPage() {
       {state?.safetyNotice && <View className='error-box'>{state.safetyNotice}</View>}
       <View className='info-box'>{message}</View>
     </View>
-    {exercise && <View className='card'>
-      <Text className='section-title'>实际重量（KG）</Text>
-      <Input className='metric-input' type='digit' value={weight} placeholder='输入本组重量' onInput={(event) => setWeight(event.detail.value)} />
-      <Text className='section-title'>实际次数</Text>
-      <Input className='metric-input' type='number' value={reps || String(exercise.targetReps)} onInput={(event) => setReps(event.detail.value)} />
+    {exercise && <View className='card workout-entry'>
+      <View className='field-group'><Text className='field-label'>实际重量（KG）</Text><Text className='field-helper'>填写本组真实使用的重量</Text>
+      <Input className='metric-input' type='digit' value={weight} placeholder='例如 12.5' onInput={(event) => setWeight(event.detail.value)} /></View>
+      <View className='field-group'><Text className='field-label'>实际次数</Text>
+      <Input className='metric-input' type='number' value={reps || String(exercise.targetReps)} onInput={(event) => setReps(event.detail.value)} /></View>
       <Text className='subtitle'>“还能做几次”可暂不填写，系统会保持 UNKNOWN，不会替你猜测。</Text>
-      <Button className='secondary-action' onClick={() => void showReplacements()}>替换本次动作</Button>
+      <Button className='secondary-action' onClick={() => void showReplacements()}>需要替换动作</Button>
       {replacements.map((candidate) => <Button key={candidate.id} className='secondary-action' onClick={() => void replace(candidate)}>{candidate.name}</Button>)}
-      <Button className='primary-action' onClick={() => void record('COMPLETED')}>完成本组</Button>
-      <View className='action-row'>
-        <Button className='secondary-action' onClick={() => void record('FAILED')}>本组失败</Button>
-        <Button className='secondary-action' onClick={() => void record('SKIPPED')}>跳过本组</Button>
-        <Button className='secondary-action' onClick={() => void record('FAILED', 'PAIN')}>疼痛/明显不适</Button>
+      <View className='action-row action-row--sticky workout-actions'>
+        <Button className='primary-action' onClick={() => void record('COMPLETED')}>完成本组</Button>
+        <Button className='secondary-action' onClick={() => void record('FAILED')}>未完成</Button>
+        <Button className='secondary-action' onClick={() => void record('SKIPPED')}>跳过</Button>
+        <Button className='danger-action' onClick={() => void record('FAILED', 'PAIN')}>疼痛或明显不适</Button>
       </View>
     </View>}
     {state?.restTimer?.timerStatus === 'RUNNING' && <View className='card'>
       <Text className='section-title'>休息计时</Text><Text className='timer'>{remaining}s</Text>
-      <View className='action-row'><Button onClick={() => void adjust(-15)}>-15 秒</Button><Button onClick={() => void adjust(15)}>+15 秒</Button></View>
+      <View className='action-row'><Button className='secondary-action' onClick={() => void adjust(-15)}>减少 15 秒</Button><Button className='secondary-action' onClick={() => void adjust(15)}>增加 15 秒</Button></View>
       <Button className='secondary-action' onClick={() => void application.workouts.skipRest(state).then(setState)}>跳过休息</Button>
     </View>}
-    <Button className='secondary-action' onClick={() => void application.navigation.open('WORKOUT_SUMMARY')}>查看当前总结</Button>
-    <Button className='secondary-action' onClick={() => void application.navigation.open('SYNC_CONFLICTS')}>处理同步冲突</Button>
+    <View className='workout-secondary-links'><Button className='secondary-action' onClick={() => void application.navigation.open('WORKOUT_SUMMARY')}>查看当前总结</Button><Button className='secondary-action' onClick={() => void application.navigation.open('SYNC_CONFLICTS')}>处理同步冲突</Button></View>
   </View>
 }

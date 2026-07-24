@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { numericFieldPath, type EditableNumericField, type PlanEditorState } from '../../../application/planEditor'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { exerciseDisplayName, planFieldDisplayName, planIssueDisplayMessage } from '../../copy'
 
 import './index.scss'
 
@@ -79,8 +80,11 @@ export default function PlanEditorPage() {
         <View key={day.code} className='card'>
           <Text className='section-title'>{day.name}</Text>
           {day.exercises.map((exercise, exerciseIndex) => (
-            <View key={exercise.exerciseCode} className='card'>
-              <Text>{exercise.exerciseCode}</Text>
+            <View key={exercise.exerciseCode} className='editor-exercise'>
+              <View className='editor-exercise__heading'>
+                <Text className='section-title'>{exerciseDisplayName(exercise.exerciseCode)}</Text>
+                <Text className='code-label'>{exercise.exerciseCode}</Text>
+              </View>
               {editableFields.map((field) => {
                 const path = numericFieldPath(day.code, exercise.exerciseCode, field)
                 const lock = editor.locks[path] ?? 'UNLOCKED'
@@ -111,14 +115,15 @@ export default function PlanEditorPage() {
 
       {editor.validationResult.validationIssues.map((issue) => (
         <View key={`${issue.fieldPath}-${issue.reasonCode}`} className={issue.severity === 'ERROR' ? 'error-box' : 'warning-box'}>
-          {issue.severity} · {issue.reasonCode} · {issue.fieldPath}
+          <Text>{planIssueDisplayMessage(issue.reasonCode)}</Text>
+          <Text className='code-label'>{issue.severity === 'ERROR' ? '保存前需修正' : '请确认'} · {planFieldDisplayName(issue.fieldPath)}</Text>
         </View>
       ))}
       {Object.entries(editor.lockedFieldOutcomes).map(([path, outcome]) => (
-        <View key={path} className='info-box'>{path}：{outcome}</View>
+        <View key={path} className='info-box'>{planFieldDisplayName(path)}：{outcome === 'RULE_LOCKED' ? '由规则锁定，不能手动修改' : '已按你的选择锁定'}</View>
       ))}
       {editor.rebalanceDiffs.map((diff) => (
-        <View key={diff.fieldPath} className='editor-diff'>{diff.fieldPath}：{diff.before} → {diff.after}</View>
+        <View key={diff.fieldPath} className='editor-diff'>{planFieldDisplayName(diff.fieldPath)}：{diff.before} → {diff.after}</View>
       ))}
       {editor.conflict && <View className='error-box'>{editor.conflict.message}</View>}
       {error && <View className='error-box'>{error}</View>}
@@ -126,7 +131,7 @@ export default function PlanEditorPage() {
       {editor.warningConfirmationToken && !editor.warningConfirmed && (
         <View className='warning-box'>服务端返回警告。请阅读上述问题并显式确认，第二次保存将携带一次性确认 token。</View>
       )}
-      <View className='action-row'>
+      <View className='action-row action-row--sticky'>
         <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.validateEditor())}>校验</Button>
         <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.previewRebalance())}>重新优化预览</Button>
         {editor.warningConfirmationToken && !editor.warningConfirmed

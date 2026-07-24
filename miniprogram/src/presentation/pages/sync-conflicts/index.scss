@@ -1,1 +1,20 @@
-.evidence { padding: 16px; border-radius: 14px; background: #f7f8fa; word-break: break-all; }
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 16px;
+  background: #f5f8f6;
+}
+
+.evidence__row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) 1.4fr;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 1px solid #e1e9e5;
+  word-break: break-word;
+  font-size: 23px;
+}
+
+.evidence__row text:last-child { text-align: right; }

@@ -44,6 +44,5 @@ export default function WorkoutSummaryPage() {
     </> : <Text className='subtitle'>暂无可总结的训练草稿。</Text>}
     <Text className='subtitle'>{message}</Text>
     {aiSummary && <View className='info-box'>{aiSummary}</View>}
-    {summary && <Button className='primary-action' disabled={settling} onClick={() => void settle()}>{settling ? '正在同步并结算…' : summary.complete ? '完成训练' : '提前结束训练'}</Button>}
-  </View><Button className='secondary-action' onClick={() => void application.navigation.open('HISTORY')}>查看训练历史</Button></View>
+  </View><View className='action-row action-row--sticky'>{summary && <Button className={summary.complete ? 'primary-action' : 'danger-action'} disabled={settling} onClick={() => void settle()}>{settling ? '正在同步并结算…' : summary.complete ? '完成训练' : '确认提前结束'}</Button>}<Button className='secondary-action' onClick={() => void application.navigation.open('HISTORY')}>查看训练历史</Button></View></View>
 }

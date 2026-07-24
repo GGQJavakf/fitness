@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import type { ActivePlanData } from '../../../application/models'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { exerciseDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -60,10 +61,10 @@ export default function WorkoutPreparePage() {
     </View>
     <View className='card workout-list'>
       {day?.exercises.map((exercise) => <View className='workout-item' key={exercise.exerciseCode}>
-        <Text>{exercise.exerciseCode}</Text>
+        <View><Text>{exerciseDisplayName(exercise.exerciseCode)}</Text><Text className='code-label'>{exercise.exerciseCode}</Text></View>
         <Text className='subtitle'>{exercise.workSets} 组 × {exercise.repMin}～{exercise.repMax} 次 · 休息 {exercise.restSeconds} 秒</Text>
       </View>)}
     </View>
-    <Button className='primary-action' disabled={!day} onClick={() => void start()}>完成热身，进入训练</Button>
+    <View className='action-row action-row--sticky'><Button className='primary-action' disabled={!day} onClick={() => void start()}>完成热身，进入训练</Button></View>
   </View>
 }

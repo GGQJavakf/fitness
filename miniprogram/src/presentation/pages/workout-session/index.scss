@@ -1,2 +1,7 @@
-.metric-input { margin: 12px 0; padding: 18px; border: 2px solid #dfe5ec; border-radius: 14px; background: #fff; }
-.timer { font-size: 58px; font-weight: 700; color: #176b5b; }
+.workout-entry { padding-bottom: 0; }
+.metric-input { min-height: 92px; padding: 0 22px; border: 2px solid #cbd8d2; border-radius: 18px; background: #f8faf9; font-size: 34px; font-weight: 650; }
+.timer { font-size: 64px; font-weight: 750; color: #176b58; text-align: center; }
+.workout-actions { margin: 6px -28px 0; }
+.workout-actions .primary-action { flex-basis: 100%; }
+.workout-actions .danger-action { flex-basis: 100%; }
+.workout-secondary-links { display: grid; gap: 12px; margin-top: 20px; }

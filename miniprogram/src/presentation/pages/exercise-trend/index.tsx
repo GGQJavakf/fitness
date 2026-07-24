@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { toExerciseTrendRows, type ExerciseTrendRow } from '../../../application/progression'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { exerciseDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -33,7 +34,8 @@ export default function ExerciseTrendPage() {
 
   return <View className='screen'>
     <View className='card'>
-      <Text className='title'>{exerciseCode ?? '动作'}趋势</Text>
+      <Text className='title'>{exerciseCode ? exerciseDisplayName(exerciseCode) : '动作'}趋势</Text>
+      {exerciseCode && <Text className='code-label'>{exerciseCode}</Text>}
       <Text className='subtitle'>{message}</Text>
     </View>
     {rows.map((row) => <View className='card trend-row' key={row.id}>
@@ -43,6 +45,8 @@ export default function ExerciseTrendPage() {
       </View>
       <Text>{row.volumeLabel}</Text>
     </View>)}
+    {rows.length === 0 && !message.includes('正在') && <View className='card empty-state'><Text>完成训练后才会形成趋势，提前结束或异常记录不会误导进阶决策。</Text></View>}
     {message.includes('无法加载') && <Button className='secondary-action' onClick={() => void load()}>重试</Button>}
+    <Button className='secondary-action' onClick={() => void application.navigation.replace('HISTORY')}>返回训练历史</Button>
   </View>
 }

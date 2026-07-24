@@ -2,6 +2,7 @@ import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { exerciseDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -68,7 +69,7 @@ export default function PlanCandidatesPage() {
           <Text className='section-title'>{day.name}</Text>
           {day.exercises.map((exercise) => (
             <View key={exercise.exerciseCode} className='candidate-exercise'>
-              <Text>{exercise.exerciseCode}</Text>
+              <View className='candidate-exercise__heading'><Text>{exerciseDisplayName(exercise.exerciseCode)}</Text><Text className='code-label'>{exercise.exerciseCode}</Text></View>
               <Text>{exercise.workSets} 组 · {exercise.repRange} · {exercise.restLabel}</Text>
               <Text className='subtitle'>{exercise.weightLabel}</Text>
             </View>
@@ -78,7 +79,7 @@ export default function PlanCandidatesPage() {
 
       {error && <View className='error-box'>{error}</View>}
       {candidate.canContinue
-        ? <Button className='primary-action' loading={busy} onClick={() => void accept()}>采用候选并进入编辑</Button>
+        ? <Button className='primary-action' loading={busy} onClick={() => void accept()}>查看并确认计划</Button>
         : <Button className='primary-action' onClick={() => void adjustCandidate()}>{candidate.action?.label ?? '返回调整档案'}</Button>}
       {candidate.canContinue && <Text className='subtitle'>进入编辑不会立即生效；最终保存时才创建首个不可变版本，手改会以新版本记录，不覆盖历史。</Text>}
     </View>

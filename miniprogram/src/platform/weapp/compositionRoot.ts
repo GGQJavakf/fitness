@@ -14,11 +14,13 @@ import {
 } from './adapters'
 import { createWechatWorkoutDraftStore } from './WechatStorageAdapter'
 
+declare const __FITNESS_API_BASE_URL__: string
+
 const sessions = createWeappSessionStore()
 const navigationPort = createWeappNavigation()
 const reauthentication = createWeappLogin()
 const api = new FitnessApiClient(
-  process.env.TARO_APP_API_BASE_URL ?? 'http://127.0.0.1:8080',
+  __FITNESS_API_BASE_URL__,
   createWeappTransport(),
   sessions,
   () => navigationPort.replaceApp('LOGIN'),

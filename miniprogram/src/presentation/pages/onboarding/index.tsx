@@ -10,6 +10,7 @@ import {
   type OnboardingDraft,
 } from '../../../application/onboarding'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { experienceDisplayName, goalDisplayName, locationDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -50,6 +51,7 @@ export default function OnboardingPage() {
   return (
     <View className='onboarding screen'>
       <View className='card'>
+        <Text className='eyebrow'>基础档案</Text>
         <Text className='title'>3 分钟建立基础档案</Text>
         <Text className='subtitle'>第 {state.stepIndex + 1} / {ONBOARDING_STEPS.length} 步</Text>
         <View className='onboarding__progress-track'>
@@ -77,23 +79,21 @@ export default function OnboardingPage() {
           <>
             <Text className='section-title'>目标与经验</Text>
             <Text className='subtitle'>计划关键数字将由服务端规则引擎生成。</Text>
-            <View className='choice-row'>
-              {([
-                ['GENERAL_FITNESS', '一般健身'],
-                ['STRENGTH', '提升力量'],
-                ['HYPERTROPHY', '增肌'],
-              ] as const).map(([value, label]) => (
-                <Button key={value} className={`choice ${state.draft.goal === value ? 'choice--selected' : ''}`} onClick={() => patch({ goal: value })}>{label}</Button>
-              ))}
+            <View className='field-group'>
+              <Text className='field-label'>你的目标</Text>
+              <View className='choice-row'>
+                {(['GENERAL_FITNESS', 'STRENGTH', 'HYPERTROPHY'] as const).map((value) => (
+                  <Button key={value} className={`choice ${state.draft.goal === value ? 'choice--selected' : ''}`} onClick={() => patch({ goal: value })}>{goalDisplayName(value)}</Button>
+                ))}
+              </View>
             </View>
-            <View className='choice-row'>
-              {([
-                ['BEGINNER', '新手'],
-                ['INTERMEDIATE', '有经验'],
-                ['ADVANCED', '进阶'],
-              ] as const).map(([value, label]) => (
-                <Button key={value} className={`choice ${state.draft.experience === value ? 'choice--selected' : ''}`} onClick={() => patch({ experience: value })}>{label}</Button>
-              ))}
+            <View className='field-group'>
+              <Text className='field-label'>训练经验</Text>
+              <View className='choice-row'>
+                {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as const).map((value) => (
+                  <Button key={value} className={`choice ${state.draft.experience === value ? 'choice--selected' : ''}`} onClick={() => patch({ experience: value })}>{experienceDisplayName(value)}</Button>
+                ))}
+              </View>
             </View>
           </>
         )}
@@ -102,20 +102,29 @@ export default function OnboardingPage() {
           <>
             <Text className='section-title'>时间、频率与场地</Text>
             <Text className='subtitle'>每周 2～6 天；单次时长使用 P0 支持的固定选项。</Text>
-            <View className='choice-row'>
-              {[2, 3, 4, 5, 6].map((value) => (
-                <Button key={value} className={`choice ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`} onClick={() => patch({ weeklyFrequency: value })}>{value} 天</Button>
-              ))}
+            <View className='field-group'>
+              <Text className='field-label'>每周训练几天</Text>
+              <View className='choice-row'>
+                {[2, 3, 4, 5, 6].map((value) => (
+                  <Button key={value} className={`choice ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`} onClick={() => patch({ weeklyFrequency: value })}>{value} 天</Button>
+                ))}
+              </View>
             </View>
-            <View className='choice-row'>
-              {([30, 45, 60, 75, 90] as const).map((value) => (
-                <Button key={value} className={`choice ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`} onClick={() => patch({ sessionMinutes: value })}>{value} 分钟</Button>
-              ))}
+            <View className='field-group'>
+              <Text className='field-label'>每次训练多久</Text>
+              <View className='choice-row'>
+                {([30, 45, 60, 75, 90] as const).map((value) => (
+                  <Button key={value} className={`choice ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`} onClick={() => patch({ sessionMinutes: value })}>{value} 分钟</Button>
+                ))}
+              </View>
             </View>
-            <View className='choice-row'>
-              {([['HOME', '居家'], ['GYM', '健身房'], ['OTHER', '其他']] as const).map(([value, label]) => (
-                <Button key={value} className={`choice ${state.draft.location === value ? 'choice--selected' : ''}`} onClick={() => patch({ location: value })}>{label}</Button>
-              ))}
+            <View className='field-group'>
+              <Text className='field-label'>主要训练场地</Text>
+              <View className='choice-row'>
+                {(['HOME', 'GYM', 'OTHER'] as const).map((value) => (
+                  <Button key={value} className={`choice ${state.draft.location === value ? 'choice--selected' : ''}`} onClick={() => patch({ location: value })}>{locationDisplayName(value)}</Button>
+                ))}
+              </View>
             </View>
           </>
         )}
@@ -153,10 +162,10 @@ export default function OnboardingPage() {
           <>
             <Text className='section-title'>确认档案并生成候选</Text>
             <View className='onboarding__summary'>
-              <Text>目标：{state.draft.goal}</Text>
-              <Text>经验：{state.draft.experience}</Text>
+              <Text>目标：{goalDisplayName(state.draft.goal)}</Text>
+              <Text>经验：{experienceDisplayName(state.draft.experience)}</Text>
               <Text>安排：每周 {state.draft.weeklyFrequency} 天，每次 {state.draft.sessionMinutes} 分钟</Text>
-              <Text>场地：{state.draft.location}</Text>
+              <Text>场地：{locationDisplayName(state.draft.location)}</Text>
               <Text>器械：{state.draft.equipment.length > 0 ? '健身房基础器械（KG）' : '仅自重'}</Text>
             </View>
           </>
@@ -166,7 +175,7 @@ export default function OnboardingPage() {
         {submitError && <View className='error-box'>{submitError}</View>}
       </View>
 
-      <View className='action-row'>
+      <View className='action-row action-row--sticky'>
         {state.stepIndex > 0 && <Button className='secondary-action' onClick={() => setState((current) => previousOnboardingStep(current))}>上一步</Button>}
         {state.step === 'REVIEW'
           ? <Button className='primary-action' loading={submitting} onClick={() => void submit()}>保存并生成候选</Button>
