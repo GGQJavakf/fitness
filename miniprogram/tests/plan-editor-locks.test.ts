@@ -103,6 +103,33 @@ describe('plan editor locks', () => {
     expect(ruleLockedUnlock.lockedFieldOutcomes[restSecondsPath]).toBe('RULE_LOCKED')
   })
 
+  it('preserves an explicit UNLOCKED command when editing a base USER_LOCKED field', () => {
+    let state = createPlanEditorState({
+      planId: 'plan-1',
+      baseVersion: 1,
+      plan: {
+        ...originalPlan,
+        locks: {
+          ...originalPlan.locks,
+          [workSetsPath]: 'USER_LOCKED' as const,
+        },
+      },
+      validationResult: { valid: true, validationIssues: [] },
+    })
+
+    expect(buildSaveCommand(state).locks).toEqual({})
+
+    state = setFieldLock(state, workSetsPath, 'UNLOCKED')
+    state = changeNumericField(state, 'day-a', 'goblet-squat', 'workSets', 4)
+
+    expect(state).toMatchObject({
+      baseLocks: { [workSetsPath]: 'USER_LOCKED' },
+      lockCommands: { [workSetsPath]: 'UNLOCKED' },
+      locks: { [workSetsPath]: 'UNLOCKED' },
+    })
+    expect(buildSaveCommand(state).locks).toEqual({ [workSetsPath]: 'UNLOCKED' })
+  })
+
   it('blocks ERROR saves and requires a second command with the warning token', () => {
     const initial = createPlanEditorState({
       planId: 'plan-1',
@@ -149,6 +176,10 @@ describe('plan editor locks', () => {
       validationResult: { valid: true, validationIssues: [] },
     })
     state = changeNumericField(state, 'day-a', 'goblet-squat', 'workSets', 4)
+    state = {
+      ...state,
+      lockedFieldOutcomes: { [workSetsPath]: 'USER_LOCKED' },
+    }
 
     const preview = applyRebalancePreview(state, {
       status: 'PREVIEW',
@@ -167,9 +198,6 @@ describe('plan editor locks', () => {
         },
       },
       validationIssues: [],
-      lockedFieldOutcomes: {
-        [workSetsPath]: 'USER_LOCKED',
-      },
     })
 
     expect(preview.workingCopy.days[0].exercises[0].workSets).toBe(4)
@@ -261,7 +289,7 @@ describe('plan editor locks', () => {
       },
     }))
     const planPort: PlanPersistencePort = {
-      validatePlan: vi.fn(),
+      validatePlan: vi.fn().mockResolvedValue({ valid: true, validationIssues: [] }),
       createInitialPlan,
       getActivePlan: vi.fn(),
       createPlanVersion,
@@ -341,6 +369,10 @@ describe('plan editor locks', () => {
       validationResult: { valid: true, validationIssues: [] },
     })
     state = changeNumericField(state, 'day-a', 'goblet-squat', 'workSets', 4)
+    state = {
+      ...state,
+      lockedFieldOutcomes: { [workSetsPath]: 'USER_LOCKED' },
+    }
 
     const preview = applyRebalancePreview(state, {
       status: 'PREVIEW',
@@ -356,7 +388,6 @@ describe('plan editor locks', () => {
         locks: { [workSetsPath]: 'USER_LOCKED' },
       },
       validationIssues: [],
-      lockedFieldOutcomes: { [workSetsPath]: 'USER_LOCKED' },
     })
 
     const dayA = preview.workingCopy.days.find((day) => day.code === 'day-a')!
@@ -425,6 +456,79 @@ describe('plan editor locks', () => {
     application.openCandidateEditor()
 
     await expect(application.saveEditor()).rejects.toThrow('计划包含错误，不能保存')
+    expect(createInitialPlan).not.toHaveBeenCalled()
+    expect(createPlanVersion).not.toHaveBeenCalled()
+  })
+
+  it('validates the exact edited working copy before any provisional plan write', async () => {
+    const candidate = {
+      candidateId: 'candidate-server-invalid',
+      plan: { ...originalPlan, locks: {} },
+      validationIssues: [],
+      ruleReference: {
+        ruleVersion: 'r1',
+        templateVersion: 't1',
+        contentVersion: 'c1',
+      },
+      lockedFieldOutcomes: {},
+      explanationStatus: 'READY' as const,
+      explanation: '规则候选',
+      expiresAt: '2026-07-25T00:00:00Z',
+    }
+    const onboardingPort: OnboardingPersistencePort = {
+      getProfileVersion: vi.fn().mockResolvedValue(0),
+      getEquipmentVersion: vi.fn().mockResolvedValue(0),
+      getPreferencesVersion: vi.fn().mockResolvedValue(0),
+      saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
+      saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
+      savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      generateCandidate: vi.fn().mockResolvedValue({
+        status: 'CANDIDATE_READY',
+        candidate,
+        validationIssues: [],
+        lockedFieldOutcomes: {},
+      }),
+    }
+    const validatePlan = vi.fn().mockResolvedValue({
+      valid: false,
+      validationIssues: [{
+        severity: 'ERROR',
+        reasonCode: 'SERVER_REJECTED_EDIT',
+        fieldPath: workSetsPath,
+      }],
+    })
+    const createInitialPlan = vi.fn()
+    const createPlanVersion = vi.fn()
+    const application = createFitnessApplication(onboardingPort, {
+      validatePlan,
+      createInitialPlan,
+      getActivePlan: vi.fn(),
+      createPlanVersion,
+      previewRebalance: vi.fn(),
+    })
+    await application.completeOnboarding({
+      adultConfirmed: true,
+      safetyAccepted: true,
+      goal: 'GENERAL_FITNESS',
+      experience: 'BEGINNER',
+      weeklyFrequency: 3,
+      sessionMinutes: 45,
+      location: 'GYM',
+      equipment: [],
+      preferences: [],
+    })
+    application.openCandidateEditor()
+    application.editPlanNumber('day-a', 'goblet-squat', 'workSets', 4)
+
+    await expect(application.saveEditor()).rejects.toThrow('计划包含错误，不能保存')
+    expect(validatePlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        days: [expect.objectContaining({
+          exercises: [expect.objectContaining({ workSets: 4 })],
+        })],
+      }),
+      candidate.ruleReference,
+    )
     expect(createInitialPlan).not.toHaveBeenCalled()
     expect(createPlanVersion).not.toHaveBeenCalled()
   })

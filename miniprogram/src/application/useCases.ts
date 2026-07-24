@@ -20,14 +20,17 @@ import {
 import type { PlanPersistencePort } from './ports'
 import {
   buildCandidateViewModel,
+  createOnboardingState,
   saveProfileAndGenerateCandidate,
   type CandidateViewModel,
   type OnboardingDraft,
   type OnboardingPersistencePort,
+  type OnboardingState,
 } from './onboarding'
 
 export interface FitnessApplication {
   completeOnboarding(draft: OnboardingDraft): Promise<CandidateViewModel>
+  resumeOnboarding(route?: 'ONBOARDING_EQUIPMENT'): OnboardingState
   getCandidate(): CandidateViewModel | null
   activateCandidate(): Promise<ActivePlanData>
   openCandidateEditor(): PlanEditorState
@@ -53,6 +56,7 @@ export function createFitnessApplication(
   planPort: PlanPersistencePort,
 ): FitnessApplication {
   let candidateData: PlanCandidateGenerationData | null = null
+  let onboardingDraft: OnboardingDraft | null = null
   let activePlan: ActivePlanData | null = null
   let editor: PlanEditorState | null = null
 
@@ -85,8 +89,20 @@ export function createFitnessApplication(
 
   return {
     async completeOnboarding(draft) {
+      onboardingDraft = cloneOnboardingDraft(draft)
       candidateData = await saveProfileAndGenerateCandidate(onboardingPort, draft)
       return buildCandidateViewModel(candidateData)
+    },
+
+    resumeOnboarding() {
+      const initial = createOnboardingState()
+      if (!onboardingDraft) return initial
+      return {
+        ...initial,
+        stepIndex: 3,
+        step: 'EQUIPMENT',
+        draft: cloneOnboardingDraft(onboardingDraft),
+      }
     },
 
     getCandidate() {
@@ -172,20 +188,29 @@ export function createFitnessApplication(
       let state = requireEditor()
       try {
         buildSaveCommand(state)
+        const ruleReference = activePlan?.activeVersion.ruleReference
+          ?? candidateData?.candidate?.ruleReference
+        if (!ruleReference) {
+          throw new ApplicationError('RESOURCE_NOT_FOUND', '计划规则版本不存在')
+        }
+        state = applyValidation(
+          state,
+          await planPort.validatePlan(validationDraft(state), ruleReference),
+        )
+        editor = state
+        buildSaveCommand(state)
         if (!state.planId) {
           const candidateId = candidateData?.candidate?.candidateId
           if (!candidateId) {
             throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
           }
           const pendingWorkingCopy = state.workingCopy
-          const pendingLocks = state.locks
+          const pendingLockCommands = state.lockCommands
           const pendingValidation = state.validationResult
           activePlan = await planPort.createInitialPlan(candidateId)
           const baseEditor = editorWithActivePlan(activePlan)
           const hasPlanChanges = JSON.stringify(pendingWorkingCopy) !== JSON.stringify(activePlan.activeVersion.plan)
-          const hasLockChanges = Object.entries(pendingLocks).some(
-            ([path, status]) => activePlan?.activeVersion.plan.locks[path] !== status,
-          )
+          const hasLockChanges = Object.keys(pendingLockCommands).length > 0
           if (!hasPlanChanges && !hasLockChanges) {
             editor = baseEditor
             return editor
@@ -193,7 +218,8 @@ export function createFitnessApplication(
           state = {
             ...baseEditor,
             workingCopy: pendingWorkingCopy,
-            locks: pendingLocks,
+            lockCommands: pendingLockCommands,
+            locks: { ...baseEditor.baseLocks, ...pendingLockCommands },
             validationResult: pendingValidation,
           }
           editor = state
@@ -232,5 +258,17 @@ export function createFitnessApplication(
       editor = applyRebalancePreview(state, result)
       return editor
     },
+  }
+}
+
+function cloneOnboardingDraft(draft: OnboardingDraft): OnboardingDraft {
+  return {
+    ...draft,
+    equipment: draft.equipment.map((item) => ({
+      ...item,
+      minIncrement: { ...item.minIncrement },
+      availableLevels: item.availableLevels.map((level) => ({ ...level })),
+    })),
+    preferences: draft.preferences.map((preference) => ({ ...preference })),
   }
 }

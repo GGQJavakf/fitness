@@ -8,6 +8,7 @@ import type {
   StartupPorts,
 } from '../src/application/onboarding'
 import { FitnessApiClient } from '../src/infrastructure/api/client'
+import { createFitnessApplication } from '../src/application/useCases'
 import {
   ONBOARDING_STEPS,
   advanceOnboarding,
@@ -207,9 +208,79 @@ describe('P0 onboarding flow', () => {
     })
     expect(noCandidate.reason).toContain('EQUIPMENT_UNAVAILABLE')
   })
+
+  it('resumes a NO_CANDIDATE adjustment at equipment without dropping the submitted draft', async () => {
+    const port: OnboardingPersistencePort = {
+      getProfileVersion: vi.fn().mockResolvedValue(0),
+      getEquipmentVersion: vi.fn().mockResolvedValue(0),
+      getPreferencesVersion: vi.fn().mockResolvedValue(0),
+      saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
+      saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
+      savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      generateCandidate: vi.fn().mockResolvedValue({
+        status: 'NO_CANDIDATE',
+        validationIssues: [],
+        lockedFieldOutcomes: {},
+      }),
+    }
+    const application = createFitnessApplication(port, {
+      validatePlan: vi.fn(),
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn(),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    })
+
+    const candidate = await application.completeOnboarding(validDraft)
+    const resumed = application.resumeOnboarding(candidate.action!.route)
+
+    expect(resumed).toMatchObject({
+      stepIndex: 3,
+      step: 'EQUIPMENT',
+      draft: validDraft,
+      errors: [],
+    })
+    expect(resumed.draft).not.toBe(validDraft)
+  })
 })
 
 describe('P0 startup and WeChat session', () => {
+  it('allows HTTP only for loopback API hosts', () => {
+    const transport = { request: vi.fn() }
+    const sessionStore = { load: vi.fn(), save: vi.fn(), clear: vi.fn() }
+
+    expect(() => new FitnessApiClient(
+      'http://api.example.com',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).toThrow('HTTPS')
+    expect(() => new FitnessApiClient(
+      'http://localhost:8080',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).not.toThrow()
+    expect(() => new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).not.toThrow()
+    expect(() => new FitnessApiClient(
+      'http://[::1]:8080',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).not.toThrow()
+    expect(() => new FitnessApiClient(
+      'https://api.example.com',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).not.toThrow()
+  })
+
   it('restores a session and navigates incomplete profiles through the application use case', async () => {
     const session: Session = {
       accessToken: 'access-redacted',

@@ -25,6 +25,13 @@ export default function PlanCandidatesPage() {
     }
   }
 
+  async function adjustCandidate(): Promise<void> {
+    if (candidate?.action?.route === 'ONBOARDING_EQUIPMENT') {
+      application.resumeOnboarding(candidate.action.route)
+    }
+    await application.navigation.replace('ONBOARDING')
+  }
+
   if (!candidate) {
     return (
       <View className='screen'>
@@ -62,7 +69,7 @@ export default function PlanCandidatesPage() {
       {error && <View className='error-box'>{error}</View>}
       {candidate.canContinue
         ? <Button className='primary-action' loading={busy} onClick={() => void accept()}>采用候选并进入编辑</Button>
-        : <Button className='primary-action' onClick={() => void application.navigation.replace('ONBOARDING')}>{candidate.action?.label ?? '返回调整档案'}</Button>}
+        : <Button className='primary-action' onClick={() => void adjustCandidate()}>{candidate.action?.label ?? '返回调整档案'}</Button>}
       {candidate.canContinue && <Text className='subtitle'>进入编辑不会立即生效；最终保存时才创建首个不可变版本，手改会以新版本记录，不覆盖历史。</Text>}
     </View>
   )

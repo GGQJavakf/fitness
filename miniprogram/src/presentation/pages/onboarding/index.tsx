@@ -5,7 +5,6 @@ import {
   DEFAULT_GYM_EQUIPMENT,
   ONBOARDING_STEPS,
   advanceOnboarding,
-  createOnboardingState,
   previousOnboardingStep,
   updateOnboardingDraft,
   type OnboardingDraft,
@@ -17,7 +16,7 @@ import './index.scss'
 const application = getWeappApplication()
 
 export default function OnboardingPage() {
-  const [state, setState] = useState(createOnboardingState)
+  const [state, setState] = useState(() => application.resumeOnboarding())
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 

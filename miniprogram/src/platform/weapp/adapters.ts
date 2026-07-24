@@ -42,8 +42,9 @@ export function createWeappSessionStore(): SessionAccessPort {
       try {
         const value = await Taro.getStorage<Session>({ key: sessionStorageKey })
         return isSession(value.data) ? value.data : null
-      } catch {
-        return null
+      } catch (error) {
+        if (isMissingStorageError(error)) return null
+        throw error
       }
     },
     async save(session: Session): Promise<void> {
@@ -52,8 +53,8 @@ export function createWeappSessionStore(): SessionAccessPort {
     async clear(): Promise<void> {
       try {
         await Taro.removeStorage({ key: sessionStorageKey })
-      } catch {
-        // Missing local state already satisfies the clear operation.
+      } catch (error) {
+        if (!isMissingStorageError(error)) throw error
       }
     },
   }
@@ -103,4 +104,12 @@ function isSession(value: unknown): value is Session {
   return typeof session.accessToken === 'string'
     && typeof session.refreshToken === 'string'
     && typeof session.expiresAt === 'string'
+}
+
+function isMissingStorageError(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || !('errMsg' in value)) {
+    return false
+  }
+  const errMsg = (value as { errMsg?: unknown }).errMsg
+  return typeof errMsg === 'string' && /(?:data )?not found/i.test(errMsg)
 }

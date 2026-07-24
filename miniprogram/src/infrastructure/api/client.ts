@@ -253,8 +253,18 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
 
 function normalizeBaseUrl(baseUrl: string): string {
   const normalized = baseUrl.trim().replace(/\/+$/, '')
-  if (!/^https?:\/\//.test(normalized)) {
+  let parsed: URL
+  try {
+    parsed = new URL(normalized)
+  } catch {
     throw new Error('API base URL must use http or https')
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('API base URL must use http or https')
+  }
+  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+  if (parsed.protocol === 'http:' && !loopbackHosts.has(parsed.hostname.toLowerCase())) {
+    throw new Error('API base URL must use HTTPS for non-loopback hosts')
   }
   return normalized
 }

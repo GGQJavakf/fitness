@@ -16,6 +16,8 @@ export interface PlanEditorState {
   basePlan: PlanDraft
   workingCopy: PlanDraft
   validationResult: PlanValidationData
+  baseLocks: Record<string, LockStatus>
+  lockCommands: Record<string, LockCommandStatus>
   locks: Record<string, LockStatus>
   lockedFieldOutcomes: Record<string, LockStatus>
   warningConfirmationToken?: string
@@ -40,18 +42,17 @@ interface CreatePlanEditorStateInput {
   validationResult: PlanValidationData
 }
 
-interface RebalancePreview extends PlanVersionResultData {
-  lockedFieldOutcomes?: Record<string, LockStatus>
-}
-
 export function createPlanEditorState(input: CreatePlanEditorStateInput): PlanEditorState {
+  const baseLocks = { ...input.plan.locks }
   return {
     planId: input.planId,
     baseVersion: input.baseVersion,
     basePlan: clonePlan(input.plan),
     workingCopy: clonePlan(input.plan),
     validationResult: cloneValidation(input.validationResult),
-    locks: { ...input.plan.locks },
+    baseLocks,
+    lockCommands: {},
+    locks: { ...baseLocks },
     lockedFieldOutcomes: {},
     warningConfirmed: false,
     rebalanceDiffs: [],
@@ -76,7 +77,8 @@ export function changeNumericField(
   value: number,
 ): PlanEditorState {
   const fieldPath = numericFieldPath(dayCode, exerciseCode, field)
-  if (state.locks[fieldPath] === 'RULE_LOCKED') {
+  const currentLock = effectiveLock(state, fieldPath)
+  if (currentLock === 'RULE_LOCKED') {
     return {
       ...state,
       lockedFieldOutcomes: {
@@ -98,10 +100,16 @@ export function changeNumericField(
   }
   exercise[field] = value
 
+  const lockCommands = { ...state.lockCommands }
+  if (currentLock !== 'USER_LOCKED' && lockCommands[fieldPath] !== 'UNLOCKED') {
+    lockCommands[fieldPath] = 'USER_LOCKED'
+  }
+
   return {
     ...state,
     workingCopy,
-    locks: { ...state.locks, [fieldPath]: 'USER_LOCKED' },
+    lockCommands,
+    locks: effectiveLocks(state.baseLocks, lockCommands),
     validationResult: { valid: true, validationIssues: [] },
     warningConfirmationToken: undefined,
     warningConfirmed: false,
@@ -114,7 +122,7 @@ export function setFieldLock(
   fieldPath: string,
   status: LockCommandStatus,
 ): PlanEditorState {
-  if (state.locks[fieldPath] === 'RULE_LOCKED') {
+  if (effectiveLock(state, fieldPath) === 'RULE_LOCKED') {
     return {
       ...state,
       lockedFieldOutcomes: {
@@ -123,9 +131,11 @@ export function setFieldLock(
       },
     }
   }
+  const lockCommands = { ...state.lockCommands, [fieldPath]: status }
   return {
     ...state,
-    locks: { ...state.locks, [fieldPath]: status },
+    lockCommands,
+    locks: effectiveLocks(state.baseLocks, lockCommands),
     warningConfirmationToken: undefined,
     warningConfirmed: false,
   }
@@ -154,7 +164,7 @@ export function buildSaveCommand(state: PlanEditorState): CreatePlanVersionReque
   return {
     plan: toValidationDraft(state.workingCopy),
     baseVersionNumber: state.baseVersion,
-    locks: commandLocks(state.locks),
+    locks: { ...state.lockCommands },
     ...(state.warningConfirmationToken
       ? { warningConfirmationToken: state.warningConfirmationToken }
       : {}),
@@ -177,6 +187,8 @@ export function applyVersionResult(
     ...(result.version ? {
       baseVersion: result.version.versionNumber,
       basePlan: clonePlan(result.version.plan),
+      baseLocks: { ...result.version.plan.locks },
+      lockCommands: {},
       locks: { ...result.version.plan.locks },
     } : {}),
   }
@@ -191,12 +203,15 @@ export function confirmWarnings(state: PlanEditorState): PlanEditorState {
 
 export function applyRebalancePreview(
   state: PlanEditorState,
-  preview: RebalancePreview,
+  preview: PlanVersionResultData,
 ): PlanEditorState {
   const previewPlan = clonePlan(preview.plan)
   const diffs = findNumericDiffs(state.workingCopy, previewPlan)
 
-  for (const [fieldPath, status] of Object.entries(state.locks)) {
+  for (const [fieldPath, status] of Object.entries(effectiveLocks(
+    state.baseLocks,
+    state.lockCommands,
+  ))) {
     if (status === 'USER_LOCKED') {
       copyNumericField(state.workingCopy, previewPlan, fieldPath)
     }
@@ -209,8 +224,8 @@ export function applyRebalancePreview(
       valid: !preview.validationIssues.some((issue) => issue.severity === 'ERROR'),
       validationIssues: preview.validationIssues.map((issue) => ({ ...issue })),
     },
-    lockedFieldOutcomes: { ...(preview.lockedFieldOutcomes ?? {}) },
-    rebalanceDiffs: diffs.filter((diff) => state.locks[diff.fieldPath] !== 'USER_LOCKED'),
+    lockedFieldOutcomes: { ...state.lockedFieldOutcomes },
+    rebalanceDiffs: diffs.filter((diff) => effectiveLock(state, diff.fieldPath) !== 'USER_LOCKED'),
     warningConfirmationToken: preview.warningConfirmationToken,
     warningConfirmed: false,
   }
@@ -247,12 +262,15 @@ function cloneValidation(validation: PlanValidationData): PlanValidationData {
   }
 }
 
-function commandLocks(locks: Record<string, LockStatus>): Record<string, LockCommandStatus> {
-  return Object.fromEntries(
-    Object.entries(locks).filter(
-      (entry): entry is [string, LockCommandStatus] => entry[1] !== 'RULE_LOCKED',
-    ),
-  )
+function effectiveLocks(
+  baseLocks: Record<string, LockStatus>,
+  lockCommands: Record<string, LockCommandStatus>,
+): Record<string, LockStatus> {
+  return { ...baseLocks, ...lockCommands }
+}
+
+function effectiveLock(state: PlanEditorState, fieldPath: string): LockStatus | undefined {
+  return state.lockCommands[fieldPath] ?? state.baseLocks[fieldPath]
 }
 
 function toValidationDraft(plan: PlanDraft): PlanValidationDraft {
