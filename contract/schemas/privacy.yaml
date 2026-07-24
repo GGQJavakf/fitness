@@ -1,0 +1,77 @@
+components:
+  schemas:
+    DeletionStatus:
+      type: string
+      enum:
+        - REQUESTED
+        - ACCESS_REVOKED
+        - BUSINESS_DATA_ANONYMIZED
+        - RETENTION_SEPARATED
+        - COMPLETED
+        - REJECTED
+    CreateDeletionRequest:
+      type: object
+      additionalProperties: false
+      required: [reauthenticationProof, confirmationText]
+      properties:
+        reauthenticationProof:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          writeOnly: true
+        confirmationText:
+          type: string
+          enum: [DELETE]
+    PrivacyExportData:
+      type: object
+      additionalProperties: false
+      required: [generatedAt, scope, excludedRetentionCategories]
+      properties:
+        generatedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        scope:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS]
+        excludedRetentionCategories:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [SECURITY_AUDIT, LEGAL_HOLD]
+    DeletionRequestData:
+      type: object
+      additionalProperties: false
+      required: [id, status, requestedAt, updatedAt, deletionScope, retainedCategories]
+      properties:
+        id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/DeletionStatus'}
+        requestedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        updatedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        deletionScope:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS]
+        retainedCategories:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [SECURITY_AUDIT, LEGAL_HOLD]
+    PrivacyExportResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PrivacyExportData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    DeletionRequestResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/DeletionRequestData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

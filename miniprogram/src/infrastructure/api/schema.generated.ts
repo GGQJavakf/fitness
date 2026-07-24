@@ -545,6 +545,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description 仅导出当前认证用户声明范围内的数据；安全审计和法定保留数据保持分离。 */
         get: operations["getOrStartPrivacyExport"];
         put?: never;
         post?: never;
@@ -630,7 +631,7 @@ export interface components {
         /** Format: int64 */
         ExpectedVersion: number;
         /** @enum {string} */
-        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "REAUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
         Weight: {
             value: number;
             unit: components["schemas"]["WeightUnit"];
@@ -1012,9 +1013,34 @@ export interface components {
         AiWorkoutSummaryRequest: {
             workoutSessionId: string;
         };
+        PrivacyExportData: {
+            generatedAt: components["schemas"]["UtcDateTime"];
+            scope: ("PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS")[];
+            excludedRetentionCategories: ("SECURITY_AUDIT" | "LEGAL_HOLD")[];
+        };
+        PrivacyExportResponse: {
+            data: components["schemas"]["PrivacyExportData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         CreateDeletionRequest: {
+            reauthenticationProof: string;
             /** @enum {string} */
-            confirmation: "DELETE_MY_DATA";
+            confirmationText: "DELETE";
+        };
+        /** @enum {string} */
+        DeletionStatus: "REQUESTED" | "ACCESS_REVOKED" | "BUSINESS_DATA_ANONYMIZED" | "RETENTION_SEPARATED" | "COMPLETED" | "REJECTED";
+        DeletionRequestData: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["DeletionStatus"];
+            requestedAt: components["schemas"]["UtcDateTime"];
+            updatedAt: components["schemas"]["UtcDateTime"];
+            deletionScope: ("PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS")[];
+            retainedCategories: ("SECURITY_AUDIT" | "LEGAL_HOLD")[];
+        };
+        DeletionRequestResponse: {
+            data: components["schemas"]["DeletionRequestData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
     };
     responses: {
@@ -1921,13 +1947,24 @@ export interface operations {
     getOrStartPrivacyExport: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                "X-Reauthentication-Proof": string;
+            };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户的数据导出范围 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyExportResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1940,7 +1977,17 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PrivacyDeletion"];
         responses: {
-            201: components["responses"]["Success"];
+            /** @description 删除申请已受理；重复申请返回同一活动申请 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1955,7 +2002,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户自己的删除申请状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };

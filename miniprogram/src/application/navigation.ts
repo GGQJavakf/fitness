@@ -4,6 +4,7 @@ export type PageDestination =
   | 'PLAN_CANDIDATES'
   | 'PLAN_EDITOR'
   | 'PLAN'
+  | 'MY'
 
 export interface PageNavigationPort {
   open(destination: PageDestination): Promise<void> | void

@@ -59,6 +59,12 @@ export default function HomePage() {
         <Text className='section-title'>当前范围</Text>
         <Text className='subtitle'>计划生效后会在这里显示状态。今日训练执行将在下一阶段 M2 接入，本阶段不会伪造训练入口。</Text>
       </View>
+      {destination !== 'LOADING' && (
+        <Button
+          className='secondary-action'
+          onClick={() => void application.navigation.open('MY')}
+        >我的与隐私</Button>
+      )}
     </View>
   )
 }

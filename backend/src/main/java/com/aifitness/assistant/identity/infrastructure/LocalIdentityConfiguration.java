@@ -4,6 +4,7 @@ import com.aifitness.assistant.identity.application.IdentityRepository;
 import com.aifitness.assistant.identity.application.SessionStore;
 import com.aifitness.assistant.identity.application.SubjectProtector;
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
+import com.aifitness.assistant.identity.application.WechatIdentityResolver;
 import com.aifitness.assistant.identity.application.WechatLoginService;
 import java.time.Clock;
 import java.util.Locale;
@@ -52,6 +53,15 @@ public class LocalIdentityConfiguration {
     @Bean
     IdentityRepository identityRepository() {
         return new InMemoryIdentityRepository();
+    }
+
+    @Bean
+    WechatIdentityResolver wechatIdentityResolver(
+            WechatIdentityProvider provider,
+            SubjectProtector protector,
+            IdentityRepository identities,
+            Clock identityClock) {
+        return new LocalWechatIdentityResolver(provider, protector, identities, identityClock);
     }
 
     @Bean

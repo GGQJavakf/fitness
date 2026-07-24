@@ -153,7 +153,8 @@ class MigrationTest {
                 "db/migration/V003__plan_versions.sql",
                 "db/migration/V004__workout_sync.sql",
                 "db/migration/V005__progression_ai_audit.sql",
-                "db/migration/V006__equipment_client_key.sql"))
+                "db/migration/V006__equipment_client_key.sql",
+                "db/migration/V007__privacy_requests.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -195,6 +196,12 @@ class MigrationTest {
         assertThat(readMigration("V006__equipment_client_key.sql")).contains(
                 "client_equipment_key BINARY(16)",
                 "UNIQUE KEY uq_user_equipment_user_client_key (user_id, client_equipment_key)");
+        assertThat(readMigration("V007__privacy_requests.sql")).contains(
+                "privacy_deletion_request",
+                "uq_privacy_deletion_active_user",
+                "privacy_required_retention",
+                "trg_privacy_required_retention_immutable_update",
+                "trg_privacy_required_retention_immutable_delete");
     }
 
     @Test
@@ -203,7 +210,7 @@ class MigrationTest {
         assertThat(flyway.info().applied())
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
-                .containsExactly("001", "002", "003", "004", "005", "006");
+                .containsExactly("001", "002", "003", "004", "005", "006", "007");
     }
 
     @Test
@@ -523,7 +530,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(6);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

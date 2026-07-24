@@ -1,0 +1,32 @@
+.my-page {
+  padding-bottom: 48px;
+}
+
+.settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.danger-zone {
+  border: 1px solid #f1c4c4;
+}
+
+.confirmation-input {
+  margin: 20px 0 12px;
+  padding: 14px;
+  border: 1px solid #d6d9df;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.danger-action {
+  color: #fff;
+  background: #b42318;
+}

@@ -460,8 +460,19 @@ paths:
     get:
       tags: [Privacy]
       operationId: getOrStartPrivacyExport
+      description: 仅导出当前认证用户声明范围内的数据；安全审计和法定保留数据保持分离。
+      parameters:
+        - name: X-Reauthentication-Proof
+          in: header
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 2048}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户的数据导出范围
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/PrivacyExportResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/deletion-requests:
     post:
@@ -469,7 +480,13 @@ paths:
       operationId: createPrivacyDeletionRequest
       requestBody: {$ref: '#/components/requestBodies/PrivacyDeletion'}
       responses:
-        '201': {$ref: '#/components/responses/Success'}
+        '201':
+          description: 删除申请已受理；重复申请返回同一活动申请
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/DeletionRequestResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/deletion-requests/{id}:
     get:
@@ -478,7 +495,11 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/IdPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户自己的删除申请状态
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/DeletionRequestResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
 components:
@@ -537,7 +558,7 @@ components:
     RecommendationDismiss: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/DismissRecommendationRequest'}}}}
     AiPlanExplanation: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/AiPlanExplanationRequest'}}}}
     AiWorkoutSummary: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/AiWorkoutSummaryRequest'}}}}
-    PrivacyDeletion: {required: true, content: {application/json: {schema: {$ref: './schemas/progression.yaml#/components/schemas/CreateDeletionRequest'}}}}
+    PrivacyDeletion: {required: true, content: {application/json: {schema: {$ref: './schemas/privacy.yaml#/components/schemas/CreateDeletionRequest'}}}}
   responses:
     Success: {$ref: './schemas/common.yaml#/components/responses/Success'}
     BadRequest: {$ref: './schemas/common.yaml#/components/responses/BadRequest'}

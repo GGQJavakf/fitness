@@ -65,6 +65,7 @@ class OpenApiContractTest {
     private static Map<String, Object> commonSchemas;
     private static Map<String, Object> profileSchemas;
     private static Map<String, Object> planSchemas;
+    private static Map<String, Object> privacySchemas;
 
     @BeforeAll
     static void loadContract() throws IOException {
@@ -73,6 +74,7 @@ class OpenApiContractTest {
         commonSchemas = map(loadYaml(contractRoot.resolve("schemas/common.yaml")).get("components"));
         profileSchemas = map(loadYaml(contractRoot.resolve("schemas/profile.yaml")).get("components"));
         planSchemas = map(loadYaml(contractRoot.resolve("schemas/plan.yaml")).get("components"));
+        privacySchemas = map(loadYaml(contractRoot.resolve("schemas/privacy.yaml")).get("components"));
     }
 
     @Test
@@ -207,6 +209,30 @@ class OpenApiContractTest {
                 .doesNotContain("RULE_LOCKED");
         assertThat(required(schemas, "PlanVersionData"))
                 .contains("versionNumber", "plan", "ruleReference", "confirmedWarningCodes", "createdAt");
+    }
+
+    @Test
+    void privacyOperationsRequireReauthenticationAndExposeTypedRetentionAwareContracts() {
+        assertThat(successSchemaRef("/api/v1/privacy/export", "get"))
+                .endsWith("/PrivacyExportResponse");
+        assertThat(successSchemaRef("/api/v1/privacy/deletion-requests", "post"))
+                .endsWith("/DeletionRequestResponse");
+        assertThat(successSchemaRef("/api/v1/privacy/deletion-requests/{id}", "get"))
+                .endsWith("/DeletionRequestResponse");
+
+        Map<String, Object> exportOperation = map(
+                map(map(openApi.get("paths")).get("/api/v1/privacy/export")).get("get"));
+        assertThat(list(exportOperation.get("parameters")).toString())
+                .contains("X-Reauthentication-Proof");
+        Map<String, Object> schemas = map(privacySchemas.get("schemas"));
+        assertThat(required(schemas, "CreateDeletionRequest"))
+                .containsExactlyInAnyOrder("reauthenticationProof", "confirmationText");
+        assertThat(list(map(map(map(schemas.get("CreateDeletionRequest"))
+                .get("properties")).get("confirmationText")).get("enum")))
+                .containsExactly("DELETE");
+        assertThat(required(schemas, "PrivacyExportData"))
+                .containsExactlyInAnyOrder(
+                        "generatedAt", "scope", "excludedRetentionCategories");
     }
 
     @Test

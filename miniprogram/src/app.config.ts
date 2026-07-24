@@ -4,7 +4,8 @@ export default defineAppConfig({
     'presentation/pages/onboarding/index',
     'presentation/pages/plan-candidates/index',
     'presentation/pages/plan-editor/index',
-    'presentation/pages/plan/index'
+    'presentation/pages/plan/index',
+    'presentation/pages/my/index'
   ],
   window: {
     navigationBarTitleText: 'AI 健身助手',

@@ -50,4 +50,10 @@ class ModuleBoundaryTest {
             .that().resideInAPackage("com.aifitness.assistant.plan.api..")
             .should().dependOnClassesThat().resideInAPackage("com.aifitness.assistant.rules.domain..")
             .because("the plan transport boundary exposes plan-domain contracts, not rule-engine internals");
+
+    @ArchTest
+    static final ArchRule privacyDoesNotAccessIdentityRepositories = noClasses()
+            .that().resideInAPackage("com.aifitness.assistant.privacy..")
+            .should().dependOnClassesThat().haveSimpleName("IdentityRepository")
+            .because("privacy must use an identity application capability instead of another module's repository");
 }

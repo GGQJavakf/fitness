@@ -1,5 +1,6 @@
 export type ApplicationErrorCode =
   | 'AUTHENTICATION_REQUIRED'
+  | 'REAUTHENTICATION_REQUIRED'
   | 'ACCESS_DENIED'
   | 'RESOURCE_NOT_FOUND'
   | 'VERSION_CONFLICT'
@@ -32,6 +33,8 @@ export function applicationErrorMessage(code: ApplicationErrorCode): string {
   switch (code) {
     case 'AUTHENTICATION_REQUIRED':
       return '登录状态已失效，请重新登录'
+    case 'REAUTHENTICATION_REQUIRED':
+      return '请重新验证身份后继续'
     case 'ACCESS_DENIED':
       return '当前账号无权执行此操作'
     case 'RESOURCE_NOT_FOUND':

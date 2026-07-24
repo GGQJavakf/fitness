@@ -17,6 +17,11 @@ import type {
   VersionedResource,
 } from '../../application/onboarding'
 import type { PlanPersistencePort } from '../../application/ports'
+import type {
+  DeletionRequestData,
+  PrivacyExportData,
+  PrivacyPort,
+} from '../../application/privacy'
 import type { ApiErrorResponse, ApiResponse } from './generated'
 import type { components } from './schema.generated'
 
@@ -51,8 +56,10 @@ type CandidateResponse = components['schemas']['PlanCandidateGenerationResponse'
 type ValidationResponse = components['schemas']['PlanValidationResponse']
 type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
+type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
+type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
 
-export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort {
+export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort {
   private readonly baseUrl: string
 
   constructor(
@@ -185,6 +192,37 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return requireData(response.data)
   }
 
+  async exportData(reauthenticationProof: string): Promise<PrivacyExportData> {
+    const response = await this.request<PrivacyExportResponse>(
+      '/api/v1/privacy/export',
+      'GET',
+      undefined,
+      true,
+      { 'X-Reauthentication-Proof': reauthenticationProof },
+    )
+    return requireData(response.data)
+  }
+
+  async requestDeletion(request: {
+    reauthenticationProof: string
+    confirmationText: 'DELETE'
+  }): Promise<DeletionRequestData> {
+    const response = await this.request<DeletionRequestResponse>(
+      '/api/v1/privacy/deletion-requests',
+      'POST',
+      request satisfies components['schemas']['CreateDeletionRequest'],
+    )
+    return requireData(response.data)
+  }
+
+  async getDeletionRequest(requestId: string): Promise<DeletionRequestData> {
+    const response = await this.request<DeletionRequestResponse>(
+      `/api/v1/privacy/deletion-requests/${encodeURIComponent(requestId)}`,
+      'GET',
+    )
+    return requireData(response.data)
+  }
+
   private async getVersionOrNull<Response extends { data: { version: number } }>(
     path: string,
   ): Promise<number | null> {
@@ -204,8 +242,12 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     method: HttpMethod,
     body?: unknown,
     authenticated = true,
+    extraHeaders: Record<string, string> = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    }
     if (authenticated) {
       const session = await this.sessions.load()
       if (!session) {
@@ -289,6 +331,7 @@ function mapErrorCode(
 ): ApplicationError['code'] {
   switch (serverCode) {
     case 'AUTHENTICATION_REQUIRED': return 'AUTHENTICATION_REQUIRED'
+    case 'REAUTHENTICATION_REQUIRED': return 'REAUTHENTICATION_REQUIRED'
     case 'ACCESS_DENIED': return 'ACCESS_DENIED'
     case 'RESOURCE_NOT_FOUND': return 'RESOURCE_NOT_FOUND'
     case 'VERSION_CONFLICT': return 'VERSION_CONFLICT'

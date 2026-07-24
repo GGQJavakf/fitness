@@ -3,6 +3,7 @@ package com.aifitness.assistant.common.api;
 public enum ErrorCode {
     VALIDATION_FAILED,
     AUTHENTICATION_REQUIRED,
+    REAUTHENTICATION_REQUIRED,
     ACCESS_DENIED,
     RESOURCE_NOT_FOUND,
     VERSION_CONFLICT,

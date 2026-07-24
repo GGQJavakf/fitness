@@ -30,11 +30,3 @@ components:
       required: [workoutSessionId]
       properties:
         workoutSessionId: {type: string}
-    CreateDeletionRequest:
-      type: object
-      additionalProperties: false
-      required: [confirmation]
-      properties:
-        confirmation:
-          type: string
-          enum: [DELETE_MY_DATA]

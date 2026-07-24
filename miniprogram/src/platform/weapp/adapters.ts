@@ -17,6 +17,7 @@ const pageRoutes: Record<PageDestination, string> = {
   PLAN_CANDIDATES: '/presentation/pages/plan-candidates/index',
   PLAN_EDITOR: '/presentation/pages/plan-editor/index',
   PLAN: '/presentation/pages/plan/index',
+  MY: '/presentation/pages/my/index',
 }
 
 export function createWeappTransport(): TransportPort {
