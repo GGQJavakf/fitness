@@ -54,7 +54,8 @@ public final class DomainPlanWorkoutSnapshotQuery implements PlanWorkoutSnapshot
                 stableId("exercise", version.id(), day.code() + ":" + exercise.code()), order,
                 exercise.code(), exercise.name(), version.ruleReference().contentVersion(), exercise.equipment(),
                 prescription.workSets(), prescription.repMin(), prescription.repMax(),
-                prescription.restSeconds(), prescription.weightStatus().name(), "KG");
+                prescription.restSeconds(), prescription.weightStatus().name(),
+                prescription.targetWeightKg(), "KG");
     }
 
     private static UUID stableId(String type, UUID versionId, String key) {

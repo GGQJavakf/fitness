@@ -7,6 +7,7 @@ import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -69,6 +70,35 @@ public final class PlanVersionService {
         } catch (IllegalArgumentException ignored) {
             throw new PlanNotFoundException();
         }
+    }
+
+    public TrainingPlanVersion applyProgression(
+            AuthenticatedUserId user,
+            String exerciseCode,
+            int expectedVersion,
+            BigDecimal acceptedWeightKg) {
+        requireUser(user);
+        if (exerciseCode == null || exerciseCode.isBlank() || expectedVersion < 1) {
+            throw new IllegalArgumentException("progression target and version are required");
+        }
+        Objects.requireNonNull(acceptedWeightKg, "accepted weight must not be null");
+        TrainingPlan current = plans.findActiveByUser(user.value()).orElseThrow(PlanNotFoundException::new);
+        if (current.activeVersionNumber() != expectedVersion) {
+            throw new VersionConflictException(current.activeVersionNumber());
+        }
+        TrainingPlanVersion base = current.activeVersion();
+        if (base.plan().isTargetWeightLocked(exerciseCode)) {
+            throw new LockedProgressionFieldException();
+        }
+        PlanDraft proposed = base.plan().withTargetWeight(exerciseCode, acceptedWeightKg);
+        List<ValidationIssue> issues = List.copyOf(policy.validate(user, proposed, base.ruleReference()));
+        if (!issues.isEmpty()) {
+            throw new PlanValidationException(issues);
+        }
+        TrainingPlanVersion version = new TrainingPlanVersion(
+                UUID.randomUUID(), current.id(), expectedVersion + 1, TrainingPlanVersion.SourceType.PROGRESSION,
+                proposed, base.ruleReference(), Set.of(), clock.instant());
+        return plans.append(user.value(), current.id(), expectedVersion, version).activeVersion();
     }
 
     public VersionResult previewRebalance(
@@ -228,6 +258,8 @@ public final class PlanVersionService {
     public static final class PlanNotFoundException extends RuntimeException {}
 
     public static final class ActivePlanAlreadyExistsException extends RuntimeException {}
+
+    public static final class LockedProgressionFieldException extends RuntimeException {}
 
     public static final class PlanValidationException extends RuntimeException {
         private final List<ValidationIssue> issues;

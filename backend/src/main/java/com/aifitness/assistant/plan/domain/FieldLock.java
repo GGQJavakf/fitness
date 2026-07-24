@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 public record FieldLock(String fieldPath, Status status, Instant lockedAt) {
 
     private static final Pattern LOCKABLE_PATH = Pattern.compile(
-            "^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds)$");
+            "^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds|targetWeightKg)$");
 
     public FieldLock {
         if (fieldPath == null || fieldPath.length() > 256 || !LOCKABLE_PATH.matcher(fieldPath).matches()) {

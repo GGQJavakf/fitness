@@ -905,6 +905,7 @@ export interface components {
             repMax: number;
             restSeconds: number;
             weightStatus: components["schemas"]["WeightStatus"];
+            targetWeightKg?: number;
         };
         PlanDay: {
             code: string;
@@ -1059,6 +1060,7 @@ export interface components {
             repMax: number;
             restSeconds: number;
             weightStatus: components["schemas"]["WeightStatus"];
+            targetWeightKg?: number;
             unit: components["schemas"]["WeightUnit"];
         };
         WorkoutExerciseSnapshot: {
@@ -1250,7 +1252,7 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         /** @enum {string} */
-        RecommendationStatus: "PENDING" | "APPLIED" | "DISMISSED";
+        RecommendationStatus: "PENDING" | "APPLIED" | "MODIFIED" | "DISMISSED";
         ApplyRecommendationRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
             acceptedWeight?: components["schemas"]["Weight"];

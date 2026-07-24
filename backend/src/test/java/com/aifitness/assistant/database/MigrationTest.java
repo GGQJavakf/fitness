@@ -23,6 +23,9 @@ import com.aifitness.assistant.profile.domain.EquipmentProfile;
 import com.aifitness.assistant.profile.domain.PreferenceProfile;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
+import com.aifitness.assistant.progression.domain.ProgressionDecision;
+import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
+import com.aifitness.assistant.progression.infrastructure.JdbcRecommendationRepository;
 import com.aifitness.assistant.privacy.application.PrivacyDataPort;
 import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
@@ -55,6 +58,7 @@ import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Optional;
 import javax.sql.DataSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
@@ -189,7 +193,8 @@ class MigrationTest {
                 "db/migration/V011__privacy_export_artifacts.sql",
                 "db/migration/V012__workout_set_idempotency.sql",
                 "db/migration/V013__sync_conflict_resolution.sql",
-                "db/migration/V014__workout_exercise_replacement_overlay.sql"))
+                "db/migration/V014__workout_exercise_replacement_overlay.sql",
+                "db/migration/V015__progression_recommendation_lifecycle.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -279,6 +284,10 @@ class MigrationTest {
                 "replacement_revision BIGINT UNSIGNED NOT NULL DEFAULT 0",
                 "idx_workout_session_user_started_id",
                 "user_id, started_at DESC, id DESC");
+        assertThat(readMigration("V015__progression_recommendation_lifecycle.sql")).contains(
+                "accepted_weight DECIMAL(10,2)",
+                "ck_progression_recommendation_decision_metadata",
+                "uq_progression_recommendation_user_idempotency");
     }
 
     @Test
@@ -289,7 +298,7 @@ class MigrationTest {
                 .extracting(Object::toString)
                 .containsExactly(
                         "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                        "013", "014");
+                        "013", "014", "015");
     }
 
     @Test
@@ -572,6 +581,45 @@ class MigrationTest {
                 + binary(firstUserId.toString())
                 + " AND action='PRIVACY_ACCESS_REVOKED' AND entity_id="
                 + binary(requested.id().toString()))).isEqualTo("1");
+    }
+
+    @Test
+    void jdbcRecommendationRepositoryPersistsReplayEvidenceLifecycleAndOutboxAtomically() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID userId = UUID.fromString(createUser());
+        UUID exerciseId = UUID.fromString(createExercise());
+        PlanFixture plan = sealedPlan(userId.toString(), exerciseId.toString());
+        UUID sessionId = UUID.fromString(createSession(plan, userId.toString()));
+        JdbcRecommendationRepository repository = new JdbcRecommendationRepository(dataSource, new ObjectMapper());
+        ProgressionRecommendation recommendation = new ProgressionRecommendation(
+                UUID.randomUUID(), userId, exerciseId, "GOBLET_SQUAT", sessionId,
+                ProgressionDecision.Decision.INCREASE,
+                new ProgressionDecision.Prescription(new BigDecimal("40"), 8, 12),
+                new ProgressionDecision.Prescription(new BigDecimal("42.5"), 8, 12),
+                "ALL_SETS_AT_MAX_WITH_ACCEPTABLE_RIR", "{\"schemaVersion\":\"1.0.0\"}",
+                "double-progression-v1", Optional.of(new ProgressionRecommendation.RoundingEvidence(
+                        new BigDecimal("42.5"), new BigDecimal("42.5"), "ADD_ONE_MIN_INCREMENT",
+                        List.of(new BigDecimal("2.5")))), ProgressionRecommendation.Status.PENDING,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                java.time.Instant.parse("2026-07-24T10:00:00Z"));
+
+        ProgressionRecommendation persisted = repository.inTransaction(() -> {
+            ProgressionRecommendation saved = repository.save(recommendation);
+            repository.appendOutbox(recommendation.id(), "PROGRESSION_RECOMMENDATION_CREATED");
+            return saved;
+        });
+        assertThat(repository.findByIdAndUser(recommendation.id(), userId)).contains(persisted);
+
+        ProgressionRecommendation dismissed = persisted.dismiss("NOT_NOW");
+        repository.inTransaction(() -> {
+            repository.updatePending(dismissed, Optional.empty());
+            repository.appendOutbox(recommendation.id(), "PROGRESSION_RECOMMENDATION_DISMISSED");
+            return dismissed;
+        });
+        assertThat(repository.findByIdAndUser(recommendation.id(), userId).orElseThrow().status())
+                .isEqualTo(ProgressionRecommendation.Status.DISMISSED);
+        assertThat(queryOne("SELECT COUNT(*) FROM outbox_event WHERE aggregate_id = %s".formatted(
+                binary(recommendation.id().toString())))).isEqualTo("2");
     }
 
     @Test
@@ -877,7 +925,7 @@ class MigrationTest {
         String recommendationId = newId();
         execute(recommendationInsert(recommendationId, userId, exerciseId, sessionId));
 
-        execute("UPDATE progression_recommendation SET user_decision = 'APPLIED', applied_plan_id = %s, applied_plan_version_id = %s WHERE id = %s".formatted(binary(plan.planId()), binary(plan.versionId()), binary(recommendationId)));
+        execute("UPDATE progression_recommendation SET user_decision = 'APPLIED', accepted_weight = 42.50, decision_idempotency_key = 'migration-apply-once', decided_at = UTC_TIMESTAMP(6), applied_plan_id = %s, applied_plan_version_id = %s WHERE id = %s".formatted(binary(plan.planId()), binary(plan.versionId()), binary(recommendationId)));
         assertThat(queryOne("SELECT user_decision FROM progression_recommendation WHERE id = %s".formatted(binary(recommendationId)))).isEqualTo("APPLIED");
         assertRejected("45000", "progression recommendation facts are immutable", () ->
                 execute("UPDATE progression_recommendation SET current_json = JSON_OBJECT('weight', 30) WHERE id = %s".formatted(binary(recommendationId))));
@@ -939,7 +987,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(14);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(15);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

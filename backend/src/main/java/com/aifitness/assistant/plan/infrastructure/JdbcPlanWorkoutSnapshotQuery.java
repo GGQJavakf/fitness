@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.ByteBuffer;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,7 +65,7 @@ public final class JdbcPlanWorkoutSnapshotQuery implements PlanWorkoutSnapshotQu
                             row.getString("content_version"), equipment,
                             number(prescription, "workSets"), number(prescription, "repMin"),
                             number(prescription, "repMax"), number(prescription, "restSeconds"),
-                            row.getString("weight_status"), "KG");
+                            row.getString("weight_status"), decimal(prescription, "targetWeightKg"), "KG");
                 }, bytes(header.dayId()), bytes(header.versionId()));
         if (sources.isEmpty()) {
             throw new PlanSnapshotNotFoundException();
@@ -95,6 +96,12 @@ public final class JdbcPlanWorkoutSnapshotQuery implements PlanWorkoutSnapshotQu
             throw new IllegalStateException("persisted plan prescription number is missing: " + field);
         }
         return number.intValue();
+    }
+
+    private static java.util.Optional<BigDecimal> decimal(Map<String, Object> values, String field) {
+        Object value = values.get(field);
+        return value == null ? java.util.Optional.empty()
+                : java.util.Optional.of(new BigDecimal(String.valueOf(value)));
     }
 
     private static byte[] bytes(UUID value) {

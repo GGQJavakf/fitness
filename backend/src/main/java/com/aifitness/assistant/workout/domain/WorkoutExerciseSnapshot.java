@@ -1,5 +1,7 @@
 package com.aifitness.assistant.workout.domain;
 
+import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -44,12 +46,23 @@ public record WorkoutExerciseSnapshot(
             int repMax,
             int restSeconds,
             String weightStatus,
+            Optional<BigDecimal> targetWeightKg,
             String unit) {
+        public Prescription(
+                int workSets, int repMin, int repMax, int restSeconds, String weightStatus, String unit) {
+            this(workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty(), unit);
+        }
+
         public Prescription {
             if (workSets < 0 || repMin < 0 || repMax < repMin || restSeconds < 0) {
                 throw new IllegalArgumentException("snapshot prescription is invalid");
             }
             weightStatus = required(weightStatus, "weight status");
+            targetWeightKg = Objects.requireNonNull(targetWeightKg, "target weight must not be null")
+                    .map(BigDecimal::stripTrailingZeros);
+            if (targetWeightKg.filter(weight -> weight.signum() < 0).isPresent()) {
+                throw new IllegalArgumentException("target weight must not be negative");
+            }
             if (!"KG".equals(unit)) {
                 throw new IllegalArgumentException("P0 workout snapshots only support KG");
             }

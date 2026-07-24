@@ -87,6 +87,7 @@ components:
         repMax: {type: integer, minimum: 0}
         restSeconds: {type: integer, minimum: 0}
         weightStatus: {$ref: '#/components/schemas/WeightStatus'}
+        targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
     PlanCandidateRequest:
       type: object
       additionalProperties: false

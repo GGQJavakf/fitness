@@ -197,6 +197,7 @@ components:
         repMax: {type: integer, minimum: 0}
         restSeconds: {type: integer, minimum: 0}
         weightStatus: {$ref: './plan.yaml#/components/schemas/WeightStatus'}
+        targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
         unit: {$ref: './common.yaml#/components/schemas/WeightUnit'}
     WorkoutExerciseSnapshot:
       type: object

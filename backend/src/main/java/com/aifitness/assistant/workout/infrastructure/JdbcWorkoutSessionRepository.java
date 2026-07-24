@@ -199,6 +199,8 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         prescription.put("repMax", exercise.prescription().repMax());
         prescription.put("restSeconds", exercise.prescription().restSeconds());
         prescription.put("weightStatus", exercise.prescription().weightStatus());
+        exercise.prescription().targetWeightKg().ifPresent(
+                weight -> prescription.put("targetWeightKg", weight));
         prescription.put("unit", exercise.prescription().unit());
         jdbc.update("""
                 INSERT INTO workout_exercise_snapshot
@@ -265,7 +267,8 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
                 new WorkoutExerciseSnapshot.Prescription(
                         number(prescription, "workSets"), number(prescription, "repMin"),
                         number(prescription, "repMax"), number(prescription, "restSeconds"),
-                        text(prescription, "weightStatus"), text(prescription, "unit")),
+                        text(prescription, "weightStatus"), decimal(prescription, "targetWeightKg"),
+                        text(prescription, "unit")),
                 WorkoutExerciseSnapshot.Status.valueOf(row.getString("status")));
     }
 
@@ -299,6 +302,12 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
             throw new IllegalStateException("persisted workout snapshot number is missing: " + field);
         }
         return number.intValue();
+    }
+
+    private static Optional<java.math.BigDecimal> decimal(Map<String, Object> values, String field) {
+        Object value = values.get(field);
+        return value == null ? Optional.empty()
+                : Optional.of(new java.math.BigDecimal(String.valueOf(value)));
     }
 
     private static byte[] bytes(UUID value) {

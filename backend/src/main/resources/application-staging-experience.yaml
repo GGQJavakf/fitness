@@ -25,5 +25,7 @@ fitness:
     repository: mysql
   workout:
     repository: mysql
+  progression:
+    repository: mysql
   ai:
     enabled: false

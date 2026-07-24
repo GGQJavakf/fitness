@@ -65,7 +65,7 @@ public final class WorkoutSessionService {
                 item.exerciseName(), item.contentVersion(), item.equipment(),
                 new WorkoutExerciseSnapshot.Prescription(
                         item.workSets(), item.repMin(), item.repMax(), item.restSeconds(),
-                        item.weightStatus(), item.unit()),
+                        item.weightStatus(), item.targetWeightKg(), item.unit()),
                 WorkoutExerciseSnapshot.Status.PENDING)).toList();
         WorkoutSession session = new WorkoutSession(
                 sessionId, user.value(), source.planId(), source.planVersionId(), source.versionNumber(),

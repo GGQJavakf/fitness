@@ -1,5 +1,6 @@
 package com.aifitness.assistant.plan.domain;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +45,18 @@ public record PlanDraft(
             if (!exists) {
                 throw new IllegalArgumentException("locked field target does not exist");
             }
+            if (target.field().equals("targetWeightKg")) {
+                boolean weightPresent = validatedDays.stream()
+                        .filter(day -> day.code().equals(target.dayCode()))
+                        .flatMap(day -> day.exercises().stream())
+                        .filter(exercise -> exercise.exerciseCode().equals(target.exerciseCode()))
+                        .findFirst()
+                        .flatMap(Exercise::targetWeightKg)
+                        .isPresent();
+                if (!weightPresent) {
+                    throw new IllegalArgumentException("locked weight must have a value");
+                }
+            }
         });
     }
 
@@ -55,6 +68,54 @@ public record PlanDraft(
                 .filter(exercise -> exercise.exerciseCode().equals(path.exerciseCode()))
                 .findFirst()
                 .map(exercise -> exercise.value(path.field()));
+    }
+
+    public Optional<BigDecimal> weightAt(String fieldPath) {
+        Path path = Path.parse(fieldPath);
+        if (!path.field().equals("targetWeightKg")) {
+            throw new IllegalArgumentException("field is not a weight field");
+        }
+        return days.stream()
+                .filter(day -> day.code().equals(path.dayCode()))
+                .flatMap(day -> day.exercises().stream())
+                .filter(exercise -> exercise.exerciseCode().equals(path.exerciseCode()))
+                .findFirst()
+                .flatMap(Exercise::targetWeightKg);
+    }
+
+    public boolean isTargetWeightLocked(String exerciseCode) {
+        return locks.entrySet().stream().anyMatch(entry -> {
+            Path path = Path.parse(entry.getKey());
+            return path.exerciseCode().equals(exerciseCode)
+                    && path.field().equals("targetWeightKg")
+                    && entry.getValue() != FieldLock.Status.UNLOCKED;
+        });
+    }
+
+    public PlanDraft withTargetWeight(String exerciseCode, BigDecimal weightKg) {
+        requireStableCode(exerciseCode, "exercise code");
+        Objects.requireNonNull(weightKg, "target weight must not be null");
+        if (weightKg.signum() < 0) {
+            throw new IllegalArgumentException("target weight must not be negative");
+        }
+        boolean found = false;
+        List<Day> updatedDays = new ArrayList<>(days.size());
+        for (Day day : days) {
+            List<Exercise> updatedExercises = new ArrayList<>(day.exercises().size());
+            for (Exercise exercise : day.exercises()) {
+                if (exercise.exerciseCode().equals(exerciseCode)) {
+                    updatedExercises.add(exercise.withTargetWeight(weightKg));
+                    found = true;
+                } else {
+                    updatedExercises.add(exercise);
+                }
+            }
+            updatedDays.add(new Day(day.code(), day.name(), updatedExercises));
+        }
+        if (!found) {
+            throw new IllegalArgumentException("exercise does not exist in plan");
+        }
+        return new PlanDraft(templateCode, name, updatedDays, locks);
     }
 
     public PlanDraft preserveLockedValues(PlanDraft base, Map<String, FieldLock.Status> requestedLocks) {
@@ -84,11 +145,40 @@ public record PlanDraft(
             if (requested == FieldLock.Status.UNLOCKED) {
                 continue;
             }
-            Integer lockedValue = base.valueAt(entry.getKey()).orElseThrow(
-                    () -> new IllegalArgumentException("locked field does not exist in base plan"));
-            result = result.withValue(entry.getKey(), lockedValue);
+            Path path = Path.parse(entry.getKey());
+            if (path.field().equals("targetWeightKg")) {
+                BigDecimal lockedWeight = base.weightAt(entry.getKey()).orElseThrow(
+                        () -> new IllegalArgumentException("locked weight does not exist in base plan"));
+                result = result.withWeightValue(entry.getKey(), lockedWeight);
+            } else {
+                Integer lockedValue = base.valueAt(entry.getKey()).orElseThrow(
+                        () -> new IllegalArgumentException("locked field does not exist in base plan"));
+                result = result.withValue(entry.getKey(), lockedValue);
+            }
         }
         return result;
+    }
+
+    private PlanDraft withWeightValue(String fieldPath, BigDecimal value) {
+        Path path = Path.parse(fieldPath);
+        boolean found = false;
+        List<Day> updatedDays = new ArrayList<>(days.size());
+        for (Day day : days) {
+            List<Exercise> updatedExercises = new ArrayList<>(day.exercises().size());
+            for (Exercise exercise : day.exercises()) {
+                if (day.code().equals(path.dayCode()) && exercise.exerciseCode().equals(path.exerciseCode())) {
+                    updatedExercises.add(exercise.withTargetWeight(value));
+                    found = true;
+                } else {
+                    updatedExercises.add(exercise);
+                }
+            }
+            updatedDays.add(new Day(day.code(), day.name(), updatedExercises));
+        }
+        if (!found) {
+            throw new IllegalArgumentException("locked weight does not exist in candidate plan");
+        }
+        return new PlanDraft(templateCode, name, updatedDays, locks);
     }
 
     private PlanDraft withValue(String fieldPath, int value) {
@@ -134,13 +224,32 @@ public record PlanDraft(
             int repMin,
             int repMax,
             int restSeconds,
-            WeightStatus weightStatus) {
+            WeightStatus weightStatus,
+            Optional<BigDecimal> targetWeightKg) {
+        public Exercise(
+                String exerciseCode,
+                int workSets,
+                int repMin,
+                int repMax,
+                int restSeconds,
+                WeightStatus weightStatus) {
+            this(exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty());
+        }
+
         public Exercise {
             exerciseCode = requireStableCode(exerciseCode, "exercise code");
             if (workSets < 0 || repMin < 0 || repMax < 0 || restSeconds < 0) {
                 throw new IllegalArgumentException("exercise prescription contains invalid numbers");
             }
             Objects.requireNonNull(weightStatus, "weightStatus must not be null");
+            targetWeightKg = Objects.requireNonNull(targetWeightKg, "target weight must not be null")
+                    .map(BigDecimal::stripTrailingZeros);
+            if (targetWeightKg.filter(weight -> weight.signum() < 0).isPresent()) {
+                throw new IllegalArgumentException("target weight must not be negative");
+            }
+            if (weightStatus == WeightStatus.BODYWEIGHT && targetWeightKg.isPresent()) {
+                throw new IllegalArgumentException("bodyweight exercise cannot have a target weight");
+            }
         }
 
         int value(String field) {
@@ -155,12 +264,21 @@ public record PlanDraft(
 
         Exercise withValue(String field, int value) {
             return switch (field) {
-                case "workSets" -> new Exercise(exerciseCode, value, repMin, repMax, restSeconds, weightStatus);
-                case "repMin" -> new Exercise(exerciseCode, workSets, value, repMax, restSeconds, weightStatus);
-                case "repMax" -> new Exercise(exerciseCode, workSets, repMin, value, restSeconds, weightStatus);
-                case "restSeconds" -> new Exercise(exerciseCode, workSets, repMin, repMax, value, weightStatus);
+                case "workSets" -> new Exercise(
+                        exerciseCode, value, repMin, repMax, restSeconds, weightStatus, targetWeightKg);
+                case "repMin" -> new Exercise(
+                        exerciseCode, workSets, value, repMax, restSeconds, weightStatus, targetWeightKg);
+                case "repMax" -> new Exercise(
+                        exerciseCode, workSets, repMin, value, restSeconds, weightStatus, targetWeightKg);
+                case "restSeconds" -> new Exercise(
+                        exerciseCode, workSets, repMin, repMax, value, weightStatus, targetWeightKg);
                 default -> throw new IllegalArgumentException("field is not lockable");
             };
+        }
+
+        Exercise withTargetWeight(BigDecimal value) {
+            return new Exercise(
+                    exerciseCode, workSets, repMin, repMax, restSeconds, WeightStatus.KNOWN, Optional.of(value));
         }
     }
 

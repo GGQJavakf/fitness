@@ -11,6 +11,7 @@ import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
 import java.time.Clock;
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -167,11 +168,12 @@ public final class WorkoutSessionController {
     }
 
     public record PrescriptionData(
-            int workSets, int repMin, int repMax, int restSeconds, String weightStatus, String unit) {
+            int workSets, int repMin, int repMax, int restSeconds, String weightStatus,
+            Optional<BigDecimal> targetWeightKg, String unit) {
         static PrescriptionData from(WorkoutExerciseSnapshot.Prescription value) {
             return new PrescriptionData(
                     value.workSets(), value.repMin(), value.repMax(), value.restSeconds(),
-                    value.weightStatus(), value.unit());
+                    value.weightStatus(), value.targetWeightKg(), value.unit());
         }
     }
 }

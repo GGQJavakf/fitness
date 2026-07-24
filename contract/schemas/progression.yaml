@@ -5,7 +5,7 @@ components:
       enum: [INCREASE, KEEP, REDUCE, REVIEW]
     RecommendationStatus:
       type: string
-      enum: [PENDING, APPLIED, DISMISSED]
+      enum: [PENDING, APPLIED, MODIFIED, DISMISSED]
     ApplyRecommendationRequest:
       type: object
       additionalProperties: false

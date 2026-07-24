@@ -1,5 +1,6 @@
 package com.aifitness.assistant.plan.application;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -42,10 +43,29 @@ public interface PlanWorkoutSnapshotQuery {
             int repMax,
             int restSeconds,
             String weightStatus,
+            java.util.Optional<BigDecimal> targetWeightKg,
             String unit) {
+        public ExerciseSource(
+                UUID sourcePlanExerciseId,
+                int order,
+                String exerciseCode,
+                String exerciseName,
+                String contentVersion,
+                Set<String> equipment,
+                int workSets,
+                int repMin,
+                int repMax,
+                int restSeconds,
+                String weightStatus,
+                String unit) {
+            this(sourcePlanExerciseId, order, exerciseCode, exerciseName, contentVersion, equipment,
+                    workSets, repMin, repMax, restSeconds, weightStatus, java.util.Optional.empty(), unit);
+        }
+
         public ExerciseSource {
             Objects.requireNonNull(sourcePlanExerciseId, "source plan exercise id must not be null");
             equipment = Set.copyOf(Objects.requireNonNull(equipment, "equipment must not be null"));
+            targetWeightKg = Objects.requireNonNull(targetWeightKg, "target weight must not be null");
         }
     }
 

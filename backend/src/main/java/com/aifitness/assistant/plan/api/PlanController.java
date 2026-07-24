@@ -11,6 +11,7 @@ import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import java.time.Clock;
 import java.time.Instant;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -194,16 +195,18 @@ public final class PlanController {
             int repMin,
             int repMax,
             int restSeconds,
-            PlanDraft.WeightStatus weightStatus) {
+            PlanDraft.WeightStatus weightStatus,
+            BigDecimal targetWeightKg) {
         PlanDraft.Exercise toDomain() {
             return new PlanDraft.Exercise(
-                    exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus);
+                    exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus,
+                    Optional.ofNullable(targetWeightKg));
         }
 
         static ExerciseData from(PlanDraft.Exercise exercise) {
             return new ExerciseData(
                     exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
-                    exercise.restSeconds(), exercise.weightStatus());
+                    exercise.restSeconds(), exercise.weightStatus(), exercise.targetWeightKg().orElse(null));
         }
     }
 

@@ -179,6 +179,7 @@ public final class JdbcPlanRepository implements PlanRepository {
                 prescription.put("repMin", exercise.repMin());
                 prescription.put("repMax", exercise.repMax());
                 prescription.put("restSeconds", exercise.restSeconds());
+                exercise.targetWeightKg().ifPresent(weight -> prescription.put("targetWeightKg", weight));
                 jdbc.update("""
                         INSERT INTO plan_exercise
                             (id, training_day_id, plan_version_id, exercise_id, exercise_order,
@@ -253,7 +254,7 @@ public final class JdbcPlanRepository implements PlanRepository {
             exercises.add(new PlanDraft.Exercise(
                     String.valueOf(value.get("exerciseCode")), number(value, "workSets"),
                     number(value, "repMin"), number(value, "repMax"), number(value, "restSeconds"),
-                    PlanDraft.WeightStatus.valueOf(item.weightStatus())));
+                    PlanDraft.WeightStatus.valueOf(item.weightStatus()), decimal(value, "targetWeightKg")));
         }
         String dayCode = stored.isEmpty() ? null : String.valueOf(stored.getFirst().values().get("dayCode"));
         return new PlanDraft.Day(dayCode, dayRow.getString("name"), exercises);
@@ -277,6 +278,11 @@ public final class JdbcPlanRepository implements PlanRepository {
 
     private static int number(Map<String, Object> value, String field) {
         return ((Number) value.get(field)).intValue();
+    }
+
+    private static Optional<java.math.BigDecimal> decimal(Map<String, Object> value, String field) {
+        Object number = value.get(field);
+        return number == null ? Optional.empty() : Optional.of(new java.math.BigDecimal(String.valueOf(number)));
     }
 
     private static byte[] bytes(UUID value) {
