@@ -187,6 +187,12 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ApiErrorResponse'
+    TooManyRequests:
+      description: 当前用户和操作在时间窗口内请求过于频繁，错误码为 RATE_LIMITED。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiErrorResponse'
     DefaultError:
       description: 统一错误响应
       content:

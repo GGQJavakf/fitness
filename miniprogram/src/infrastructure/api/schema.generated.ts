@@ -587,6 +587,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy/deletion-requests/{id}/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 仅 local/test 隔离 fixture 使用；生产环境不注册此入口。 */
+        post: operations["processLocalPrivacyDeletionRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1013,10 +1030,24 @@ export interface components {
         AiWorkoutSummaryRequest: {
             workoutSessionId: string;
         };
+        /** @enum {string} */
+        PrivacyExportStatus: "READY";
+        /** @enum {string} */
+        PrivacyDataCategory: "PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS";
+        PrivacyExportResource: {
+            category: components["schemas"]["PrivacyDataCategory"];
+            recordCount: number;
+        };
+        /** @enum {string} */
+        RetentionCategory: "SECURITY_AUDIT" | "LEGAL_HOLD";
         PrivacyExportData: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["PrivacyExportStatus"];
             generatedAt: components["schemas"]["UtcDateTime"];
-            scope: ("PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS")[];
-            excludedRetentionCategories: ("SECURITY_AUDIT" | "LEGAL_HOLD")[];
+            resources: components["schemas"]["PrivacyExportResource"][];
+            scope: components["schemas"]["PrivacyDataCategory"][];
+            excludedRetentionCategories: components["schemas"]["RetentionCategory"][];
         };
         PrivacyExportResponse: {
             data: components["schemas"]["PrivacyExportData"];
@@ -1035,8 +1066,8 @@ export interface components {
             status: components["schemas"]["DeletionStatus"];
             requestedAt: components["schemas"]["UtcDateTime"];
             updatedAt: components["schemas"]["UtcDateTime"];
-            deletionScope: ("PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS")[];
-            retainedCategories: ("SECURITY_AUDIT" | "LEGAL_HOLD")[];
+            deletionScope: components["schemas"]["PrivacyDataCategory"][];
+            retainedCategories: components["schemas"]["RetentionCategory"][];
         };
         DeletionRequestResponse: {
             data: components["schemas"]["DeletionRequestData"];
@@ -1082,6 +1113,15 @@ export interface components {
         };
         /** @description expectedVersion 与当前资源版本不一致，错误码为 VERSION_CONFLICT。 */
         VersionConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ApiErrorResponse"];
+            };
+        };
+        /** @description 当前用户和操作在时间窗口内请求过于频繁，错误码为 RATE_LIMITED。 */
+        TooManyRequests: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1965,6 +2005,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1988,6 +2029,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2012,6 +2054,36 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    processLocalPrivacyDeletionRequest: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-Reauthentication-Proof": string;
+                "X-Local-Deletion-Approval": "LOCAL_TEST_APPROVED";
+            };
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 隔离 fixture 删除流程执行结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletionRequestResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
             default: components["responses"]["DefaultError"];
         };
     };

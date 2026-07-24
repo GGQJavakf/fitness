@@ -29,6 +29,11 @@ public final class PrivacyExceptionHandler {
         return error(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_FAILED, "请准确输入 DELETE 完成二次确认");
     }
 
+    @ExceptionHandler(PrivacyRequestService.PrivacyRateLimitedException.class)
+    ResponseEntity<ApiErrorResponse> rateLimited() {
+        return error(HttpStatus.TOO_MANY_REQUESTS, ErrorCode.RATE_LIMITED, "请求过于频繁，请稍后重试");
+    }
+
     private ResponseEntity<ApiErrorResponse> error(HttpStatus status, ErrorCode code, String message) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {

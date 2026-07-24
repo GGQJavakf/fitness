@@ -473,6 +473,7 @@ paths:
             application/json:
               schema: {$ref: './schemas/privacy.yaml#/components/schemas/PrivacyExportResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/deletion-requests:
     post:
@@ -487,6 +488,7 @@ paths:
               schema: {$ref: './schemas/privacy.yaml#/components/schemas/DeletionRequestResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/deletion-requests/{id}:
     get:
@@ -501,6 +503,32 @@ paths:
             application/json:
               schema: {$ref: './schemas/privacy.yaml#/components/schemas/DeletionRequestResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/deletion-requests/{id}/process:
+    post:
+      tags: [Privacy]
+      operationId: processLocalPrivacyDeletionRequest
+      description: 仅 local/test 隔离 fixture 使用；生产环境不注册此入口。
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+        - name: X-Reauthentication-Proof
+          in: header
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 2048}
+        - name: X-Local-Deletion-Approval
+          in: header
+          required: true
+          schema: {type: string, enum: [LOCAL_TEST_APPROVED]}
+      responses:
+        '200':
+          description: 隔离 fixture 删除流程执行结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/DeletionRequestResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
 components:
   schemas:
@@ -565,4 +593,5 @@ components:
     Unauthorized: {$ref: './schemas/common.yaml#/components/responses/Unauthorized'}
     NotFound: {$ref: './schemas/common.yaml#/components/responses/NotFound'}
     VersionConflict: {$ref: './schemas/common.yaml#/components/responses/VersionConflict'}
+    TooManyRequests: {$ref: './schemas/common.yaml#/components/responses/TooManyRequests'}
     DefaultError: {$ref: './schemas/common.yaml#/components/responses/DefaultError'}

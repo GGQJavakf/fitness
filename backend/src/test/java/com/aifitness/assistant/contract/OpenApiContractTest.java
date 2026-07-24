@@ -57,7 +57,8 @@ class OpenApiContractTest {
             "POST /api/v1/ai/workout-summaries",
             "GET /api/v1/privacy/export",
             "POST /api/v1/privacy/deletion-requests",
-            "GET /api/v1/privacy/deletion-requests/{id}");
+            "GET /api/v1/privacy/deletion-requests/{id}",
+            "POST /api/v1/privacy/deletion-requests/{id}/process");
 
     private static final Set<String> HTTP_METHODS = Set.of("get", "put", "post", "delete", "patch");
     private static Path contractRoot;
@@ -232,7 +233,21 @@ class OpenApiContractTest {
                 .containsExactly("DELETE");
         assertThat(required(schemas, "PrivacyExportData"))
                 .containsExactlyInAnyOrder(
-                        "generatedAt", "scope", "excludedRetentionCategories");
+                        "id", "status", "generatedAt", "resources",
+                        "scope", "excludedRetentionCategories");
+        assertThat(required(schemas, "PrivacyExportResource"))
+                .containsExactlyInAnyOrder("category", "recordCount");
+
+        for (String path : List.of(
+                "/api/v1/privacy/export",
+                "/api/v1/privacy/deletion-requests",
+                "/api/v1/privacy/deletion-requests/{id}",
+                "/api/v1/privacy/deletion-requests/{id}/process")) {
+            String method = path.equals("/api/v1/privacy/deletion-requests/{id}") ? "get" :
+                    path.equals("/api/v1/privacy/export") ? "get" : "post";
+            Map<String, Object> operation = map(map(map(openApi.get("paths")).get(path)).get(method));
+            assertThat(map(operation.get("responses"))).containsKey("429");
+        }
     }
 
     @Test

@@ -1,6 +1,7 @@
 import { Button, Input, Text, View } from '@tarojs/components'
 import { useState } from 'react'
 
+import { privacyActionErrorMessage } from '../../../application/privacy'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 
 import './index.scss'
@@ -18,9 +19,9 @@ export default function MyPage() {
     setMessage('')
     try {
       const result = await application.privacy.exportData()
-      setMessage(`可导出：${result.scopeLabel}。${result.retentionNotice}`)
-    } catch {
-      setMessage('身份验证或导出失败，请稍后重试')
+      setMessage(`导出任务 ${result.id} 已就绪：${result.resourceSummary || '暂无记录'}。${result.retentionNotice}`)
+    } catch (error: unknown) {
+      setMessage(privacyActionErrorMessage(error, '数据导出失败，请稍后重试'))
     } finally {
       setBusy(false)
     }
@@ -33,8 +34,8 @@ export default function MyPage() {
       const result = await application.privacy.requestDeletion(confirmation)
       setRequestId(result.id)
       setMessage(`删除申请${result.statusLabel}，范围：${result.scopeLabel}。${result.retentionNotice}`)
-    } catch {
-      setMessage('请准确输入 DELETE，并完成微信身份重新验证')
+    } catch (error: unknown) {
+      setMessage(privacyActionErrorMessage(error, '删除申请提交失败，请稍后重试'))
     } finally {
       setBusy(false)
     }
@@ -45,8 +46,8 @@ export default function MyPage() {
     try {
       const result = await application.privacy.getDeletionStatus(requestId)
       setMessage(`当前申请状态：${result.statusLabel}。${result.retentionNotice}`)
-    } catch {
-      setMessage('暂时无法读取申请状态')
+    } catch (error: unknown) {
+      setMessage(privacyActionErrorMessage(error, '暂时无法读取申请状态'))
     }
   }
 
@@ -67,7 +68,7 @@ export default function MyPage() {
       <View className='card'>
         <Text className='section-title'>隐私与数据</Text>
         <Text className='subtitle'>导出和删除申请均会重新进行微信身份验证，并记录不含凭据的安全审计。</Text>
-        <Button className='secondary-action' disabled={busy} onClick={() => void exportData()}>查看数据导出范围</Button>
+        <Button className='secondary-action' disabled={busy} onClick={() => void exportData()}>生成数据导出</Button>
       </View>
 
       <View className='card danger-zone'>

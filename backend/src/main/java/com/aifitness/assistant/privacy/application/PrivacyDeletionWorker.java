@@ -24,40 +24,49 @@ public final class PrivacyDeletionWorker {
     }
 
     public synchronized DeletionRequest process(UUID requestId, boolean explicitlyApproved) {
-        if (!explicitlyApproved) {
-            throw new ExecutionNotApprovedException();
-        }
         DeletionRequest request = repository.findById(requestId)
                 .orElseThrow(() -> new IllegalArgumentException("deletion request not found"));
+        if (!explicitlyApproved) {
+            audit.recordAttempt(request.userId(), "PRIVACY_DELETION_PROCESS", "NOT_APPROVED", requestId);
+            throw new ExecutionNotApprovedException();
+        }
         if (request.status() == DeletionRequest.Status.COMPLETED) {
+            audit.recordAttempt(request.userId(), "PRIVACY_DELETION_PROCESS", "DUPLICATE", requestId);
             return request;
         }
-        request = advance(request);
-        return request;
+        try {
+            return advance(request);
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(request.userId(), "PRIVACY_DELETION_PROCESS", "FAILED", requestId);
+            throw failure;
+        }
     }
 
     private DeletionRequest advance(DeletionRequest request) {
         UUID userId = request.userId();
         if (request.status() == DeletionRequest.Status.REQUESTED) {
-            dataLifecycle.revokeAccess(userId);
+            dataLifecycle.execute(new LifecycleCommand(
+                    request.id(), userId, LifecycleStep.REVOKE_ACCESS));
+            audit.recordStepOnce(userId, "PRIVACY_ACCESS_REVOKED", request.id());
             request = save(request.transitionTo(DeletionRequest.Status.ACCESS_REVOKED, clock.instant()));
-            audit.record(userId, "PRIVACY_ACCESS_REVOKED", request.id());
         }
         if (request.status() == DeletionRequest.Status.ACCESS_REVOKED) {
-            dataLifecycle.anonymizeOrdinaryBusinessData(userId);
+            dataLifecycle.execute(new LifecycleCommand(
+                    request.id(), userId, LifecycleStep.ANONYMIZE_BUSINESS_DATA));
+            audit.recordStepOnce(userId, "PRIVACY_BUSINESS_DATA_ANONYMIZED", request.id());
             request = save(request.transitionTo(
                     DeletionRequest.Status.BUSINESS_DATA_ANONYMIZED, clock.instant()));
-            audit.record(userId, "PRIVACY_BUSINESS_DATA_ANONYMIZED", request.id());
         }
         if (request.status() == DeletionRequest.Status.BUSINESS_DATA_ANONYMIZED) {
-            dataLifecycle.separateRequiredRetention(userId);
+            dataLifecycle.execute(new LifecycleCommand(
+                    request.id(), userId, LifecycleStep.SEPARATE_REQUIRED_RETENTION));
+            audit.recordStepOnce(userId, "PRIVACY_RETENTION_SEPARATED", request.id());
             request = save(request.transitionTo(
                     DeletionRequest.Status.RETENTION_SEPARATED, clock.instant()));
-            audit.record(userId, "PRIVACY_RETENTION_SEPARATED", request.id());
         }
         if (request.status() == DeletionRequest.Status.RETENTION_SEPARATED) {
+            audit.recordStepOnce(userId, "PRIVACY_DELETION_COMPLETED", request.id());
             request = save(request.transitionTo(DeletionRequest.Status.COMPLETED, clock.instant()));
-            audit.record(userId, "PRIVACY_DELETION_COMPLETED", request.id());
         }
         return request;
     }
@@ -67,11 +76,19 @@ public final class PrivacyDeletionWorker {
     }
 
     public interface DataLifecyclePort {
-        void revokeAccess(UUID userId);
+        void execute(LifecycleCommand command);
+    }
 
-        void anonymizeOrdinaryBusinessData(UUID userId);
+    public record LifecycleCommand(UUID requestId, UUID userId, LifecycleStep step) {
+        public LifecycleCommand {
+            Objects.requireNonNull(requestId);
+            Objects.requireNonNull(userId);
+            Objects.requireNonNull(step);
+        }
+    }
 
-        void separateRequiredRetention(UUID userId);
+    public enum LifecycleStep {
+        REVOKE_ACCESS, ANONYMIZE_BUSINESS_DATA, SEPARATE_REQUIRED_RETENTION
     }
 
     public static final class ExecutionNotApprovedException extends RuntimeException {

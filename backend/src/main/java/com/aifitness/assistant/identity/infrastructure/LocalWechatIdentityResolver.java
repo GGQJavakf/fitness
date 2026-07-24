@@ -8,6 +8,7 @@ import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.identity.domain.UserIdentity;
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 final class LocalWechatIdentityResolver implements WechatIdentityResolver {
 
@@ -28,10 +29,10 @@ final class LocalWechatIdentityResolver implements WechatIdentityResolver {
     }
 
     @Override
-    public AuthenticatedUserId resolve(String oneTimeCode) {
+    public Optional<ResolvedIdentity> resolveExisting(String oneTimeCode) {
         var subject = provider.exchange(oneTimeCode);
         byte[] protectedSubject = protector.protect(subject.subject());
-        return identities.findOrCreate(
-                UserIdentity.Provider.WECHAT_MINI_PROGRAM, protectedSubject, clock.instant());
+        return identities.findExisting(UserIdentity.Provider.WECHAT_MINI_PROGRAM, protectedSubject)
+                .map(user -> new ResolvedIdentity(user, clock.instant()));
     }
 }

@@ -154,7 +154,8 @@ class MigrationTest {
                 "db/migration/V004__workout_sync.sql",
                 "db/migration/V005__progression_ai_audit.sql",
                 "db/migration/V006__equipment_client_key.sql",
-                "db/migration/V007__privacy_requests.sql"))
+                "db/migration/V007__privacy_requests.sql",
+                "db/migration/V008__privacy_retention_lifecycle.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -202,6 +203,13 @@ class MigrationTest {
                 "privacy_required_retention",
                 "trg_privacy_required_retention_immutable_update",
                 "trg_privacy_required_retention_immutable_delete");
+        assertThat(readMigration("V008__privacy_retention_lifecycle.sql")).contains(
+                "MODIFY COLUMN retained_until DATETIME(6) NOT NULL",
+                "DROP TRIGGER trg_privacy_required_retention_immutable_update",
+                "trg_privacy_required_retention_require_expiry_insert",
+                "trg_privacy_required_retention_controlled_update",
+                "privacy_retention_lifecycle_audit",
+                "PAYLOAD_PURGED");
     }
 
     @Test
@@ -210,7 +218,7 @@ class MigrationTest {
         assertThat(flyway.info().applied())
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
-                .containsExactly("001", "002", "003", "004", "005", "006", "007");
+                .containsExactly("001", "002", "003", "004", "005", "006", "007", "008");
     }
 
     @Test
@@ -224,6 +232,39 @@ class MigrationTest {
         databaseRejectsCrossPlanSnapshotsAndProtectsWorkoutFacts();
         progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser();
         databaseRejectsHistoricalDeletesAndRevisionRewrites();
+    }
+
+    @Test
+    void retentionLifecycleRequiresPolicyExpiryHoldReleaseAndAuditsPayloadCleanup() throws Exception {
+        migrateEmptyMysqlDatabase();
+        String userId = createUser();
+        String requestId = newId();
+        String retentionId = newId();
+        execute("INSERT INTO privacy_deletion_request "
+                + "(id, user_id, status, requested_at, updated_at) VALUES ("
+                + binary(requestId) + ", " + binary(userId)
+                + ", 'RETENTION_SEPARATED', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))");
+
+        assertRejected("45000", "retention expiry", () -> execute(
+                retentionInsert(retentionId, requestId, "NULL")));
+        execute(retentionInsert(retentionId, requestId, "UTC_TIMESTAMP(6) - INTERVAL 1 DAY"));
+        assertRejected("45000", "invalid retention lifecycle transition", () -> execute(
+                "UPDATE privacy_required_retention SET disposition_status='PURGED', "
+                        + "disposed_at=UTC_TIMESTAMP(6), payload_digest=UNHEX(SHA2('', 256)) WHERE id="
+                        + binary(retentionId)));
+
+        execute("UPDATE privacy_required_retention SET hold_status='RELEASED', "
+                + "hold_released_at=UTC_TIMESTAMP(6) WHERE id=" + binary(retentionId));
+        execute("UPDATE privacy_required_retention SET disposition_status='PURGED', "
+                + "disposed_at=UTC_TIMESTAMP(6), payload_digest=UNHEX(SHA2('', 256)) WHERE id="
+                + binary(retentionId));
+
+        assertThat(queryOne("SELECT disposition_status FROM privacy_required_retention WHERE id="
+                + binary(retentionId))).isEqualTo("PURGED");
+        assertThat(queryOne("SELECT COUNT(*) FROM privacy_retention_lifecycle_audit WHERE retention_id="
+                + binary(retentionId))).isEqualTo("2");
+        assertRejected("45000", "retention lifecycle audit is immutable", () -> execute(
+                "DELETE FROM privacy_retention_lifecycle_audit WHERE retention_id=" + binary(retentionId)));
     }
 
     @Test
@@ -530,7 +571,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }
@@ -728,6 +769,15 @@ class MigrationTest {
     private static String recommendationInsert(String recommendationId, String userId, String exerciseId, String sessionId) {
         return "INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))"
                 .formatted(binary(recommendationId), binary(userId), binary(exerciseId), binary(sessionId));
+    }
+
+    private static String retentionInsert(String retentionId, String requestId, String retainedUntil) {
+        return "INSERT INTO privacy_required_retention "
+                + "(id, deletion_request_id, user_reference_digest, retention_category, "
+                + "payload_digest, retained_until, policy_version, created_at) VALUES ("
+                + binary(retentionId) + ", " + binary(requestId)
+                + ", UNHEX(SHA2('user', 256)), 'SECURITY_AUDIT', UNHEX(SHA2('payload', 256)), "
+                + retainedUntil + ", 'fixture-policy-v1', UTC_TIMESTAMP(6))";
     }
 
     private static void assertRejected(String sqlState, String messageFragment, ThrowingCallable action) {

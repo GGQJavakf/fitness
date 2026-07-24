@@ -15,8 +15,9 @@ public final class LocalWechatIdentityProvider implements WechatIdentityProvider
             throw new IllegalArgumentException("wechat code must not be blank");
         }
         try {
+            String fixtureSubject = oneTimeCode.split("\\|", 2)[0];
             byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(oneTimeCode.getBytes(StandardCharsets.UTF_8));
+                    .digest(fixtureSubject.getBytes(StandardCharsets.UTF_8));
             return new ProviderSubject("local:" + HexFormat.of().formatHex(digest));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);

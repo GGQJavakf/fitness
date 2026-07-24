@@ -4,6 +4,7 @@ import com.aifitness.assistant.common.api.ApiResponse;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
+import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
 import java.time.Clock;
 import java.time.Instant;
@@ -28,10 +29,13 @@ public final class PrivacyController {
 
     private final PrivacyRequestService privacy;
     private final Clock clock;
+    private final PrivacyDeletionWorker deletionWorker;
 
-    public PrivacyController(PrivacyRequestService privacy, Clock clock) {
+    public PrivacyController(
+            PrivacyRequestService privacy, Clock clock, PrivacyDeletionWorker deletionWorker) {
         this.privacy = privacy;
         this.clock = clock;
+        this.deletionWorker = deletionWorker;
     }
 
     @GetMapping("/export")
@@ -55,6 +59,17 @@ public final class PrivacyController {
         return response(DeletionRequestData.from(privacy.getDeletionRequest(user, id)));
     }
 
+    @PostMapping("/deletion-requests/{id}/process")
+    public ApiResponse<DeletionRequestData> processDeletionRequest(
+            AuthenticatedUserId user,
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-Reauthentication-Proof", required = false) String proof,
+            @RequestHeader(value = "X-Local-Deletion-Approval", required = false) String approval) {
+        privacy.authorizeDeletionProcessing(user, id, proof);
+        boolean approved = "LOCAL_TEST_APPROVED".equals(approval);
+        return response(DeletionRequestData.from(deletionWorker.process(id, approved)));
+    }
+
     private <T> ApiResponse<T> response(T data) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {
@@ -66,14 +81,27 @@ public final class PrivacyController {
     public record CreateDeletionRequest(String reauthenticationProof, String confirmationText) {}
 
     public record PrivacyExportData(
+            UUID id,
+            PrivacyRequestService.ExportStatus status,
             Instant generatedAt,
+            List<PrivacyResourceData> resources,
             List<String> scope,
             List<String> excludedRetentionCategories) {
         static PrivacyExportData from(PrivacyRequestService.PrivacyExport export) {
             return new PrivacyExportData(
-                    export.generatedAt(), export.scope(), export.excludedRetentionCategories());
+                    export.id(),
+                    export.status(),
+                    export.generatedAt(),
+                    export.resources().stream()
+                            .map(resource -> new PrivacyResourceData(
+                                    resource.category().name(), resource.recordCount()))
+                            .toList(),
+                    export.scope(),
+                    export.excludedRetentionCategories());
         }
     }
+
+    public record PrivacyResourceData(String category, int recordCount) {}
 
     public record DeletionRequestData(
             UUID id,

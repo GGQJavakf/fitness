@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class InMemoryIdentityRepository implements IdentityRepository {
@@ -35,5 +36,17 @@ public final class InMemoryIdentityRepository implements IdentityRepository {
                 UserIdentity.Status.ACTIVE,
                 now));
         return userId;
+    }
+
+    @Override
+    public synchronized Optional<AuthenticatedUserId> findExisting(
+            UserIdentity.Provider provider, byte[] protectedSubject) {
+        String key = provider.name() + ':' + Base64.getEncoder().encodeToString(protectedSubject);
+        UserIdentity identity = identities.get(key);
+        return identity == null ? Optional.empty() : Optional.of(identity.userId());
+    }
+
+    synchronized int identityCount() {
+        return identities.size();
     }
 }

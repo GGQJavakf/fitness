@@ -58,6 +58,8 @@ type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
+type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
+type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
 export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort {
   private readonly baseUrl: string
@@ -200,7 +202,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       true,
       { 'X-Reauthentication-Proof': reauthenticationProof },
     )
-    return requireData(response.data)
+    return toPrivacyExportData(requireData(response.data))
   }
 
   async requestDeletion(request: {
@@ -212,7 +214,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       'POST',
       request satisfies components['schemas']['CreateDeletionRequest'],
     )
-    return requireData(response.data)
+    return toDeletionRequestData(requireData(response.data))
   }
 
   async getDeletionRequest(requestId: string): Promise<DeletionRequestData> {
@@ -220,7 +222,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       `/api/v1/privacy/deletion-requests/${encodeURIComponent(requestId)}`,
       'GET',
     )
-    return requireData(response.data)
+    return toDeletionRequestData(requireData(response.data))
   }
 
   private async getVersionOrNull<Response extends { data: { version: number } }>(
@@ -316,6 +318,14 @@ function requireData<T>(value: T | null | undefined): T {
     throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
   }
   return value
+}
+
+function toPrivacyExportData(data: ContractPrivacyExportData): PrivacyExportData {
+  return data
+}
+
+function toDeletionRequestData(data: ContractDeletionRequestData): DeletionRequestData {
+  return data
 }
 
 function isApiErrorResponse(value: unknown): value is ApiErrorResponse {

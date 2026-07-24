@@ -8,19 +8,36 @@ export type DeletionStatus =
   | 'COMPLETED'
   | 'REJECTED'
 
+export type PrivacyDataCategory =
+  | 'PROFILE'
+  | 'EQUIPMENT'
+  | 'PREFERENCES'
+  | 'PLANS'
+  | 'WORKOUTS'
+
+export type RetentionCategory = 'SECURITY_AUDIT' | 'LEGAL_HOLD'
+
+export interface PrivacyExportResource {
+  category: PrivacyDataCategory
+  recordCount: number
+}
+
 export interface PrivacyExportData {
+  id: string
+  status: 'READY'
   generatedAt: string
-  scope: string[]
-  excludedRetentionCategories: string[]
+  resources: PrivacyExportResource[]
+  scope: PrivacyDataCategory[]
+  excludedRetentionCategories: RetentionCategory[]
 }
 
 export interface DeletionRequestData {
   id: string
   status: DeletionStatus
   requestedAt: string
-  updatedAt?: string
-  deletionScope: string[]
-  retainedCategories: string[]
+  updatedAt: string
+  deletionScope: PrivacyDataCategory[]
+  retainedCategories: RetentionCategory[]
 }
 
 export interface PrivacyPort {
@@ -38,6 +55,7 @@ export interface ReauthenticationProofPort {
 
 export interface PrivacyExportViewModel extends PrivacyExportData {
   scopeLabel: string
+  resourceSummary: string
   retentionNotice: string
 }
 
@@ -47,7 +65,7 @@ export interface DeletionStatusViewModel extends DeletionRequestData {
   retentionNotice: string
 }
 
-const categoryLabels: Record<string, string> = {
+const categoryLabels: Record<PrivacyDataCategory | RetentionCategory, string> = {
   PROFILE: '档案',
   EQUIPMENT: '器械',
   PREFERENCES: '偏好',
@@ -74,6 +92,9 @@ export function createPrivacyUseCases(port: PrivacyPort) {
       return {
         ...data,
         scopeLabel: labels(data.scope),
+        resourceSummary: data.resources
+          .map(({ category, recordCount }) => `${categoryLabels[category]} ${recordCount} 项`)
+          .join('、'),
         retentionNotice: `以下数据不包含在普通导出/删除中：${labels(data.excludedRetentionCategories)}`,
       }
     },
@@ -132,6 +153,23 @@ function deletionView(data: DeletionRequestData): DeletionStatusViewModel {
   }
 }
 
-function labels(categories: string[]): string {
-  return categories.map((category) => categoryLabels[category] ?? category).join('、')
+function labels(categories: readonly (PrivacyDataCategory | RetentionCategory)[]): string {
+  return categories.map((category) => categoryLabels[category]).join('、')
+}
+
+export function privacyActionErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof ApplicationError)) return fallback
+  switch (error.code) {
+    case 'REAUTHENTICATION_REQUIRED':
+    case 'AUTHENTICATION_REQUIRED':
+      return '请重新验证微信身份后继续'
+    case 'RATE_LIMITED':
+      return '操作过于频繁，请稍后重试'
+    case 'NETWORK_ERROR':
+      return '网络连接失败，请检查网络后重试'
+    case 'VALIDATION_FAILED':
+      return error.message
+    default:
+      return fallback
+  }
 }

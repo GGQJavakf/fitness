@@ -3,16 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createPrivacyUseCases,
   createVerifiedPrivacyUseCases,
+  privacyActionErrorMessage,
   type PrivacyPort,
 } from '../src/application/privacy'
 import { FitnessApiClient } from '../src/infrastructure/api/client'
+import { ApplicationError } from '../src/application/errors'
 
 describe('privacy flow', () => {
   it('requires identity re-verification and exact second confirmation before deletion', async () => {
     const port: PrivacyPort = {
       exportData: vi.fn(),
       requestDeletion: vi.fn().mockResolvedValue({
-        id: 'request-1', status: 'REQUESTED', requestedAt: '2026-07-24T08:00:00Z',
+        id: 'request-1', status: 'REQUESTED', requestedAt: '2026-07-24T08:00:00Z', updatedAt: '2026-07-24T08:00:00Z',
         deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
       }),
       getDeletionRequest: vi.fn(),
@@ -32,7 +34,9 @@ describe('privacy flow', () => {
   it('exports only declared categories and keeps retained data visibly separate', async () => {
     const port: PrivacyPort = {
       exportData: vi.fn().mockResolvedValue({
+        id: 'export-1', status: 'READY',
         generatedAt: '2026-07-24T08:00:00Z',
+        resources: [{ category: 'PROFILE', recordCount: 1 }, { category: 'EQUIPMENT', recordCount: 2 }],
         scope: ['PROFILE', 'EQUIPMENT'],
         excludedRetentionCategories: ['SECURITY_AUDIT', 'LEGAL_HOLD'],
       }),
@@ -44,6 +48,7 @@ describe('privacy flow', () => {
     const view = await privacy.exportData('fresh-proof')
 
     expect(view.scopeLabel).toBe('档案、器械')
+    expect(view.resourceSummary).toBe('档案 1 项、器械 2 项')
     expect(view.retentionNotice).toContain('安全审计、法定保留')
     expect(JSON.stringify(view)).not.toContain('other-user')
   })
@@ -53,7 +58,7 @@ describe('privacy flow', () => {
       exportData: vi.fn(),
       requestDeletion: vi.fn(),
       getDeletionRequest: vi.fn().mockResolvedValue({
-        id: 'request-1', status: 'COMPLETED', requestedAt: '2026-07-24T08:00:00Z',
+        id: 'request-1', status: 'COMPLETED', requestedAt: '2026-07-24T08:00:00Z', updatedAt: '2026-07-24T08:00:00Z',
         deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
       }),
     }
@@ -70,7 +75,9 @@ describe('privacy flow', () => {
       statusCode: 200,
       data: {
         data: {
+          id: 'export-1', status: 'READY',
           generatedAt: '2026-07-24T08:00:00Z',
+          resources: [{ category: 'PROFILE', recordCount: 1 }],
           scope: ['PROFILE'],
           excludedRetentionCategories: ['SECURITY_AUDIT'],
         },
@@ -106,12 +113,14 @@ describe('privacy flow', () => {
   it('obtains a fresh platform proof inside the application layer for every sensitive action', async () => {
     const port: PrivacyPort = {
       exportData: vi.fn().mockResolvedValue({
+        id: 'export-1', status: 'READY',
         generatedAt: '2026-07-24T08:00:00Z',
+        resources: [],
         scope: [],
         excludedRetentionCategories: [],
       }),
       requestDeletion: vi.fn().mockResolvedValue({
-        id: 'request-1', status: 'REQUESTED', requestedAt: '2026-07-24T08:00:00Z',
+        id: 'request-1', status: 'REQUESTED', requestedAt: '2026-07-24T08:00:00Z', updatedAt: '2026-07-24T08:00:00Z',
         deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
       }),
       getDeletionRequest: vi.fn(),
@@ -166,5 +175,15 @@ describe('privacy flow', () => {
       message: '请重新验证身份后继续',
     })
     expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('renders privacy errors by stable application code instead of a generic catch-all', () => {
+    expect(privacyActionErrorMessage(new ApplicationError('REAUTHENTICATION_REQUIRED', 'x'), 'fallback'))
+      .toContain('重新验证')
+    expect(privacyActionErrorMessage(new ApplicationError('RATE_LIMITED', 'x'), 'fallback'))
+      .toContain('频繁')
+    expect(privacyActionErrorMessage(new ApplicationError('NETWORK_ERROR', 'x'), 'fallback'))
+      .toContain('网络')
+    expect(privacyActionErrorMessage(new Error('opaque'), 'fallback')).toBe('fallback')
   })
 })

@@ -1,5 +1,21 @@
 components:
   schemas:
+    PrivacyDataCategory:
+      type: string
+      enum: [PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS]
+    RetentionCategory:
+      type: string
+      enum: [SECURITY_AUDIT, LEGAL_HOLD]
+    PrivacyExportStatus:
+      type: string
+      enum: [READY]
+    PrivacyExportResource:
+      type: object
+      additionalProperties: false
+      required: [category, recordCount]
+      properties:
+        category: {$ref: '#/components/schemas/PrivacyDataCategory'}
+        recordCount: {type: integer, minimum: 0}
     DeletionStatus:
       type: string
       enum:
@@ -25,21 +41,25 @@ components:
     PrivacyExportData:
       type: object
       additionalProperties: false
-      required: [generatedAt, scope, excludedRetentionCategories]
+      required: [id, status, generatedAt, resources, scope, excludedRetentionCategories]
       properties:
+        id: {type: string, format: uuid}
+        status: {$ref: '#/components/schemas/PrivacyExportStatus'}
         generatedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        resources:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrivacyExportResource'
         scope:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum: [PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS]
+            $ref: '#/components/schemas/PrivacyDataCategory'
         excludedRetentionCategories:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum: [SECURITY_AUDIT, LEGAL_HOLD]
+            $ref: '#/components/schemas/RetentionCategory'
     DeletionRequestData:
       type: object
       additionalProperties: false
@@ -53,14 +73,12 @@ components:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum: [PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS]
+            $ref: '#/components/schemas/PrivacyDataCategory'
         retainedCategories:
           type: array
           uniqueItems: true
           items:
-            type: string
-            enum: [SECURITY_AUDIT, LEGAL_HOLD]
+            $ref: '#/components/schemas/RetentionCategory'
     PrivacyExportResponse:
       type: object
       additionalProperties: false
