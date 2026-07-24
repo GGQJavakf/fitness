@@ -16,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/** Local/test-only server-side proof registry; raw proofs are never stored. */
+/** Process-local server-side proof registry; raw proofs are never stored and restart invalidates them. */
 final class LocalReauthenticationProofStore
         implements ReauthenticationProofIssuer, PrivacyRequestService.ReauthenticationPort {
 

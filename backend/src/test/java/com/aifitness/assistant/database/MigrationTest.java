@@ -22,6 +22,13 @@ import com.aifitness.assistant.profile.domain.EquipmentProfile;
 import com.aifitness.assistant.profile.domain.PreferenceProfile;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
+import com.aifitness.assistant.privacy.application.PrivacyDataPort;
+import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
+import com.aifitness.assistant.privacy.domain.DeletionRequest;
+import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyAudit;
+import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyDataReader;
+import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyExportRepository;
+import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.io.IOException;
@@ -168,7 +175,8 @@ class MigrationTest {
                 "db/migration/V007__privacy_requests.sql",
                 "db/migration/V008__privacy_retention_lifecycle.sql",
                 "db/migration/V009__identity_sessions.sql",
-                "db/migration/V010__profile_collection_versions.sql"))
+                "db/migration/V010__profile_collection_versions.sql",
+                "db/migration/V011__privacy_export_artifacts.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -238,6 +246,11 @@ class MigrationTest {
                 "FOREIGN KEY (user_id) REFERENCES user_account (id)",
                 "INSERT INTO user_profile_collection_version",
                 "THEN 1 ELSE 0 END");
+        assertThat(readMigration("V011__privacy_export_artifacts.sql")).contains(
+                "privacy_export_artifact",
+                "payload_json JSON NOT NULL",
+                "idx_privacy_export_user_expires",
+                "trg_privacy_export_artifact_immutable_update");
     }
 
     @Test
@@ -247,7 +260,7 @@ class MigrationTest {
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
                 .containsExactly(
-                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010");
+                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011");
     }
 
     @Test
@@ -463,6 +476,73 @@ class MigrationTest {
                 + binary(secondUserId.toString()))).isEqualTo("0");
         assertThat(queryOne("SELECT COUNT(*) FROM user_exercise_preference WHERE user_id="
                 + binary(secondUserId.toString()))).isEqualTo("0");
+    }
+
+    @Test
+    void jdbcPrivacyRepositoriesPersistOwnedArtifactsRequestsAndIdempotentAudit() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID firstUserId = UUID.fromString(createUser());
+        UUID secondUserId = UUID.fromString(createUser());
+        ObjectMapper objectMapper = new ObjectMapper();
+        JdbcPrivacyRepository requests = new JdbcPrivacyRepository(dataSource);
+        JdbcPrivacyExportRepository exports =
+                new JdbcPrivacyExportRepository(dataSource, objectMapper,
+                        java.time.Clock.fixed(
+                                java.time.Instant.parse("2026-07-24T08:00:00Z"),
+                                java.time.ZoneOffset.UTC));
+        JdbcPrivacyAudit audit = new JdbcPrivacyAudit(dataSource, java.time.Clock.systemUTC());
+        java.time.Instant now = java.time.Instant.parse("2026-07-24T08:00:00Z");
+
+        DeletionRequest requested = new DeletionRequest(
+                UUID.randomUUID(), firstUserId, DeletionRequest.Status.REQUESTED, now, now);
+        assertThat(requests.save(requested)).isEqualTo(requested);
+        assertThat(requests.findById(requested.id())).contains(requested);
+        assertThat(requests.findActiveByUser(firstUserId)).contains(requested);
+        assertThat(requests.findActiveByUser(secondUserId)).isEmpty();
+        assertThatThrownBy(() -> requests.save(new DeletionRequest(
+                requested.id(), secondUserId, DeletionRequest.Status.REQUESTED, now, now)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(requests.findById(requested.id())).contains(requested);
+
+        execute("INSERT INTO user_profile (user_id, experience, goal, weekly_frequency, "
+                + "session_minutes, location, version) VALUES ("
+                + binary(firstUserId.toString())
+                + ", 'BEGINNER', 'GENERAL_FITNESS', 3, 45, 'HOME', 1)");
+        List<PrivacyDataPort.ResourceExport> firstUserExport =
+                new JdbcPrivacyDataReader(dataSource).export(firstUserId);
+        assertThat(firstUserExport)
+                .filteredOn(resource -> resource.category() == PrivacyDataPort.Category.PROFILE)
+                .singleElement()
+                .satisfies(resource -> assertThat(resource.recordCount()).isEqualTo(1));
+        assertThat(new JdbcPrivacyDataReader(dataSource).export(secondUserId))
+                .allSatisfy(resource -> assertThat(resource.recordCount()).isZero());
+
+        DeletionRequest advanced = requested.transitionTo(
+                DeletionRequest.Status.ACCESS_REVOKED, now.plusSeconds(1));
+        assertThat(requests.save(advanced)).isEqualTo(advanced);
+        assertThat(requests.findById(requested.id())).contains(advanced);
+
+        PrivacyExportRepository.ExportArtifact artifact = new PrivacyExportRepository.ExportArtifact(
+                UUID.randomUUID(), firstUserId, "READY", now, now.plusSeconds(600),
+                List.of(new PrivacyDataPort.ResourceExport(
+                        PrivacyDataPort.Category.PROFILE,
+                        List.of(new PrivacyDataPort.ExportRecord("profile", "成年用户训练档案")))),
+                List.of("PROFILE"), List.of("SECURITY_AUDIT"));
+        assertThat(exports.save(artifact)).isEqualTo(artifact);
+        assertThat(exports.findById(artifact.id())).contains(artifact);
+        assertThat(new JdbcPrivacyExportRepository(
+                dataSource, objectMapper,
+                java.time.Clock.fixed(now.plusSeconds(601), java.time.ZoneOffset.UTC))
+                .findById(artifact.id())).isEmpty();
+        assertThat(queryOne("SELECT COUNT(*) FROM privacy_export_artifact WHERE id="
+                + binary(artifact.id().toString()))).isEqualTo("0");
+
+        audit.recordStepOnce(firstUserId, "PRIVACY_ACCESS_REVOKED", requested.id());
+        audit.recordStepOnce(firstUserId, "PRIVACY_ACCESS_REVOKED", requested.id());
+        assertThat(queryOne("SELECT COUNT(*) FROM domain_audit WHERE user_id="
+                + binary(firstUserId.toString())
+                + " AND action='PRIVACY_ACCESS_REVOKED' AND entity_id="
+                + binary(requested.id().toString()))).isEqualTo("1");
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -712,7 +792,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(10);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(11);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class PrivacyExceptionHandler {
 
     @ExceptionHandler(PrivacyRequestService.ReauthenticationRequiredException.class)

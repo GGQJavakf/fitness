@@ -4,7 +4,6 @@ import com.aifitness.assistant.common.api.ApiResponse;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
-import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
 import com.aifitness.assistant.privacy.application.ReauthenticationProofIssuer;
 import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
@@ -26,20 +25,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/privacy")
-@Profile({"local", "test"})
+@Profile({"local", "test", "staging-experience"})
 public final class PrivacyController {
 
     private final PrivacyRequestService privacy;
     private final Clock clock;
-    private final PrivacyDeletionWorker deletionWorker;
 
-    public PrivacyController(
-            PrivacyRequestService privacy,
-            Clock clock,
-            PrivacyDeletionWorker deletionWorker) {
+    public PrivacyController(PrivacyRequestService privacy, Clock clock) {
         this.privacy = privacy;
         this.clock = clock;
-        this.deletionWorker = deletionWorker;
     }
 
     @PostMapping("/reauthentication-proofs")
@@ -74,17 +68,6 @@ public final class PrivacyController {
     public ApiResponse<DeletionRequestData> getDeletionRequest(
             AuthenticatedUserId user, @PathVariable UUID id) {
         return response(DeletionRequestData.from(privacy.getDeletionRequest(user, id)));
-    }
-
-    @PostMapping("/deletion-requests/{id}/process")
-    public ApiResponse<DeletionRequestData> processDeletionRequest(
-            AuthenticatedUserId user,
-            @PathVariable UUID id,
-            @RequestHeader(value = "X-Reauthentication-Proof", required = false) String proof,
-            @RequestHeader(value = "X-Local-Deletion-Approval", required = false) String approval) {
-        privacy.authorizeDeletionProcessing(user, id, proof);
-        boolean approved = "LOCAL_TEST_APPROVED".equals(approval);
-        return response(DeletionRequestData.from(deletionWorker.process(id, approved)));
     }
 
     private <T> ApiResponse<T> response(T data) {
