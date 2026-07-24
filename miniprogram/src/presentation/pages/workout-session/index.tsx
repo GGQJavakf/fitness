@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { WorkoutFlowState } from '../../../application/workoutFlow'
 import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-import { useWeappDidShow } from '../../../platform/weapp/lifecycle'
+import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecycle'
 
 import './index.scss'
 
@@ -25,7 +25,12 @@ export default function WorkoutSessionPage() {
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
       setMessage(resumed.clockRollbackDetected ? '检测到设备时间回拨，计时已按最近可信时间校准。' : '草稿已恢复。')
+      application.telemetry.track('workout_resumed', { source: 'foreground' })
     }).catch(() => setMessage('训练草稿损坏或读取失败，未伪造任何完成记录。'))
+  })
+
+  useWeappDidHide(() => {
+    if (state) application.telemetry.track('workout_paused', { reason: 'background' })
   })
 
   async function record(status: 'COMPLETED' | 'FAILED' | 'SKIPPED', discomfort: 'NONE' | 'PAIN' = 'NONE'): Promise<void> {
@@ -57,15 +62,26 @@ export default function WorkoutSessionPage() {
       discomfort,
     })
     setState(updated)
+    application.telemetry.track('workout_set_completed', { status: status.toLowerCase() as 'completed' | 'failed' | 'skipped' })
+    if (status === 'SKIPPED') application.telemetry.track('exercise_skipped', { reason: 'user' })
     const resumed = await application.workouts.resume(updated)
     setState(resumed.state)
     setRemaining(resumed.remainingSeconds)
     setMessage(status === 'COMPLETED' ? '本组已先保存到本地草稿。' : '本组已按真实状态记录，不计作正常完成。')
     void application.workouts.flush(resumed.state).then((synced) => {
       setState(synced)
-      if (synced.syncStatus === 'CONFLICT') setMessage('服务端检测到事实冲突，请在冲突页显式选择。')
-      if (synced.syncStatus === 'SYNC_REJECTED') setMessage('服务端拒绝了该操作，本地事实仍保留，请检查输入。')
-    }).catch(() => setMessage('网络不可用，本组已保存在本地，稍后自动补传。'))
+      if (synced.syncStatus === 'CONFLICT') {
+        setMessage('服务端检测到事实冲突，请在冲突页显式选择。')
+        application.telemetry.track('sync_failed', { reason: 'conflict' })
+      }
+      if (synced.syncStatus === 'SYNC_REJECTED') {
+        setMessage('服务端拒绝了该操作，本地事实仍保留，请检查输入。')
+        application.telemetry.track('sync_failed', { reason: 'rejected' })
+      }
+    }).catch(() => {
+      setMessage('网络不可用，本组已保存在本地，稍后自动补传。')
+      application.telemetry.track('sync_failed', { reason: 'network' })
+    })
   }
 
   async function adjust(seconds: 15 | -15): Promise<void> {
@@ -91,6 +107,7 @@ export default function WorkoutSessionPage() {
     try {
       const updated = await application.workouts.replaceCurrentExercise(state, candidate)
       setState(updated); setReplacements([])
+      application.telemetry.track('exercise_replaced', { source: 'user' })
       setMessage('已仅替换本次训练动作；原计划版本没有改变。')
     } catch {
       setMessage('替换未生效；本地事实和原计划均未被静默覆盖。')

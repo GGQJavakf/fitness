@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import {
   DEFAULT_GYM_EQUIPMENT,
@@ -21,6 +21,10 @@ export default function OnboardingPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
+  useEffect(() => {
+    application.telemetry.track('onboarding_started', { source: state.stepIndex > 0 ? 'resume' : 'new' })
+  }, [])
+
   function patch(patchValue: Partial<OnboardingDraft>): void {
     setState((current) => updateOnboardingDraft(current, patchValue))
   }
@@ -37,9 +41,18 @@ export default function OnboardingPage() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      await application.completeOnboarding(state.draft)
+      const candidate = await application.completeOnboarding(state.draft)
+      application.telemetry.track('onboarding_completed', {
+        daysPerWeek: state.draft.weeklyFrequency!,
+        sessionMinutes: state.draft.sessionMinutes!,
+      })
+      application.telemetry.track('plan_generated', {
+        result: candidate.status === 'READY' ? 'ready' : 'needs_adjustment',
+        issueCount: candidate.status === 'READY' ? 0 : 1,
+      })
       await application.navigation.open('PLAN_CANDIDATES')
     } catch (error) {
+      application.telemetry.track('plan_generation_failed', { reason: 'network' })
       setSubmitError(error instanceof Error ? error.message : '保存失败，请稍后重试')
     } finally {
       setSubmitting(false)

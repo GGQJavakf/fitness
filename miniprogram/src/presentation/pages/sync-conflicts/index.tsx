@@ -26,6 +26,9 @@ export default function SyncConflictsPage() {
     setMessage('正在保存你的选择…')
     try {
       await application.resolveSyncConflict(conflict.id, { resolution, expectedVersion: conflict.version })
+      application.telemetry.track('sync_conflict_resolved', {
+        resolution: ({ KEEP_LOCAL: 'keep_local', KEEP_SERVER: 'keep_server', KEEP_BOTH: 'keep_both' } as const)[resolution],
+      })
       await reload()
     } catch {
       setMessage('处理失败，两份证据都已保留，请稍后重试。')

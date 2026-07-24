@@ -46,6 +46,7 @@ export default function WorkoutPreparePage() {
           restSeconds: exercise.prescription.restSeconds,
         })),
       })
+      application.telemetry.track('workout_started', { exerciseCount: session.exercises.length })
       await application.navigation.replace('WORKOUT_SESSION')
     } catch {
       setMessage('训练会话启动失败；再次点击会复用同一幂等键，不会创建重复会话。')

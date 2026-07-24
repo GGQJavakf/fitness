@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createTelemetryEvent } from '../src/infrastructure/telemetry/events'
+import { createTelemetryEvent, createTelemetryReporter } from '../src/infrastructure/telemetry/events'
 
 describe('telemetry event construction', () => {
   it('constructs only declared bounded metadata and freezes the event', () => {
@@ -12,6 +12,7 @@ describe('telemetry event construction', () => {
 
     expect(event).toEqual({
       name: 'api_result',
+      schemaVersion: 1,
       properties: {
         operation: 'workout_submit',
         result: 'failure',
@@ -42,5 +43,12 @@ describe('telemetry event construction', () => {
     expect(() => createTelemetryEvent('screen_viewed', {
       screen: 'x'.repeat(65),
     } as never)).toThrow('Invalid telemetry event properties')
+  })
+
+  it('never lets a telemetry outlet failure block the business flow', async () => {
+    const reporter = createTelemetryReporter(() => Promise.reject(new Error('offline')))
+    expect(() => reporter.track('sync_failed', { reason: 'network' })).not.toThrow()
+    await Promise.resolve()
+    expect(reporter.droppedEventCount()).toBe(1)
   })
 })

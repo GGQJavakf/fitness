@@ -5,6 +5,7 @@ import { createVerifiedPrivacyUseCases } from '../../application/privacy'
 import { WorkoutSyncService } from '../../application/use-cases/WorkoutSyncService'
 import { WorkoutFlowService } from '../../application/use-cases/WorkoutFlowService'
 import { FitnessApiClient } from '../../infrastructure/api/client'
+import { createTelemetryReporter } from '../../infrastructure/telemetry/events'
 import {
   createWeappLogin,
   createWeappNavigation,
@@ -46,6 +47,7 @@ const workoutDrafts = createWechatWorkoutDraftStore()
 const clock = { nowUtc: () => new Date().toISOString() }
 const workoutSync = new WorkoutSyncService(workoutDrafts, () => clock.nowUtc())
 const workouts = new WorkoutFlowService(workoutDrafts, clock, api, api, api)
+const telemetry = createTelemetryReporter()
 
 export function getWeappApplication() {
   return {
@@ -55,6 +57,7 @@ export function getWeappApplication() {
     privacy,
     workoutSync,
     workouts,
+    telemetry,
     listSyncConflicts: () => api.listSyncConflicts(),
     resolveSyncConflict: (
       conflictId: string,

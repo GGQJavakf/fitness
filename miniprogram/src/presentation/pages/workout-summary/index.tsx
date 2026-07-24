@@ -22,11 +22,19 @@ export default function WorkoutSummaryPage() {
     try {
       const result = await application.workouts.complete(state, summary.complete ? 'FULL' : 'EARLY_END')
       setMessage(result.complete ? '训练已完整结算。' : '训练已提前结束；已完成组已保留，不会自动加重。')
+      application.telemetry.track(result.complete ? 'workout_completed' : 'workout_aborted', {
+        completedSetCount: summary.completedWorkSets,
+      })
       try {
+        application.telemetry.track('ai_summary_requested', { purpose: 'workout_summary' })
         const generated = await application.requestWorkoutSummary()
-        if (generated) setAiSummary(generated.content)
+        if (generated) {
+          setAiSummary(generated.content)
+          application.telemetry.track('ai_summary_viewed', { source: generated.status === 'DEGRADED' ? 'template' : 'provider' })
+        }
       } catch {
         setAiSummary('AI 总结暂不可用；训练事实和规则建议不受影响。')
+        application.telemetry.track('ai_summary_failed', { reason: 'unavailable' })
       }
     } catch {
       setMessage('结算暂未成功；本地事实仍保留，请检查网络或同步冲突后重试。')

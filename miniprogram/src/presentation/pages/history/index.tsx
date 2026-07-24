@@ -45,6 +45,9 @@ export default function HistoryPage() {
     try {
       const values = await application.listProgressionRecommendations()
       setRecommendations([...values])
+      values.forEach((value) => application.telemetry.track('progression_recommended', {
+        decision: value.decision.toLowerCase() as 'increase' | 'keep' | 'reduce' | 'review',
+      }))
       setRecommendationMessage(values.length ? '建议不会自动改变计划，由你决定是否采纳。' : '当前没有待处理建议。')
     } catch {
       setRecommendationMessage('进阶建议暂时无法加载，训练记录不受影响。')
@@ -63,6 +66,11 @@ export default function HistoryPage() {
         acceptedWeightKg,
         `progression-${id}-${Date.now()}`,
       )
+      const applied = recommendations.find((item) => item.id === id)
+      application.telemetry.track('progression_applied', {
+        decision: applied && applied.recommendedWeightKg < applied.currentWeightKg ? 'reduce' : 'increase',
+        modified: Boolean(applied && acceptedWeightKg !== applied.recommendedWeightKg),
+      })
       setRecommendations((current) => current.filter((item) => item.id !== id))
       setRecommendationMessage('建议已采纳并生成新的计划版本。')
     } catch {
@@ -78,6 +86,10 @@ export default function HistoryPage() {
     setBusyRecommendationId(id)
     try {
       await application.dismissProgressionRecommendation(id)
+      const dismissed = recommendations.find((item) => item.id === id)
+      application.telemetry.track('progression_dismissed', {
+        decision: (dismissed?.decision.toLowerCase() as 'increase' | 'keep' | 'reduce' | 'review' | undefined) ?? 'review',
+      })
       setRecommendations((current) => current.filter((item) => item.id !== id))
       setRecommendationMessage('建议已忽略，计划保持不变。')
     } catch {

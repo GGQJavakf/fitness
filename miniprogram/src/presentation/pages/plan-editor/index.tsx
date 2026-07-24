@@ -30,7 +30,9 @@ export default function PlanEditorPage() {
 
   function edit(dayCode: string, exerciseCode: string, field: EditableNumericField, raw: string): void {
     const value = Number(raw)
-    setEditor(application.editPlanNumber(dayCode, exerciseCode, field, value))
+    const next = application.editPlanNumber(dayCode, exerciseCode, field, value)
+    setEditor(next)
+    if (next !== editor) application.telemetry.track('plan_edited', { fieldKind: 'prescription' })
   }
 
   async function run(action: () => Promise<PlanEditorState>): Promise<void> {
@@ -57,6 +59,9 @@ export default function PlanEditorPage() {
         && !current.conflict
         && !current.validationResult.validationIssues.some((issue) => issue.severity === 'ERROR')) {
         await application.navigation.replace('PLAN')
+      }
+      if (current.baseVersion > previousVersion) {
+        application.telemetry.track('plan_confirmed', { versionNumber: current.baseVersion })
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
