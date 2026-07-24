@@ -24,6 +24,8 @@ import com.aifitness.assistant.profile.domain.PreferenceProfile;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
 import com.aifitness.assistant.progression.domain.ProgressionDecision;
+import com.aifitness.assistant.progression.domain.ProgressionEngine;
+import com.aifitness.assistant.progression.domain.EquipmentRoundingPolicy;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
 import com.aifitness.assistant.progression.application.EffectiveSetSelector;
 import com.aifitness.assistant.progression.infrastructure.JdbcExerciseTrendQuery;
@@ -45,6 +47,7 @@ import com.aifitness.assistant.workout.domain.SyncConflict;
 import com.aifitness.assistant.workout.infrastructure.JdbcSyncConflictRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSessionRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSetRepository;
+import com.aifitness.assistant.rules.domain.RuleEvaluationInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.io.IOException;
@@ -593,16 +596,32 @@ class MigrationTest {
         UUID exerciseId = UUID.fromString(createExercise());
         PlanFixture plan = sealedPlan(userId.toString(), exerciseId.toString());
         UUID sessionId = UUID.fromString(createSession(plan, userId.toString()));
-        JdbcRecommendationRepository repository = new JdbcRecommendationRepository(dataSource, new ObjectMapper());
+        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+        JdbcRecommendationRepository repository = new JdbcRecommendationRepository(dataSource, mapper);
+        RuleEvaluationInput.Progression signals = new RuleEvaluationInput.Progression(
+                "double-progression-v1", RuleEvaluationInput.WeightUnit.KG, true, false, false, false,
+                false, false, false, 0, false, true, 1, false, false, 2);
+        ProgressionDecision.Prescription current = new ProgressionDecision.Prescription(
+                new BigDecimal("40"), 8, 12);
+        ProgressionEngine.EnginePolicy enginePolicy = new ProgressionEngine.EnginePolicy(
+                "double-progression-v1", new BigDecimal("0.05"));
+        EquipmentRoundingPolicy equipmentPolicy = new EquipmentRoundingPolicy(
+                "KG", List.of(new BigDecimal("2.5")));
+        ProgressionDecision generated = new ProgressionEngine().evaluate(
+                signals, current, enginePolicy, equipmentPolicy);
+        String snapshotJson = mapper.writeValueAsString(Map.of(
+                "schemaVersion", "progression-decision-snapshot-v1",
+                "signals", signals,
+                "equipmentStepsKg", equipmentPolicy.allowedSteps(),
+                "reductionRate", enginePolicy.reductionRate()));
         ProgressionRecommendation recommendation = new ProgressionRecommendation(
                 UUID.randomUUID(), userId, exerciseId, "GOBLET_SQUAT", sessionId,
-                ProgressionDecision.Decision.INCREASE,
-                new ProgressionDecision.Prescription(new BigDecimal("40"), 8, 12),
-                new ProgressionDecision.Prescription(new BigDecimal("42.5"), 8, 12),
-                "ALL_SETS_AT_MAX_WITH_ACCEPTABLE_RIR", "{\"schemaVersion\":\"1.0.0\"}",
-                "double-progression-v1", Optional.of(new ProgressionRecommendation.RoundingEvidence(
-                        new BigDecimal("42.5"), new BigDecimal("42.5"), "ADD_ONE_MIN_INCREMENT",
-                        List.of(new BigDecimal("2.5")))), ProgressionRecommendation.Status.PENDING,
+                generated.decision(), generated.currentPrescription(), generated.recommendedPrescription(),
+                generated.reasonCode().name(), snapshotJson, generated.algorithmVersion(),
+                Optional.of(new ProgressionRecommendation.RoundingEvidence(
+                        generated.rawRecommendedWeight().orElseThrow(), generated.roundedWeight().orElseThrow(),
+                        generated.roundingRule().orElseThrow(), generated.availableEquipmentSteps())),
+                ProgressionRecommendation.Status.PENDING,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                 java.time.Instant.parse("2026-07-24T10:00:00Z"));
 
@@ -612,6 +631,15 @@ class MigrationTest {
             return saved;
         });
         assertThat(repository.findByIdAndUser(recommendation.id(), userId)).contains(persisted);
+        var storedSnapshot = mapper.readTree(persisted.inputSnapshotJson());
+        RuleEvaluationInput.Progression replaySignals = mapper.treeToValue(
+                storedSnapshot.get("signals"), RuleEvaluationInput.Progression.class);
+        ProgressionDecision replayed = new ProgressionEngine().evaluate(
+                replaySignals, persisted.currentPrescription(), enginePolicy,
+                new EquipmentRoundingPolicy("KG", List.of(new BigDecimal("2.5"))));
+        assertThat(replayed.decision()).isEqualTo(persisted.decision());
+        assertThat(replayed.reasonCode().name()).isEqualTo(persisted.reasonCode());
+        assertThat(replayed.recommendedPrescription()).isEqualTo(persisted.recommendedPrescription());
         assertThat(repository.saveIfAbsent(recommendation).created()).isFalse();
         assertThat(queryOne("SELECT COUNT(*) FROM progression_recommendation WHERE source_session_id = %s"
                 .formatted(binary(sessionId.toString())))).isEqualTo("1");
