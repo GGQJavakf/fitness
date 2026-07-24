@@ -3,6 +3,7 @@ package com.aifitness.assistant.progression.infrastructure;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.progression.application.RecommendationRepository;
 import com.aifitness.assistant.progression.application.RecommendationService;
+import com.aifitness.assistant.progression.application.ExerciseTrendQuery;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.util.UUID;
@@ -33,5 +34,18 @@ public class RecommendationConfiguration {
     RecommendationService recommendationService(
             RecommendationRepository recommendations, PlanVersionService plans, Clock clock) {
         return new RecommendationService(recommendations, plans, clock, UUID::randomUUID);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "fitness.progression", name = "repository", havingValue = "memory", matchIfMissing = true)
+    ExerciseTrendQuery exerciseTrendQuery() {
+        return (user, exerciseCode) -> new ExerciseTrendQuery.Trend(exerciseCode, "KG", java.util.List.of());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.progression", name = "repository", havingValue = "mysql")
+    ExerciseTrendQuery jdbcExerciseTrendQuery(DataSource dataSource) {
+        return new JdbcExerciseTrendQuery(dataSource);
     }
 }

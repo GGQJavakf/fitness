@@ -1,6 +1,6 @@
 import Taro from '@tarojs/taro'
 
-import type { PageDestination, PageNavigationPort } from '../../application/navigation'
+import type { NavigationParameters, PageDestination, PageNavigationPort } from '../../application/navigation'
 import type { AppDestination, Session } from '../../application/onboarding'
 import type {
   SessionAccessPort,
@@ -23,6 +23,7 @@ const pageRoutes: Record<PageDestination, string> = {
   WORKOUT_SUMMARY: '/presentation/pages/workout-summary/index',
   SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
   HISTORY: '/presentation/pages/history/index',
+  EXERCISE_TREND: '/presentation/pages/exercise-trend/index',
 }
 
 export function createWeappTransport(): TransportPort {
@@ -82,11 +83,11 @@ export function createWeappNavigation(): PageNavigationPort & {
   replaceApp(destination: AppDestination): Promise<void>
 } {
   return {
-    async open(destination): Promise<void> {
-      await Taro.navigateTo({ url: pageRoutes[destination] })
+    async open(destination, parameters): Promise<void> {
+      await Taro.navigateTo({ url: routeUrl(destination, parameters) })
     },
-    async replace(destination): Promise<void> {
-      await Taro.redirectTo({ url: pageRoutes[destination] })
+    async replace(destination, parameters): Promise<void> {
+      await Taro.redirectTo({ url: routeUrl(destination, parameters) })
     },
     async back(): Promise<void> {
       await Taro.navigateBack()
@@ -100,6 +101,20 @@ export function createWeappNavigation(): PageNavigationPort & {
       await Taro.redirectTo({ url: pageRoutes[page] })
     },
   }
+}
+
+export function currentWeappRouteParameter(name: string): string | undefined {
+  const value = Taro.getCurrentInstance().router?.params?.[name]
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function routeUrl(destination: PageDestination, parameters?: NavigationParameters): string {
+  const entries = Object.entries(parameters ?? {})
+  if (!entries.length) return pageRoutes[destination]
+  const query = entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('&')
+  return `${pageRoutes[destination]}?${query}`
 }
 
 function isSession(value: unknown): value is Session {

@@ -18,6 +18,84 @@ components:
       additionalProperties: false
       properties:
         reasonCode: {type: string}
+    ProgressionChangeSummary:
+      type: object
+      additionalProperties: false
+      required: [fieldPath, previousWeightKg, appliedWeightKg]
+      properties:
+        fieldPath: {type: string}
+        previousWeightKg: {type: number, minimum: 0}
+        appliedWeightKg: {type: number, minimum: 0}
+    ProgressionRecommendationData:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - exerciseCode
+        - status
+        - decision
+        - reasonCode
+        - currentWeightKg
+        - recommendedWeightKg
+        - algorithmVersion
+        - createdAt
+      properties:
+        id: {type: string}
+        exerciseCode: {type: string}
+        status: {$ref: '#/components/schemas/RecommendationStatus'}
+        decision: {$ref: '#/components/schemas/ProgressionDecision'}
+        reasonCode: {type: string}
+        currentWeightKg: {type: number, minimum: 0}
+        recommendedWeightKg: {type: number, minimum: 0}
+        acceptedWeightKg: {type: number, minimum: 0}
+        algorithmVersion: {type: string}
+        appliedPlanId: {type: string}
+        appliedPlanVersionId: {type: string}
+        changeSummary: {$ref: '#/components/schemas/ProgressionChangeSummary'}
+        createdAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    ProgressionRecommendationResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/ProgressionRecommendationData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    ProgressionRecommendationListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/ProgressionRecommendationData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    ExerciseTrendPoint:
+      type: object
+      additionalProperties: false
+      required: [sessionId, completedAt, topWeightKg, totalReps, workSetCount]
+      properties:
+        sessionId: {type: string}
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        topWeightKg: {type: number, minimum: 0}
+        totalReps: {type: integer, minimum: 0}
+        workSetCount: {type: integer, minimum: 1}
+    ExerciseTrendData:
+      type: object
+      additionalProperties: false
+      required: [exerciseCode, unit, points]
+      properties:
+        exerciseCode: {type: string}
+        unit: {$ref: './common.yaml#/components/schemas/WeightUnit'}
+        points:
+          type: array
+          items: {$ref: '#/components/schemas/ExerciseTrendPoint'}
+    ExerciseTrendResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/ExerciseTrendData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     AiPlanExplanationRequest:
       type: object
       additionalProperties: false

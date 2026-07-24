@@ -10,20 +10,23 @@ export type PageDestination =
   | 'WORKOUT_SUMMARY'
   | 'SYNC_CONFLICTS'
   | 'HISTORY'
+  | 'EXERCISE_TREND'
+
+export type NavigationParameters = Readonly<Record<string, string>>
 
 export interface PageNavigationPort {
-  open(destination: PageDestination): Promise<void> | void
-  replace(destination: PageDestination): Promise<void> | void
+  open(destination: PageDestination, parameters?: NavigationParameters): Promise<void> | void
+  replace(destination: PageDestination, parameters?: NavigationParameters): Promise<void> | void
   back(): Promise<void> | void
 }
 
 export function createNavigationUseCases(port: PageNavigationPort) {
   return {
-    open(destination: PageDestination): Promise<void> {
-      return Promise.resolve(port.open(destination))
+    open(destination: PageDestination, parameters?: NavigationParameters): Promise<void> {
+      return Promise.resolve(port.open(destination, parameters))
     },
-    replace(destination: PageDestination): Promise<void> {
-      return Promise.resolve(port.replace(destination))
+    replace(destination: PageDestination, parameters?: NavigationParameters): Promise<void> {
+      return Promise.resolve(port.replace(destination, parameters))
     },
     back(): Promise<void> {
       return Promise.resolve(port.back())

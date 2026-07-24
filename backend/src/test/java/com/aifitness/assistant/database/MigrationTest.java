@@ -25,6 +25,7 @@ import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
 import com.aifitness.assistant.progression.domain.ProgressionDecision;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
+import com.aifitness.assistant.progression.infrastructure.JdbcExerciseTrendQuery;
 import com.aifitness.assistant.progression.infrastructure.JdbcRecommendationRepository;
 import com.aifitness.assistant.privacy.application.PrivacyDataPort;
 import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
@@ -623,6 +624,58 @@ class MigrationTest {
     }
 
     @Test
+    void exerciseTrendQueryExcludesWarmupExtraAbortedAndAnomalousSets() throws Exception {
+        migrateEmptyMysqlDatabase();
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture plan = sealedPlan(userId, exerciseId);
+        String sessionId = createSession(plan, userId);
+        String snapshotId = newId();
+        execute("""
+                INSERT INTO workout_exercise_snapshot
+                    (id, session_id, source_plan_exercise_id, source_training_day_id,
+                     source_plan_version_id, exercise_order, exercise_snapshot_json,
+                     prescription_snapshot_json, status)
+                VALUES (%s, %s, %s, %s, %s, 1,
+                    JSON_OBJECT('exerciseCode', 'GOBLET_SQUAT'), JSON_OBJECT(), 'ACTIVE')
+                """.formatted(binary(snapshotId), binary(sessionId), binary(plan.planExerciseId()),
+                binary(plan.dayId()), binary(plan.versionId())));
+        execute("UPDATE workout_session SET status = 'COMPLETED', completed_at = '2026-07-24 09:00:00' WHERE id = "
+                + binary(sessionId));
+        insertTrendSet(snapshotId, "work-1", "WORK", 1, "40.0", 10, "COMPLETED", null);
+        insertTrendSet(snapshotId, "work-2", "WORK", 2, "42.5", 8, "COMPLETED", null);
+        insertTrendSet(snapshotId, "warmup", "WARMUP", 3, "20.0", 12, "COMPLETED", null);
+        insertTrendSet(snapshotId, "extra", "EXTRA", 4, "50.0", 5, "COMPLETED", null);
+        insertTrendSet(snapshotId, "anomaly", "WORK", 5, "100.0", 20, "COMPLETED", "CONFIRMED_EXCLUDED");
+        insertTrendSet(snapshotId, "failed", "WORK", 6, "45.0", 0, "FAILED", null);
+
+        String abortedSessionId = createSession(plan, userId);
+        String abortedSnapshotId = newId();
+        execute("""
+                INSERT INTO workout_exercise_snapshot
+                    (id, session_id, source_plan_exercise_id, source_training_day_id,
+                     source_plan_version_id, exercise_order, exercise_snapshot_json,
+                     prescription_snapshot_json, status)
+                VALUES (%s, %s, %s, %s, %s, 1,
+                    JSON_OBJECT('exerciseCode', 'GOBLET_SQUAT'), JSON_OBJECT(), 'ACTIVE')
+                """.formatted(binary(abortedSnapshotId), binary(abortedSessionId), binary(plan.planExerciseId()),
+                binary(plan.dayId()), binary(plan.versionId())));
+        execute("UPDATE workout_session SET status = 'ABORTED', completed_at = '2026-07-24 10:00:00' WHERE id = "
+                + binary(abortedSessionId));
+        insertTrendSet(abortedSnapshotId, "aborted-work", "WORK", 1, "60.0", 12, "COMPLETED", null);
+
+        var trend = new JdbcExerciseTrendQuery(dataSource).load(
+                new AuthenticatedUserId(UUID.fromString(userId)), "GOBLET_SQUAT");
+
+        assertThat(trend.points()).singleElement().satisfies(point -> {
+            assertThat(point.sessionId()).isEqualTo(UUID.fromString(sessionId));
+            assertThat(point.topWeightKg()).isEqualByComparingTo("42.5");
+            assertThat(point.totalReps()).isEqualTo(18);
+            assertThat(point.workSetCount()).isEqualTo(2);
+        });
+    }
+
+    @Test
     void jdbcWorkoutRepositoryPersistsOwnedSnapshotsAndOptimisticStatus() throws Exception {
         migrateEmptyMysqlDatabase();
         UUID userId = UUID.fromString(createUser());
@@ -1106,6 +1159,27 @@ class MigrationTest {
         for (Throwable current = throwable; current != null; current = current.getCause()) {
             assertThat(current.getMessage()).doesNotContain(forbiddenText);
         }
+    }
+
+    private static void insertTrendSet(
+            String snapshotId,
+            String clientKey,
+            String setType,
+            int setOrder,
+            String weight,
+            int reps,
+            String status,
+            String anomalyStatus) throws Exception {
+        String anomaly = anomalyStatus == null ? "NULL" : "'" + anomalyStatus + "'";
+        String completedAt = status.equals("COMPLETED") ? "'2026-07-24 08:30:00'" : "NULL";
+        execute("""
+                INSERT INTO workout_set
+                    (id, session_exercise_id, client_set_key, set_type, set_order, target_json,
+                     actual_weight, unit, actual_reps, completion_status, completed_at,
+                     server_revision, anomaly_status)
+                VALUES (%s, %s, '%s', '%s', %s, JSON_OBJECT(), %s, 'KG', %s, '%s', %s, 0, %s)
+                """.formatted(binary(newId()), binary(snapshotId), clientKey, setType, setOrder,
+                weight, reps, status, completedAt, anomaly));
     }
 
     private static String createUser() throws Exception {

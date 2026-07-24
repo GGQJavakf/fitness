@@ -1251,11 +1251,55 @@ export interface components {
             data: components["schemas"]["SyncConflictData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        ExerciseTrendPoint: {
+            sessionId: string;
+            completedAt: components["schemas"]["UtcDateTime"];
+            topWeightKg: number;
+            totalReps: number;
+            workSetCount: number;
+        };
+        ExerciseTrendData: {
+            exerciseCode: string;
+            unit: components["schemas"]["WeightUnit"];
+            points: components["schemas"]["ExerciseTrendPoint"][];
+        };
+        ExerciseTrendResponse: {
+            data: components["schemas"]["ExerciseTrendData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         /** @enum {string} */
         RecommendationStatus: "PENDING" | "APPLIED" | "MODIFIED" | "DISMISSED";
+        ProgressionChangeSummary: {
+            fieldPath: string;
+            previousWeightKg: number;
+            appliedWeightKg: number;
+        };
+        ProgressionRecommendationData: {
+            id: string;
+            exerciseCode: string;
+            status: components["schemas"]["RecommendationStatus"];
+            decision: components["schemas"]["ProgressionDecision"];
+            reasonCode: string;
+            currentWeightKg: number;
+            recommendedWeightKg: number;
+            acceptedWeightKg?: number;
+            algorithmVersion: string;
+            appliedPlanId?: string;
+            appliedPlanVersionId?: string;
+            changeSummary?: components["schemas"]["ProgressionChangeSummary"];
+            createdAt: components["schemas"]["UtcDateTime"];
+        };
+        ProgressionRecommendationListResponse: {
+            data: components["schemas"]["ProgressionRecommendationData"][];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         ApplyRecommendationRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
             acceptedWeight?: components["schemas"]["Weight"];
+        };
+        ProgressionRecommendationResponse: {
+            data: components["schemas"]["ProgressionRecommendationData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         DismissRecommendationRequest: {
             reasonCode?: string;
@@ -2264,7 +2308,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 有效正式组趋势 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseTrendResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2279,7 +2331,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 建议列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressionRecommendationListResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2297,7 +2357,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["RecommendationApply"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已采纳建议 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressionRecommendationResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -2313,7 +2381,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["RecommendationDismiss"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已忽略建议 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressionRecommendationResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };

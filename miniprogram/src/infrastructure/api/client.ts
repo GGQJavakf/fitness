@@ -17,6 +17,12 @@ import type {
   VersionedResource,
 } from '../../application/onboarding'
 import type { PlanPersistencePort } from '../../application/ports'
+import type {
+  ExerciseTrendData,
+  ProgressionPort,
+  ProgressionRecommendationData,
+  RecommendationStatus,
+} from '../../application/progression'
 import type { SyncWorkoutOperation, SyncWorkoutOperationResult, WorkoutOperationSyncPort } from '../../application/ports/WorkoutOperationSyncPort'
 import type {
   DeletionRequestData,
@@ -72,10 +78,13 @@ type SyncWorkoutOperationsResponse = components['schemas']['SyncWorkoutOperation
 type WorkoutHistoryResponse = components['schemas']['WorkoutHistoryResponse']
 type WorkoutCompletionResponse = components['schemas']['WorkoutCompletionResponse']
 type ExerciseReplacementResponse = components['schemas']['ExerciseReplacementResponse']
+type ProgressionRecommendationListResponse = components['schemas']['ProgressionRecommendationListResponse']
+type ProgressionRecommendationResponse = components['schemas']['ProgressionRecommendationResponse']
+type ExerciseTrendResponse = components['schemas']['ExerciseTrendResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
-export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort {
+export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort {
   private readonly baseUrl: string
 
   constructor(
@@ -262,6 +271,48 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       'GET',
     )
     return response.data
+  }
+
+  async listRecommendations(status?: RecommendationStatus): Promise<readonly ProgressionRecommendationData[]> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : ''
+    const response = await this.request<ProgressionRecommendationListResponse>(
+      `/api/v1/progression-recommendations${query}`,
+      'GET',
+    )
+    return requireData(response.data)
+  }
+
+  async applyRecommendation(
+    id: string,
+    expectedVersion: number,
+    acceptedWeightKg: number,
+    idempotencyKey: string,
+  ): Promise<ProgressionRecommendationData> {
+    const response = await this.request<ProgressionRecommendationResponse>(
+      `/api/v1/progression-recommendations/${encodeURIComponent(id)}/apply`,
+      'POST',
+      { expectedVersion, acceptedWeight: { value: acceptedWeightKg, unit: 'KG' } },
+      true,
+      { 'Idempotency-Key': idempotencyKey },
+    )
+    return requireData(response.data)
+  }
+
+  async dismissRecommendation(id: string, reasonCode = 'USER_DISMISSED'): Promise<ProgressionRecommendationData> {
+    const response = await this.request<ProgressionRecommendationResponse>(
+      `/api/v1/progression-recommendations/${encodeURIComponent(id)}/dismiss`,
+      'POST',
+      { reasonCode },
+    )
+    return requireData(response.data)
+  }
+
+  async getExerciseTrend(exerciseCode: string): Promise<ExerciseTrendData> {
+    const response = await this.request<ExerciseTrendResponse>(
+      `/api/v1/progress/exercises/${encodeURIComponent(exerciseCode)}`,
+      'GET',
+    )
+    return requireData(response.data)
   }
 
   async completeWorkout(

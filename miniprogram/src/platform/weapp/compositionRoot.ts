@@ -10,6 +10,7 @@ import {
   createWeappNavigation,
   createWeappSessionStore,
   createWeappTransport,
+  currentWeappRouteParameter,
 } from './adapters'
 import { createWechatWorkoutDraftStore } from './WechatStorageAdapter'
 
@@ -59,5 +60,12 @@ export function getWeappApplication() {
     ) => api.resolveSyncConflict(conflictId, request),
     startWorkoutSession: (request: Parameters<typeof api.startWorkoutSession>[0]) => api.startWorkoutSession(request),
     listWorkoutHistory: (cursor?: string, limit?: number) => api.listHistory(cursor, limit),
+    listProgressionRecommendations: () => api.listRecommendations('PENDING'),
+    applyProgressionRecommendation: (
+      id: string, expectedVersion: number, acceptedWeightKg: number, idempotencyKey: string,
+    ) => api.applyRecommendation(id, expectedVersion, acceptedWeightKg, idempotencyKey),
+    dismissProgressionRecommendation: (id: string) => api.dismissRecommendation(id),
+    getExerciseTrend: (exerciseCode: string) => api.getExerciseTrend(exerciseCode),
+    routeParameter: (name: string) => currentWeappRouteParameter(name),
   }
 }

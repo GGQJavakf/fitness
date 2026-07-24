@@ -460,7 +460,11 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/ExerciseIdPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 有效正式组趋势
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/ExerciseTrendResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/progression-recommendations:
     get:
@@ -469,7 +473,11 @@ paths:
       parameters:
         - {name: status, in: query, required: false, schema: {$ref: './schemas/progression.yaml#/components/schemas/RecommendationStatus'}}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 建议列表
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/ProgressionRecommendationListResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/progression-recommendations/{id}/apply:
     post:
@@ -481,7 +489,11 @@ paths:
         - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/RecommendationApply'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已采纳建议
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/ProgressionRecommendationResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/progression-recommendations/{id}/dismiss:
@@ -492,7 +504,11 @@ paths:
         - {$ref: '#/components/parameters/IdPath'}
       requestBody: {$ref: '#/components/requestBodies/RecommendationDismiss'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已忽略建议
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/ProgressionRecommendationResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/ai/plan-explanations:
     post:
