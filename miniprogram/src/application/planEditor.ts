@@ -153,6 +153,25 @@ export function applyValidation(
   }
 }
 
+export function applyPreSaveValidation(
+  state: PlanEditorState,
+  validationResult: PlanValidationData,
+): PlanEditorState {
+  const keepConfirmedToken = Boolean(
+    state.warningConfirmationToken
+      && state.warningConfirmed
+      && sameValidation(state.validationResult, validationResult),
+  )
+  const validated = applyValidation(state, validationResult)
+  return keepConfirmedToken
+    ? {
+        ...validated,
+        warningConfirmationToken: state.warningConfirmationToken,
+        warningConfirmed: true,
+      }
+    : validated
+}
+
 export function buildSaveCommand(state: PlanEditorState): CreatePlanVersionRequest {
   if (state.validationResult.validationIssues.some((issue) => issue.severity === 'ERROR')) {
     throw new Error('计划包含错误，不能保存')
@@ -260,6 +279,10 @@ function cloneValidation(validation: PlanValidationData): PlanValidationData {
       ...(issue.parameters ? { parameters: { ...issue.parameters } } : {}),
     })),
   }
+}
+
+function sameValidation(left: PlanValidationData, right: PlanValidationData): boolean {
+  return JSON.stringify(left) === JSON.stringify(right)
 }
 
 function effectiveLocks(

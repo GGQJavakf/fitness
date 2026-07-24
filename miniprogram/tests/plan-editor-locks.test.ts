@@ -168,6 +168,111 @@ describe('plan editor locks', () => {
     })
   })
 
+  it('preserves a confirmed warning token across an unchanged deterministic preflight', async () => {
+    const warningIssue = {
+      severity: 'WARNING' as const,
+      reasonCode: 'HIGH_VOLUME',
+      fieldPath: '/days/day-a',
+    }
+    const validatePlan = vi.fn().mockResolvedValue({
+      valid: true,
+      validationIssues: [warningIssue],
+    })
+    const createPlanVersion = vi.fn()
+      .mockImplementationOnce(async (_planId, request) => ({
+        status: 'WARNING_CONFIRMATION_REQUIRED',
+        plan: { ...request.plan, locks: request.locks },
+        validationIssues: [warningIssue],
+        warningConfirmationToken: 'warning-token-1',
+      }))
+      .mockImplementationOnce(async (planId, request) => ({
+        status: 'CREATED',
+        plan: { ...request.plan, locks: request.locks },
+        validationIssues: [warningIssue],
+        version: {
+          id: 'version-2',
+          planId,
+          versionNumber: 2,
+          sourceType: 'USER_EDIT',
+          plan: { ...request.plan, locks: request.locks },
+          ruleReference: { ruleVersion: 'r1', templateVersion: 't1', contentVersion: 'c1' },
+          confirmedWarningCodes: ['HIGH_VOLUME'],
+          createdAt: '2026-07-24T00:01:00Z',
+        },
+      }))
+    const application = createFitnessApplication(createUnusedOnboardingPort(), {
+      validatePlan,
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn().mockResolvedValue(createActivePlan()),
+      createPlanVersion,
+      previewRebalance: vi.fn(),
+    })
+    await application.loadActivePlan()
+    application.openPlanEditor()
+    application.editPlanNumber('day-a', 'goblet-squat', 'workSets', 4)
+
+    const warning = await application.saveEditor()
+    expect(warning.warningConfirmationToken).toBe('warning-token-1')
+    application.confirmEditorWarnings()
+    await application.saveEditor()
+
+    expect(validatePlan).toHaveBeenCalledTimes(2)
+    expect(createPlanVersion).toHaveBeenCalledTimes(2)
+    expect(createPlanVersion.mock.calls[1][1]).toMatchObject({
+      warningConfirmationToken: 'warning-token-1',
+    })
+  })
+
+  it('drops a stale confirmed token and requires a fresh confirmation when preflight warnings change', async () => {
+    const warningA = {
+      severity: 'WARNING' as const,
+      reasonCode: 'HIGH_VOLUME',
+      fieldPath: '/days/day-a',
+    }
+    const warningB = {
+      severity: 'WARNING' as const,
+      reasonCode: 'RECOVERY_TIGHT',
+      fieldPath: '/days/day-a/exercises/goblet-squat/restSeconds',
+    }
+    const validatePlan = vi.fn()
+      .mockResolvedValueOnce({ valid: true, validationIssues: [warningA] })
+      .mockResolvedValueOnce({ valid: true, validationIssues: [warningB] })
+    const createPlanVersion = vi.fn()
+      .mockImplementationOnce(async (_planId, request) => ({
+        status: 'WARNING_CONFIRMATION_REQUIRED',
+        plan: { ...request.plan, locks: request.locks },
+        validationIssues: [warningA],
+        warningConfirmationToken: 'warning-token-old',
+      }))
+      .mockImplementationOnce(async (_planId, request) => ({
+        status: 'WARNING_CONFIRMATION_REQUIRED',
+        plan: { ...request.plan, locks: request.locks },
+        validationIssues: [warningB],
+        warningConfirmationToken: 'warning-token-new',
+      }))
+    const application = createFitnessApplication(createUnusedOnboardingPort(), {
+      validatePlan,
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn().mockResolvedValue(createActivePlan()),
+      createPlanVersion,
+      previewRebalance: vi.fn(),
+    })
+    await application.loadActivePlan()
+    application.openPlanEditor()
+    application.editPlanNumber('day-a', 'goblet-squat', 'workSets', 4)
+    await application.saveEditor()
+    application.confirmEditorWarnings()
+
+    const changed = await application.saveEditor()
+
+    expect(createPlanVersion.mock.calls[1][1]).not.toHaveProperty('warningConfirmationToken')
+    expect(changed).toMatchObject({
+      warningConfirmationToken: 'warning-token-new',
+      warningConfirmed: false,
+      validationResult: { validationIssues: [warningB] },
+    })
+  })
+
   it('keeps user locks during rebalance preview and exposes diffs and lock outcomes', () => {
     let state = createPlanEditorState({
       planId: 'plan-1',
@@ -533,3 +638,31 @@ describe('plan editor locks', () => {
     expect(createPlanVersion).not.toHaveBeenCalled()
   })
 })
+
+function createUnusedOnboardingPort(): OnboardingPersistencePort {
+  return {
+    getProfileVersion: vi.fn(),
+    getEquipmentVersion: vi.fn(),
+    getPreferencesVersion: vi.fn(),
+    saveProfile: vi.fn(),
+    saveEquipment: vi.fn(),
+    savePreferences: vi.fn(),
+    generateCandidate: vi.fn(),
+  }
+}
+
+function createActivePlan() {
+  return {
+    planId: 'plan-1',
+    activeVersion: {
+      id: 'version-1',
+      planId: 'plan-1',
+      versionNumber: 1,
+      sourceType: 'INITIAL' as const,
+      plan: { ...originalPlan, locks: {} },
+      ruleReference: { ruleVersion: 'r1', templateVersion: 't1', contentVersion: 'c1' },
+      confirmedWarningCodes: [],
+      createdAt: '2026-07-24T00:00:00Z',
+    },
+  }
+}

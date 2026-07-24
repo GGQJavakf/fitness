@@ -6,6 +6,7 @@ import type {
 } from './models'
 import {
   applyRebalancePreview,
+  applyPreSaveValidation,
   applyValidation,
   applyVersionResult,
   buildSaveCommand,
@@ -193,7 +194,7 @@ export function createFitnessApplication(
         if (!ruleReference) {
           throw new ApplicationError('RESOURCE_NOT_FOUND', '计划规则版本不存在')
         }
-        state = applyValidation(
+        state = applyPreSaveValidation(
           state,
           await planPort.validatePlan(validationDraft(state), ruleReference),
         )
