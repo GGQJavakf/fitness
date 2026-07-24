@@ -2,6 +2,7 @@ import { createNavigationUseCases } from '../../application/navigation'
 import { createStartupUseCases } from '../../application/onboarding'
 import { createFitnessApplication } from '../../application/useCases'
 import { createVerifiedPrivacyUseCases } from '../../application/privacy'
+import { WorkoutSyncService } from '../../application/use-cases/WorkoutSyncService'
 import { FitnessApiClient } from '../../infrastructure/api/client'
 import {
   createWeappLogin,
@@ -9,6 +10,7 @@ import {
   createWeappSessionStore,
   createWeappTransport,
 } from './adapters'
+import { createWechatWorkoutDraftStore } from './WechatStorageAdapter'
 
 const sessions = createWeappSessionStore()
 const navigationPort = createWeappNavigation()
@@ -36,6 +38,7 @@ const navigation = createNavigationUseCases(navigationPort)
 const privacy = createVerifiedPrivacyUseCases(api, {
   getProof: async () => api.issueReauthenticationProof(await reauthentication.getCode()),
 })
+const workoutSync = new WorkoutSyncService(createWechatWorkoutDraftStore(), () => new Date().toISOString())
 
 export function getWeappApplication() {
   return {
@@ -43,5 +46,6 @@ export function getWeappApplication() {
     startup,
     navigation,
     privacy,
+    workoutSync,
   }
 }
