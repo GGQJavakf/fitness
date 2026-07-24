@@ -155,4 +155,6 @@ public final class WorkoutSetService {
             return reasons;
         }
     }
+
+    public static final class SessionNotAcceptingSetsException extends RuntimeException {}
 }

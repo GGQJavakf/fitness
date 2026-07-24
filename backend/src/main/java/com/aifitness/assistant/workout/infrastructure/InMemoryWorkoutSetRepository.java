@@ -3,11 +3,13 @@ package com.aifitness.assistant.workout.infrastructure;
 import com.aifitness.assistant.workout.application.WorkoutSetRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutSetService;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class InMemoryWorkoutSetRepository implements WorkoutSetRepository {
@@ -31,16 +33,28 @@ public final class InMemoryWorkoutSetRepository implements WorkoutSetRepository 
             if (!existing.set().payloadDigest().equals(candidate.payloadDigest())) {
                 throw new WorkoutSessionService.IdempotencyConflictException();
             }
-            return existing;
+            return new SaveResult(existing.set(), existing.sessionVersion(), true);
         }
         if (session.version() != expectedSessionVersion) {
             throw new WorkoutSessionService.VersionConflictException(session.version());
         }
+        if (session.status().terminal()) {
+            throw new WorkoutSetService.SessionNotAcceptingSetsException();
+        }
         WorkoutSession updated = session.recordSet();
         sessions.update(updated, expectedSessionVersion);
-        SaveResult saved = new SaveResult(candidate, updated.version());
+        SaveResult saved = new SaveResult(candidate, updated.version(), false);
         sets.put(key, saved);
         return saved;
+    }
+
+    @Override
+    public synchronized Optional<WorkoutSet> find(
+            UUID userId, UUID sessionId, UUID sessionExerciseId, String clientSetKey) {
+        return sessions.findByIdAndUser(sessionId, userId)
+                .filter(session -> session.exercises().stream().anyMatch(item -> item.id().equals(sessionExerciseId)))
+                .map(ignored -> sets.get(new SetKey(sessionExerciseId, clientSetKey)))
+                .map(SaveResult::set);
     }
 
     public synchronized int count() {

@@ -244,6 +244,23 @@ class OpenApiContractTest {
     }
 
     @Test
+    void syncOperationsExposeTypedPerItemResultsAndExplicitConflictResolution() {
+        assertThat(successSchemaRef("/api/v1/sync/workout-operations", "post"))
+                .endsWith("/SyncWorkoutOperationsResponse");
+        assertThat(successSchemaRef("/api/v1/sync/conflicts", "get"))
+                .endsWith("/SyncConflictListResponse");
+        assertThat(successSchemaRef("/api/v1/sync/conflicts/{id}/resolve", "post"))
+                .endsWith("/SyncConflictResponse");
+        Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
+        assertThat(required(schemas, "SyncSetPayload"))
+                .contains("sessionId", "sessionExerciseId", "expectedSessionVersion");
+        assertThat(required(schemas, "SyncOperationResult"))
+                .containsExactlyInAnyOrder("clientOperationSeq", "status");
+        assertThat(required(schemas, "ResolveSyncConflictRequest"))
+                .containsExactlyInAnyOrder("resolution", "expectedVersion");
+    }
+
+    @Test
     void privacyOperationsRequireReauthenticationAndExposeTypedRetentionAwareContracts() {
         assertThat(successSchemaRef("/api/v1/privacy/export", "get"))
                 .endsWith("/PrivacyExportResponse");

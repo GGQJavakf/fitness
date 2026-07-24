@@ -5,6 +5,8 @@ import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.application.WorkoutSetRepository;
 import com.aifitness.assistant.workout.application.WorkoutSetService;
+import com.aifitness.assistant.workout.application.SyncConflictRepository;
+import com.aifitness.assistant.workout.application.WorkoutSyncService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import java.math.BigDecimal;
@@ -67,5 +69,23 @@ public class WorkoutConfiguration {
     WorkoutSetService workoutSetService(
             WorkoutSetRepository sets, WorkoutSetService.InputPolicy policy, Clock clock) {
         return new WorkoutSetService(sets, policy, clock, UUID::randomUUID);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.workout", name = "repository", havingValue = "memory", matchIfMissing = true)
+    SyncConflictRepository syncConflictRepository(Clock clock) {
+        return new InMemorySyncConflictRepository(clock);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.workout", name = "repository", havingValue = "mysql")
+    SyncConflictRepository jdbcSyncConflictRepository(DataSource dataSource, ObjectMapper objectMapper, Clock clock) {
+        return new JdbcSyncConflictRepository(dataSource, objectMapper, clock);
+    }
+
+    @Bean
+    WorkoutSyncService workoutSyncService(
+            WorkoutSetService sets, WorkoutSetRepository repository, SyncConflictRepository conflicts, Clock clock) {
+        return new WorkoutSyncService(sets, repository, conflicts, clock, UUID::randomUUID);
     }
 }

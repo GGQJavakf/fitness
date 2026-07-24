@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "name": "same key different completed reps",
+      "expectedStatus": "CONFLICT",
+      "local": {
+        "setType": "WORK", "setOrder": 1, "targetWeightKg": "40", "targetReps": 10,
+        "actualWeightKg": "40", "actualReps": 8, "remainingReps": 2,
+        "completionStatus": "COMPLETED", "completedAt": "2026-07-24T08:00:00Z"
+      },
+      "server": {
+        "setType": "WORK", "setOrder": 1, "targetWeightKg": "40", "targetReps": 10,
+        "actualWeightKg": "40", "actualReps": 9, "remainingReps": 2,
+        "completionStatus": "COMPLETED", "completedAt": "2026-07-24T08:00:00Z"
+      }
+    }
+  ]
+}

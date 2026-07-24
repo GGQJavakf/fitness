@@ -1102,21 +1102,80 @@ export interface components {
             /** @enum {string} */
             completionType: "FULL" | "EARLY_END";
         };
+        SyncSetPayload: {
+            /** Format: uuid */
+            sessionId: string;
+            /** Format: uuid */
+            sessionExerciseId: string;
+            setType: components["schemas"]["SetType"];
+            setOrder: number;
+            target: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetTarget"];
+            remainingReps?: number;
+            completionStatus: components["schemas"]["CompletionStatus"];
+            completedAt?: components["schemas"]["UtcDateTime"];
+            expectedSessionVersion: components["schemas"]["ExpectedVersion"];
+            /** @default false */
+            confirmAnomaly: boolean;
+        };
         SyncOperation: {
             clientOperationSeq: number;
-            operationType: string;
+            /** @enum {string} */
+            operationType: "UPSERT_SET";
             clientKey: string;
-            payload: {
-                [key: string]: unknown;
-            };
+            payload: components["schemas"]["SyncSetPayload"];
         };
         SyncWorkoutOperationsRequest: {
             operations: components["schemas"]["SyncOperation"][];
+        };
+        SyncOperationResult: {
+            /** Format: int64 */
+            clientOperationSeq: number;
+            status: components["schemas"]["SyncOperationStatus"];
+            /** Format: uuid */
+            conflictId?: string;
+            reasonCode?: string;
+        };
+        SyncWorkoutOperationsData: {
+            results: components["schemas"]["SyncOperationResult"][];
+        };
+        SyncWorkoutOperationsResponse: {
+            data: components["schemas"]["SyncWorkoutOperationsData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        SyncConflictEvidence: {
+            [key: string]: string;
+        };
+        SyncConflictData: {
+            /** Format: uuid */
+            id: string;
+            entityType: string;
+            entityKey: string;
+            localEvidence: components["schemas"]["SyncConflictEvidence"];
+            serverEvidence: components["schemas"]["SyncConflictEvidence"];
+            /** @enum {string} */
+            status: "OPEN" | "RESOLVED";
+            /** @enum {string} */
+            resolution?: "KEEP_LOCAL" | "KEEP_SERVER" | "KEEP_BOTH";
+            version: components["schemas"]["ExpectedVersion"];
+            createdAt: components["schemas"]["UtcDateTime"];
+            resolvedAt?: components["schemas"]["UtcDateTime"];
+        };
+        SyncConflictListData: {
+            items: components["schemas"]["SyncConflictData"][];
+        };
+        SyncConflictListResponse: {
+            data: components["schemas"]["SyncConflictListData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         ResolveSyncConflictRequest: {
             /** @enum {string} */
             resolution: "KEEP_LOCAL" | "KEEP_SERVER" | "KEEP_BOTH";
             expectedVersion: components["schemas"]["ExpectedVersion"];
+        };
+        SyncConflictResponse: {
+            data: components["schemas"]["SyncConflictData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         /** @enum {string} */
         RecommendationStatus: "PENDING" | "APPLIED" | "DISMISSED";
@@ -1999,7 +2058,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutOperationSync"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 每项独立处理后的结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncWorkoutOperationsResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2012,7 +2079,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前用户待处理的同步冲突 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncConflictListResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2027,7 +2102,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["SyncConflictResolution"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已显式裁决的同步冲突 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncConflictResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };

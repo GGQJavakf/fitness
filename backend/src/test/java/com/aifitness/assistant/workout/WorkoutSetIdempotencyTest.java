@@ -26,7 +26,10 @@ class WorkoutSetIdempotencyTest {
         var first = fixture.service().upsert(new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID, "set-key-0001", 1, command);
         var retry = fixture.service().upsert(new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID, "set-key-0001", 1, command);
 
-        assertThat(retry).isEqualTo(first);
+        assertThat(retry.set()).isEqualTo(first.set());
+        assertThat(retry.sessionVersion()).isEqualTo(first.sessionVersion());
+        assertThat(first.duplicate()).isFalse();
+        assertThat(retry.duplicate()).isTrue();
         assertThat(first.sessionVersion()).isEqualTo(2);
         assertThat(fixture.repository().count()).isEqualTo(1);
         assertThatThrownBy(() -> fixture.service().upsert(
@@ -70,7 +73,8 @@ class WorkoutSetIdempotencyTest {
                     })
                     .toList();
 
-            assertThat(results).allMatch(results.getFirst()::equals);
+            assertThat(results).extracting(WorkoutSetRepository.SaveResult::set).containsOnly(results.getFirst().set());
+            assertThat(results).extracting(WorkoutSetRepository.SaveResult::sessionVersion).containsOnly(2L);
             assertThat(fixture.repository().count()).isEqualTo(1);
         }
     }

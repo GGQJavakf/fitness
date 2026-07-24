@@ -29,7 +29,7 @@ final class WorkoutSetTestFixture {
                 sets, WorkoutSetService.InputPolicy.conservativeDefaults(),
                 Clock.fixed(Instant.parse("2026-07-24T08:00:00Z"), ZoneOffset.UTC),
                 () -> new UUID(0, 100));
-        return new Fixture(service, sets);
+        return new Fixture(service, sets, sessions);
     }
 
     private static WorkoutSession activeSession() {
@@ -44,5 +44,8 @@ final class WorkoutSetTestFixture {
                 Instant.parse("2026-07-24T07:55:00Z"), Optional.empty(), 1, List.of(snapshot));
     }
 
-    record Fixture(WorkoutSetService service, InMemoryWorkoutSetRepository repository) {}
+    record Fixture(
+            WorkoutSetService service,
+            InMemoryWorkoutSetRepository repository,
+            InMemoryWorkoutSessionRepository sessions) {}
 }

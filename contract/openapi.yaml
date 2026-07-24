@@ -384,14 +384,22 @@ paths:
       description: 每项独立返回 APPLIED、DUPLICATE、CONFLICT 或 REJECTED。
       requestBody: {$ref: '#/components/requestBodies/WorkoutOperationSync'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 每项独立处理后的结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncWorkoutOperationsResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/sync/conflicts:
     get:
       tags: [Sync]
       operationId: listSyncConflicts
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前用户待处理的同步冲突
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncConflictListResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/sync/conflicts/{id}/resolve:
     post:
@@ -401,7 +409,11 @@ paths:
         - {$ref: '#/components/parameters/IdPath'}
       requestBody: {$ref: '#/components/requestBodies/SyncConflictResolution'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已显式裁决的同步冲突
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncConflictResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/summary:

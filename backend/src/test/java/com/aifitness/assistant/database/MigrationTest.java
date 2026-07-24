@@ -35,6 +35,8 @@ import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
+import com.aifitness.assistant.workout.domain.SyncConflict;
+import com.aifitness.assistant.workout.infrastructure.JdbcSyncConflictRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSessionRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSetRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -185,7 +187,8 @@ class MigrationTest {
                 "db/migration/V009__identity_sessions.sql",
                 "db/migration/V010__profile_collection_versions.sql",
                 "db/migration/V011__privacy_export_artifacts.sql",
-                "db/migration/V012__workout_set_idempotency.sql"))
+                "db/migration/V012__workout_set_idempotency.sql",
+                "db/migration/V013__sync_conflict_resolution.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -265,6 +268,10 @@ class MigrationTest {
                 "payload_digest BINARY(32)",
                 "applied_session_version BIGINT UNSIGNED",
                 "trg_workout_set_fact_immutable");
+        assertThat(readMigration("V013__sync_conflict_resolution.sql")).contains(
+                "resolution VARCHAR(32)",
+                "sync_version BIGINT UNSIGNED",
+                "ck_sync_conflict_resolution_state");
     }
 
     @Test
@@ -274,7 +281,7 @@ class MigrationTest {
                 .extracting(MigrationInfo::getVersion)
                 .extracting(Object::toString)
                 .containsExactly(
-                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012");
+                        "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012", "013");
     }
 
     @Test
@@ -641,7 +648,11 @@ class MigrationTest {
                 0, java.util.Optional.empty(), "0".repeat(64));
         var firstSet = sets.save(userId, workoutSet, 1);
         assertThat(firstSet.sessionVersion()).isEqualTo(2);
-        assertThat(sets.save(userId, workoutSet, 1)).isEqualTo(firstSet);
+        assertThat(firstSet.duplicate()).isFalse();
+        var duplicateSet = sets.save(userId, workoutSet, 1);
+        assertThat(duplicateSet.set()).isEqualTo(firstSet.set());
+        assertThat(duplicateSet.sessionVersion()).isEqualTo(firstSet.sessionVersion());
+        assertThat(duplicateSet.duplicate()).isTrue();
         assertThat(queryOne("SELECT COUNT(*) FROM workout_set WHERE payload_digest IS NOT NULL"
                 + " AND applied_session_version=2")).isEqualTo("1");
         WorkoutSet conflicting = new WorkoutSet(
@@ -652,6 +663,25 @@ class MigrationTest {
                 java.util.Optional.empty(), "1".repeat(64));
         assertThatThrownBy(() -> sets.save(userId, conflicting, 2))
                 .isInstanceOf(WorkoutSessionService.IdempotencyConflictException.class);
+
+        java.time.Clock conflictClock = java.time.Clock.fixed(
+                java.time.Instant.parse("2026-07-24T08:04:00Z"), java.time.ZoneOffset.UTC);
+        JdbcSyncConflictRepository conflicts = new JdbcSyncConflictRepository(
+                dataSource, new ObjectMapper(), conflictClock);
+        SyncConflict open = conflicts.save(new SyncConflict(
+                UUID.randomUUID(), userId, "WORKOUT_SET", "jdbc-set-key-001",
+                Map.of("actualReps", "8"), Map.of("actualReps", "9"), SyncConflict.Status.OPEN,
+                java.util.Optional.empty(), 0, conflictClock.instant(), java.util.Optional.empty()));
+        assertThat(conflicts.listOpen(userId)).containsExactly(open);
+        assertThat(conflicts.listOpen(UUID.randomUUID())).isEmpty();
+        SyncConflict resolved = conflicts.resolve(
+                userId, open.id(), SyncConflict.Resolution.KEEP_SERVER, 0);
+        assertThat(resolved.status()).isEqualTo(SyncConflict.Status.RESOLVED);
+        assertThat(resolved.version()).isEqualTo(1);
+        assertThat(conflicts.listOpen(userId)).isEmpty();
+        assertThatThrownBy(() -> conflicts.resolve(
+                userId, open.id(), SyncConflict.Resolution.KEEP_LOCAL, 0))
+                .isInstanceOf(WorkoutSessionService.VersionConflictException.class);
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -901,7 +931,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(12);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(13);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
     }

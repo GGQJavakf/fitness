@@ -17,7 +17,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = {WorkoutSessionController.class, WorkoutSetController.class})
+@RestControllerAdvice(assignableTypes = {
+        WorkoutSessionController.class, WorkoutSetController.class, WorkoutSyncController.class
+})
 @Profile({"local", "test", "staging-experience"})
 public final class WorkoutExceptionHandler {
 

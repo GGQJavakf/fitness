@@ -82,9 +82,25 @@ components:
       required: [clientOperationSeq, operationType, clientKey, payload]
       properties:
         clientOperationSeq: {type: integer, minimum: 1}
-        operationType: {type: string}
-        clientKey: {type: string}
-        payload: {type: object, additionalProperties: true}
+        operationType: {type: string, enum: [UPSERT_SET]}
+        clientKey: {type: string, minLength: 8, maxLength: 128}
+        payload: {$ref: '#/components/schemas/SyncSetPayload'}
+    SyncSetPayload:
+      type: object
+      additionalProperties: false
+      required: [sessionId, sessionExerciseId, setType, setOrder, target, actual, completionStatus, expectedSessionVersion]
+      properties:
+        sessionId: {type: string, format: uuid}
+        sessionExerciseId: {type: string, format: uuid}
+        setType: {$ref: '#/components/schemas/SetType'}
+        setOrder: {type: integer, minimum: 1}
+        target: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetTarget'}
+        remainingReps: {type: integer, minimum: 0}
+        completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        expectedSessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        confirmAnomaly: {type: boolean, default: false}
     SyncWorkoutOperationsRequest:
       type: object
       additionalProperties: false
@@ -104,6 +120,66 @@ components:
           type: string
           enum: [KEEP_LOCAL, KEEP_SERVER, KEEP_BOTH]
         expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+    SyncOperationResult:
+      type: object
+      additionalProperties: false
+      required: [clientOperationSeq, status]
+      properties:
+        clientOperationSeq: {type: integer, format: int64, minimum: 1}
+        status: {$ref: '#/components/schemas/SyncOperationStatus'}
+        conflictId: {type: string, format: uuid}
+        reasonCode: {type: string}
+    SyncWorkoutOperationsData:
+      type: object
+      additionalProperties: false
+      required: [results]
+      properties:
+        results: {type: array, items: {$ref: '#/components/schemas/SyncOperationResult'}}
+    SyncWorkoutOperationsResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/SyncWorkoutOperationsData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    SyncConflictEvidence:
+      type: object
+      additionalProperties: {type: string}
+    SyncConflictData:
+      type: object
+      additionalProperties: false
+      required: [id, entityType, entityKey, localEvidence, serverEvidence, status, version, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        entityType: {type: string}
+        entityKey: {type: string}
+        localEvidence: {$ref: '#/components/schemas/SyncConflictEvidence'}
+        serverEvidence: {$ref: '#/components/schemas/SyncConflictEvidence'}
+        status: {type: string, enum: [OPEN, RESOLVED]}
+        resolution: {type: string, enum: [KEEP_LOCAL, KEEP_SERVER, KEEP_BOTH]}
+        version: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        createdAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        resolvedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    SyncConflictListData:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/SyncConflictData'}}
+    SyncConflictListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/SyncConflictListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    SyncConflictResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/SyncConflictData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     WorkoutPrescriptionSnapshot:
       type: object
       additionalProperties: false

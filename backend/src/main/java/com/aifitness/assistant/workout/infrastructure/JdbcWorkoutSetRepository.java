@@ -2,6 +2,7 @@ package com.aifitness.assistant.workout.infrastructure;
 
 import com.aifitness.assistant.workout.application.WorkoutSetRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutSetService;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -53,7 +54,7 @@ public final class JdbcWorkoutSetRepository implements WorkoutSetRepository {
                 if (!persisted.set().payloadDigest().equals(candidate.payloadDigest())) {
                     throw new WorkoutSessionService.IdempotencyConflictException();
                 }
-                return persisted;
+                return new SaveResult(persisted.set(), persisted.sessionVersion(), true);
             }
             List<SessionRow> sessions = jdbc.query("""
                     SELECT ws.sync_version, ws.status
@@ -70,6 +71,9 @@ public final class JdbcWorkoutSetRepository implements WorkoutSetRepository {
             SessionRow session = sessions.getFirst();
             if (session.version() != expectedSessionVersion) {
                 throw new WorkoutSessionService.VersionConflictException(session.version());
+            }
+            if ("COMPLETED".equals(session.status()) || "ABORTED".equals(session.status())) {
+                throw new WorkoutSetService.SessionNotAcceptingSetsException();
             }
             if (!"IN_PROGRESS".equals(session.status()) && !"PAUSED".equals(session.status())) {
                 throw new IllegalStateException("workout session does not accept set entries");
@@ -96,8 +100,21 @@ public final class JdbcWorkoutSetRepository implements WorkoutSetRepository {
                     candidate.completedAt().map(Timestamp::from).orElse(null), candidate.serverRevision(),
                     candidate.anomalyStatus().map(Enum::name).orElse(null),
                     HexFormat.of().parseHex(candidate.payloadDigest()), appliedVersion);
-            return new SaveResult(candidate, appliedVersion);
+            return new SaveResult(candidate, appliedVersion, false);
         }));
+    }
+
+    @Override
+    public Optional<WorkoutSet> find(
+            UUID userId, UUID sessionId, UUID sessionExerciseId, String clientSetKey) {
+        return jdbc.query("""
+                SELECT s.*, ws.id AS owner_session_id
+                FROM workout_set s
+                JOIN workout_exercise_snapshot x ON x.id = s.session_exercise_id
+                JOIN workout_session ws ON ws.id = x.session_id
+                WHERE ws.id = ? AND ws.user_id = ? AND x.id = ? AND s.client_set_key = ?
+                """, (row, index) -> read(row).set(), bytes(sessionId), bytes(userId),
+                bytes(sessionExerciseId), clientSetKey).stream().findFirst();
     }
 
     private long currentVersion(UUID sessionId, UUID userId) {
@@ -127,7 +144,7 @@ public final class JdbcWorkoutSetRepository implements WorkoutSetRepository {
                 Optional.ofNullable(completedAt).map(Timestamp::toInstant), row.getLong("server_revision"),
                 anomaly == null ? Optional.empty() : Optional.of(WorkoutSet.AnomalyStatus.valueOf(anomaly)),
                 HexFormat.of().formatHex(row.getBytes("payload_digest")));
-        return new SaveResult(set, row.getLong("applied_session_version"));
+        return new SaveResult(set, row.getLong("applied_session_version"), false);
     }
 
     private String targetJson(WorkoutSet.Performance target) {

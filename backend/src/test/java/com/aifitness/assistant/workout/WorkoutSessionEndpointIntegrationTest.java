@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.aifitness.assistant.FitnessAssistantApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,9 +116,59 @@ class WorkoutSessionEndpointIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("IDEMPOTENCY_KEY_REUSED"));
 
+        ObjectNode syncPayload = (ObjectNode) objectMapper.readTree(setBody);
+        syncPayload.remove("clientOperationSeq");
+        syncPayload.put("sessionId", sessionId);
+        JsonNode conflictingPayload = syncPayload.deepCopy();
+        ((ObjectNode) conflictingPayload.path("actual")).put("reps", 8);
+        String syncBody = objectMapper.writeValueAsString(java.util.Map.of("operations", java.util.List.of(
+                java.util.Map.of("clientOperationSeq", 1, "operationType", "UPSERT_SET",
+                        "clientKey", setKey, "payload", syncPayload),
+                java.util.Map.of("clientOperationSeq", 2, "operationType", "UPSERT_SET",
+                        "clientKey", setKey, "payload", conflictingPayload),
+                java.util.Map.of("clientOperationSeq", 3, "operationType", "UNSUPPORTED",
+                        "clientKey", "unsupported-key", "payload", java.util.Map.of()))));
+        mvc.perform(post("/api/v1/sync/workout-operations")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(syncBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.results[0].status").value("DUPLICATE"))
+                .andExpect(jsonPath("$.data.results[1].status").value("CONFLICT"))
+                .andExpect(jsonPath("$.data.results[2].status").value("REJECTED"));
+        JsonNode conflicts = json(mvc.perform(get("/api/v1/sync/conflicts")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].serverEvidence.payloadDigest").isNotEmpty())
+                .andReturn().getResponse().getContentAsString());
+        String conflictId = conflicts.at("/data/items/0/id").asText();
+        mvc.perform(post("/api/v1/sync/conflicts/{id}/resolve", conflictId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"resolution\":\"KEEP_SERVER\",\"expectedVersion\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RESOLVED"))
+                .andExpect(jsonPath("$.data.version").value(1));
+        mvc.perform(post("/api/v1/sync/conflicts/{id}/resolve", conflictId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"resolution\":\"KEEP_LOCAL\",\"expectedVersion\":0}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("VERSION_CONFLICT"));
+
         String otherToken = login();
         mvc.perform(get("/api/v1/workout-sessions/{id}", sessionId)
                         .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
+        mvc.perform(get("/api/v1/sync/conflicts")
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isEmpty());
+        mvc.perform(post("/api/v1/sync/conflicts/{id}/resolve", conflictId)
+                        .header("Authorization", "Bearer " + otherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"resolution\":\"KEEP_LOCAL\",\"expectedVersion\":0}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
     }
