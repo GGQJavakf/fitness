@@ -4,6 +4,7 @@ import com.aifitness.assistant.identity.application.ResourceOwnershipGuard;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +19,7 @@ public final class PrivacyRequestService {
             List.of("SECURITY_AUDIT", "LEGAL_HOLD");
 
     private final PrivacyRepository repository;
+    private final PrivacyExportRepository exportRepository;
     private final ReauthenticationPort reauthentication;
     private final AuditPort audit;
     private final PrivacyDataPort data;
@@ -26,25 +28,14 @@ public final class PrivacyRequestService {
 
     public PrivacyRequestService(
             PrivacyRepository repository,
-            ReauthenticationPort reauthentication,
-            AuditPort audit,
-            Clock clock) {
-        this(repository, reauthentication, audit, clock,
-                userId -> ordinaryDataCategories().stream()
-                        .map(category -> new PrivacyDataPort.ResourceSummary(
-                                PrivacyDataPort.Category.valueOf(category), 0))
-                        .toList(),
-                (userId, action, now) -> true);
-    }
-
-    public PrivacyRequestService(
-            PrivacyRepository repository,
+            PrivacyExportRepository exportRepository,
             ReauthenticationPort reauthentication,
             AuditPort audit,
             Clock clock,
             PrivacyDataPort data,
             PrivacyRateLimitPort rateLimit) {
         this.repository = Objects.requireNonNull(repository);
+        this.exportRepository = Objects.requireNonNull(exportRepository);
         this.reauthentication = Objects.requireNonNull(reauthentication);
         this.audit = Objects.requireNonNull(audit);
         this.clock = Objects.requireNonNull(clock);
@@ -52,21 +43,53 @@ public final class PrivacyRequestService {
         this.rateLimit = Objects.requireNonNull(rateLimit);
     }
 
-    public PrivacyExport export(AuthenticatedUserId user, String proof) {
+    public PrivacyExportRepository.ExportArtifact export(AuthenticatedUserId user, String proof) {
         Instant now = clock.instant();
         requireAllowed(user, PrivacyRateLimitPort.Action.EXPORT, null);
         requireReauthentication(user, proof, "PRIVACY_EXPORT", null);
         UUID exportId = UUID.randomUUID();
-        List<PrivacyDataPort.ResourceSummary> resources = data.summarize(user.value());
-        audit.recordAttempt(user.value(), "PRIVACY_EXPORT", "SUCCEEDED", exportId);
-        return new PrivacyExport(
-                exportId,
-                user.value(),
-                ExportStatus.READY,
-                now,
-                resources,
-                ordinaryDataCategories(),
-                requiredRetentionCategories());
+        try {
+            var artifact = new PrivacyExportRepository.ExportArtifact(
+                    exportId,
+                    user.value(),
+                    "READY",
+                    now,
+                    now.plus(Duration.ofMinutes(10)),
+                    data.export(user.value()),
+                    ordinaryDataCategories(),
+                    requiredRetentionCategories());
+            PrivacyExportRepository.ExportArtifact saved = exportRepository.save(artifact);
+            audit.recordAttempt(user.value(), "PRIVACY_EXPORT", "SUCCEEDED", exportId);
+            return saved;
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(user.value(), "PRIVACY_EXPORT", "FAILED", exportId);
+            throw failure;
+        }
+    }
+
+    public PrivacyExportRepository.ExportArtifact getExport(
+            AuthenticatedUserId user, UUID exportId) {
+        requireAllowed(user, PrivacyRateLimitPort.Action.EXPORT_READ, exportId);
+        try {
+            var artifact = exportRepository.findById(exportId)
+                    .filter(candidate -> candidate.userId().equals(user.value()))
+                    .orElseThrow(() -> {
+                        audit.recordAttempt(
+                                user.value(), "PRIVACY_EXPORT_READ", "NOT_FOUND", exportId);
+                        return new ResourceOwnershipGuard.ResourceNotFoundException();
+                    });
+            if (!clock.instant().isBefore(artifact.expiresAt())) {
+                audit.recordAttempt(user.value(), "PRIVACY_EXPORT_READ", "EXPIRED", exportId);
+                throw new ResourceOwnershipGuard.ResourceNotFoundException();
+            }
+            audit.recordAttempt(user.value(), "PRIVACY_EXPORT_READ", "SUCCEEDED", exportId);
+            return artifact;
+        } catch (ResourceOwnershipGuard.ResourceNotFoundException known) {
+            throw known;
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(user.value(), "PRIVACY_EXPORT_READ", "FAILED", exportId);
+            throw failure;
+        }
     }
 
     public synchronized DeletionRequest requestDeletion(
@@ -77,12 +100,24 @@ public final class PrivacyRequestService {
             throw new SecondConfirmationRequiredException();
         }
         requireReauthentication(user, proof, "PRIVACY_DELETION", null);
-        var existing = repository.findActiveByUser(user.value());
+        final java.util.Optional<DeletionRequest> existing;
+        try {
+            existing = repository.findActiveByUser(user.value());
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(user.value(), "PRIVACY_DELETION", "FAILED", null);
+            throw failure;
+        }
         if (existing.isPresent()) {
             audit.recordAttempt(user.value(), "PRIVACY_DELETION", "DUPLICATE", existing.get().id());
             return existing.get();
         }
-        DeletionRequest request = repository.save(DeletionRequest.requested(user.value(), clock.instant()));
+        final DeletionRequest request;
+        try {
+            request = repository.save(DeletionRequest.requested(user.value(), clock.instant()));
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(user.value(), "PRIVACY_DELETION", "FAILED", null);
+            throw failure;
+        }
         audit.recordAttempt(user.value(), "PRIVACY_DELETION", "SUCCEEDED", request.id());
         return request;
     }
@@ -121,12 +156,19 @@ public final class PrivacyRequestService {
 
     private DeletionRequest ownedRequest(
             AuthenticatedUserId user, UUID requestId, String action) {
-        return repository.findById(requestId)
-                .filter(candidate -> candidate.userId().equals(user.value()))
-                .orElseThrow(() -> {
-                    audit.recordAttempt(user.value(), action, "NOT_FOUND", requestId);
-                    return new ResourceOwnershipGuard.ResourceNotFoundException();
-                });
+        try {
+            return repository.findById(requestId)
+                    .filter(candidate -> candidate.userId().equals(user.value()))
+                    .orElseThrow(() -> {
+                        audit.recordAttempt(user.value(), action, "NOT_FOUND", requestId);
+                        return new ResourceOwnershipGuard.ResourceNotFoundException();
+                    });
+        } catch (ResourceOwnershipGuard.ResourceNotFoundException known) {
+            throw known;
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(user.value(), action, "FAILED", requestId);
+            throw failure;
+        }
     }
 
     private void requireReauthentication(
@@ -143,7 +185,6 @@ public final class PrivacyRequestService {
         boolean verify(AuthenticatedUserId user, String oneTimeProof);
     }
 
-    @FunctionalInterface
     public interface AuditPort {
         void record(UUID userId, String action, UUID requestId);
 
@@ -152,31 +193,12 @@ public final class PrivacyRequestService {
          * idempotent for the same user, action and request id so a worker retry cannot duplicate
          * or lose a completed-step audit record.
          */
-        default void recordStepOnce(UUID userId, String action, UUID requestId) {
-            record(userId, action, requestId);
-        }
+        void recordStepOnce(UUID userId, String action, UUID requestId);
 
         default void recordAttempt(UUID userId, String action, String outcome, UUID resourceId) {
             record(userId, action + "_" + outcome, resourceId);
         }
     }
-
-    public record PrivacyExport(
-            UUID id,
-            UUID userId,
-            ExportStatus status,
-            Instant generatedAt,
-            List<PrivacyDataPort.ResourceSummary> resources,
-            List<String> scope,
-            List<String> excludedRetentionCategories) {
-        public PrivacyExport {
-            resources = List.copyOf(resources);
-            scope = List.copyOf(scope);
-            excludedRetentionCategories = List.copyOf(excludedRetentionCategories);
-        }
-    }
-
-    public enum ExportStatus { READY }
 
     public static final class ReauthenticationRequiredException extends RuntimeException {
         public ReauthenticationRequiredException() {
@@ -189,7 +211,6 @@ public final class PrivacyRequestService {
             super("exact deletion confirmation required");
         }
     }
-
 
     public static final class PrivacyRateLimitedException extends RuntimeException {
         public PrivacyRateLimitedException() {

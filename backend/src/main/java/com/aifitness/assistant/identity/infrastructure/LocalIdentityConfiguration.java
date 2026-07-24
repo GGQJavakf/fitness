@@ -6,6 +6,7 @@ import com.aifitness.assistant.identity.application.SubjectProtector;
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
 import com.aifitness.assistant.identity.application.WechatIdentityResolver;
 import com.aifitness.assistant.identity.application.WechatLoginService;
+import com.aifitness.assistant.identity.application.UserAccessRevocation;
 import java.time.Clock;
 import java.util.Locale;
 import java.util.Set;
@@ -67,6 +68,11 @@ public class LocalIdentityConfiguration {
     @Bean
     SessionStore sessionStore() {
         return new InMemorySessionStore();
+    }
+
+    @Bean
+    UserAccessRevocation userAccessRevocation(SessionStore sessions) {
+        return sessions::revokeAllSessionsAndBlockLogin;
     }
 
     @Bean

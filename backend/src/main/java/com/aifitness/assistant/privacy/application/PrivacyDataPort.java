@@ -5,15 +5,17 @@ import java.util.UUID;
 
 public interface PrivacyDataPort {
 
-    List<ResourceSummary> summarize(UUID userId);
+    List<ResourceExport> export(UUID userId);
 
-    record ResourceSummary(Category category, int recordCount) {
-        public ResourceSummary {
-            if (recordCount < 0) {
-                throw new IllegalArgumentException("recordCount must not be negative");
-            }
+    record ResourceExport(Category category, List<ExportRecord> records) {
+        public ResourceExport {
+            records = List.copyOf(records);
         }
+
+        public int recordCount() { return records.size(); }
     }
+
+    record ExportRecord(String id, String summary) {}
 
     enum Category {
         PROFILE, EQUIPMENT, PREFERENCES, PLANS, WORKOUTS

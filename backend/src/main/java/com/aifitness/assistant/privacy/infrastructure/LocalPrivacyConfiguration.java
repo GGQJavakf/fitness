@@ -1,11 +1,13 @@
 package com.aifitness.assistant.privacy.infrastructure;
 
+import com.aifitness.assistant.identity.application.UserAccessRevocation;
 import com.aifitness.assistant.identity.application.WechatIdentityResolver;
+import com.aifitness.assistant.privacy.application.PrivacyDataPort;
+import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
+import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
+import com.aifitness.assistant.privacy.application.PrivacyRateLimitPort;
 import com.aifitness.assistant.privacy.application.PrivacyRepository;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
-import com.aifitness.assistant.privacy.application.PrivacyDataPort;
-import com.aifitness.assistant.privacy.application.PrivacyRateLimitPort;
-import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
 import java.time.Clock;
 import java.time.Duration;
 import org.springframework.context.annotation.Bean;
@@ -22,9 +24,15 @@ public class LocalPrivacyConfiguration {
     }
 
     @Bean
-    PrivacyRequestService.ReauthenticationPort privacyReauthentication(
-            WechatIdentityResolver identities, Clock identityClock) {
-        return new WechatCodeReauthenticationAdapter(identities, identityClock, Duration.ofMinutes(5));
+    PrivacyExportRepository privacyExportRepository() {
+        return new InMemoryPrivacyExportRepository();
+    }
+
+    @Bean
+    LocalReauthenticationProofStore localReauthenticationProofStore(
+            Clock identityClock, WechatIdentityResolver identities) {
+        return new LocalReauthenticationProofStore(
+                identityClock, Duration.ofMinutes(5), identities);
     }
 
     @Bean
@@ -33,8 +41,8 @@ public class LocalPrivacyConfiguration {
     }
 
     @Bean
-    LocalPrivacyDataFixture privacyDataFixture() {
-        return new LocalPrivacyDataFixture();
+    LocalPrivacyDataFixture privacyDataFixture(UserAccessRevocation accessRevocation) {
+        return new LocalPrivacyDataFixture(accessRevocation);
     }
 
     @Bean
@@ -45,13 +53,14 @@ public class LocalPrivacyConfiguration {
     @Bean
     PrivacyRequestService privacyRequestService(
             PrivacyRepository repository,
-            PrivacyRequestService.ReauthenticationPort reauthentication,
+            PrivacyExportRepository exportRepository,
+            LocalReauthenticationProofStore reauthentication,
             PrivacyRequestService.AuditPort audit,
             Clock identityClock,
             PrivacyDataPort data,
             PrivacyRateLimitPort rateLimit) {
         return new PrivacyRequestService(
-                repository, reauthentication, audit, identityClock, data, rateLimit);
+                repository, exportRepository, reauthentication, audit, identityClock, data, rateLimit);
     }
 
     @Bean
@@ -60,7 +69,6 @@ public class LocalPrivacyConfiguration {
             LocalPrivacyDataFixture data,
             PrivacyRequestService.AuditPort audit,
             Clock identityClock) {
-        return new PrivacyDeletionWorker(
-                repository, data, audit, identityClock);
+        return new PrivacyDeletionWorker(repository, data, audit, identityClock);
     }
 }

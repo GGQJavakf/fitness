@@ -170,6 +170,14 @@ class WechatLoginServiceTest {
         }
 
         @Override
+        public void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId) {
+            byAccess.values().stream()
+                    .filter(state -> state.userId.equals(userId))
+                    .toList()
+                    .forEach(state -> revoke(state.accessToken));
+        }
+
+        @Override
         public AuthenticatedUserId authenticate(String accessToken, Instant now) {
             State state = byAccess.get(accessToken);
             if (state == null || state.revoked) {

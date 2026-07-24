@@ -34,7 +34,7 @@ const startup = createStartupUseCases({
 })
 const navigation = createNavigationUseCases(navigationPort)
 const privacy = createVerifiedPrivacyUseCases(api, {
-  getProof: () => reauthentication.getCode(),
+  getProof: async () => api.issueReauthenticationProof(await reauthentication.getCode()),
 })
 
 export function getWeappApplication() {

@@ -56,6 +56,8 @@ class OpenApiContractTest {
             "POST /api/v1/ai/plan-explanations",
             "POST /api/v1/ai/workout-summaries",
             "GET /api/v1/privacy/export",
+            "POST /api/v1/privacy/reauthentication-proofs",
+            "GET /api/v1/privacy/exports/{id}",
             "POST /api/v1/privacy/deletion-requests",
             "GET /api/v1/privacy/deletion-requests/{id}",
             "POST /api/v1/privacy/deletion-requests/{id}/process");
@@ -233,18 +235,23 @@ class OpenApiContractTest {
                 .containsExactly("DELETE");
         assertThat(required(schemas, "PrivacyExportData"))
                 .containsExactlyInAnyOrder(
-                        "id", "status", "generatedAt", "resources",
+                        "id", "status", "generatedAt", "expiresAt", "resources",
                         "scope", "excludedRetentionCategories");
         assertThat(required(schemas, "PrivacyExportResource"))
-                .containsExactlyInAnyOrder("category", "recordCount");
+                .containsExactlyInAnyOrder("category", "recordCount", "records");
+        assertThat(required(schemas, "PrivacyExportRecord"))
+                .containsExactlyInAnyOrder("id", "summary");
+        assertThat(required(schemas, "ReauthenticationProofData"))
+                .containsExactlyInAnyOrder("proof", "issuedAt", "expiresAt");
 
         for (String path : List.of(
                 "/api/v1/privacy/export",
+                "/api/v1/privacy/exports/{id}",
                 "/api/v1/privacy/deletion-requests",
                 "/api/v1/privacy/deletion-requests/{id}",
                 "/api/v1/privacy/deletion-requests/{id}/process")) {
-            String method = path.equals("/api/v1/privacy/deletion-requests/{id}") ? "get" :
-                    path.equals("/api/v1/privacy/export") ? "get" : "post";
+            String method = path.equals("/api/v1/privacy/deletion-requests")
+                    || path.endsWith("/process") ? "post" : "get";
             Map<String, Object> operation = map(map(map(openApi.get("paths")).get(path)).get(method));
             assertThat(map(operation.get("responses"))).containsKey("429");
         }

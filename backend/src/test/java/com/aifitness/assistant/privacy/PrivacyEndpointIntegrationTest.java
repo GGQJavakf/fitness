@@ -15,47 +15,89 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest(classes = FitnessAssistantApplication.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(PrivacyEndpointIntegrationTest.PrivacyTestConfiguration.class)
 class PrivacyEndpointIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private MutableClock privacyTestClock;
 
     @Test
     void exportAndDeletionRequireMatchingFreshWechatProof() throws Exception {
         String aliceAccess = login("privacy-alice");
-        login("privacy-bob");
+        String bobAccess = login("privacy-bob");
 
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", "privacy-bob|wrong-user"))
+                        .header("X-Reauthentication-Proof", "privacy-alice|forged-suffix"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
 
-        mvc.perform(get("/api/v1/privacy/export")
+        mvc.perform(post("/api/v1/privacy/reauthentication-proofs")
                         .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", "privacy-alice|export-1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"privacy-bob\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
+
+        String aliceProof = issueProof(aliceAccess, "privacy-alice");
+        String exportJson = mvc.perform(get("/api/v1/privacy/export")
+                        .header("Authorization", "Bearer " + aliceAccess)
+                        .header("X-Reauthentication-Proof", aliceProof))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").isNotEmpty())
                 .andExpect(jsonPath("$.data.status").value("READY"))
+                .andExpect(jsonPath("$.data.expiresAt").isNotEmpty())
                 .andExpect(jsonPath("$.data.resources[0].category").value("PROFILE"))
+                .andExpect(jsonPath("$.data.resources[0].records[0].summary").value("成年用户训练档案"))
                 .andExpect(jsonPath("$.data.scope[0]").value("PROFILE"))
-                .andExpect(jsonPath("$.data.excludedRetentionCategories[0]").value("SECURITY_AUDIT"));
+                .andExpect(jsonPath("$.data.excludedRetentionCategories[0]").value("SECURITY_AUDIT"))
+                .andReturn().getResponse().getContentAsString();
+        String exportId = objectMapper.readTree(exportJson).at("/data/id").asText();
+
+        mvc.perform(get("/api/v1/privacy/exports/" + exportId)
+                        .header("Authorization", "Bearer " + aliceAccess))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.id").value(exportId));
+        mvc.perform(get("/api/v1/privacy/exports/" + exportId)
+                        .header("Authorization", "Bearer " + bobAccess))
+                .andExpect(status().isNotFound());
 
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", "privacy-alice|export-1"))
+                        .header("X-Reauthentication-Proof", aliceProof))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
+
+        String expiringProof = issueProof(aliceAccess, "privacy-alice");
+        privacyTestClock.advance(Duration.ofMinutes(5));
+        mvc.perform(get("/api/v1/privacy/export")
+                        .header("Authorization", "Bearer " + aliceAccess)
+                        .header("X-Reauthentication-Proof", expiringProof))
+                .andExpect(status().isUnauthorized());
+        privacyTestClock.advance(Duration.ofMinutes(5));
+        mvc.perform(get("/api/v1/privacy/exports/" + exportId)
+                        .header("Authorization", "Bearer " + aliceAccess))
+                .andExpect(status().isNotFound());
 
         mvc.perform(post("/api/v1/privacy/deletion-requests")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reauthenticationProof\":\"privacy-alice|delete-invalid\",\"confirmationText\":\"NO\"}"))
+                        .content("{\"reauthenticationProof\":\"forged\",\"confirmationText\":\"NO\"}"))
                 .andExpect(status().isBadRequest());
     }
 
@@ -67,7 +109,8 @@ class PrivacyEndpointIntegrationTest {
         String requestJson = mvc.perform(post("/api/v1/privacy/deletion-requests")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reauthenticationProof\":\"deletion-alice|delete-1\",\"confirmationText\":\"DELETE\"}"))
+                        .content("{\"reauthenticationProof\":\"" + issueProof(aliceAccess, "deletion-alice")
+                                + "\",\"confirmationText\":\"DELETE\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.deletionScope[0]").value("PROFILE"))
                 .andExpect(jsonPath("$.data.retainedCategories[0]").value("SECURITY_AUDIT"))
@@ -77,29 +120,32 @@ class PrivacyEndpointIntegrationTest {
         String duplicateJson = mvc.perform(post("/api/v1/privacy/deletion-requests")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reauthenticationProof\":\"deletion-alice|delete-2\",\"confirmationText\":\"DELETE\"}"))
+                        .content("{\"reauthenticationProof\":\"" + issueProof(aliceAccess, "deletion-alice")
+                                + "\",\"confirmationText\":\"DELETE\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         assertThat(objectMapper.readTree(duplicateJson).at("/data/id").asText()).isEqualTo(requestId);
 
         mvc.perform(post("/api/v1/privacy/deletion-requests/" + requestId + "/process")
                         .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", "deletion-alice|process-1")
+                        .header("X-Reauthentication-Proof", issueProof(aliceAccess, "deletion-alice"))
                         .header("X-Local-Deletion-Approval", "LOCAL_TEST_APPROVED"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("COMPLETED"));
 
-        mvc.perform(get("/api/v1/privacy/export")
-                        .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", "deletion-alice|after-process"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.resources[0].recordCount").value(0))
-                .andExpect(jsonPath("$.data.resources[1].recordCount").value(0));
+        mvc.perform(get("/api/v1/profile")
+                        .header("Authorization", "Bearer " + aliceAccess))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"deletion-alice\"}"))
+                .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + bobAccess)
-                        .header("X-Reauthentication-Proof", "deletion-bob|isolated"))
+                        .header("X-Reauthentication-Proof", issueProof(bobAccess, "deletion-bob")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.resources[0].recordCount").value(1));
+                .andExpect(jsonPath("$.data.resources[0].recordCount").value(1))
+                .andExpect(jsonPath("$.data.resources[0].records[0].id").isNotEmpty());
 
         String foreign = mvc.perform(get("/api/v1/privacy/deletion-requests/" + requestId)
                         .header("Authorization", "Bearer " + bobAccess))
@@ -119,13 +165,13 @@ class PrivacyEndpointIntegrationTest {
         for (int attempt = 0; attempt < 20; attempt++) {
             mvc.perform(get("/api/v1/privacy/export")
                             .header("Authorization", "Bearer " + access)
-                            .header("X-Reauthentication-Proof", "privacy-rate-user|" + attempt))
+                            .header("X-Reauthentication-Proof", issueProof(access, "privacy-rate-user")))
                     .andExpect(status().isOk());
         }
 
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + access)
-                        .header("X-Reauthentication-Proof", "privacy-rate-user|limited"))
+                        .header("X-Reauthentication-Proof", issueProof(access, "privacy-rate-user")))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"));
     }
@@ -138,5 +184,32 @@ class PrivacyEndpointIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         JsonNode data = objectMapper.readTree(json).get("data");
         return data.get("accessToken").asText();
+    }
+
+    private String issueProof(String accessToken, String code) throws Exception {
+        String json = mvc.perform(post("/api/v1/privacy/reauthentication-proofs")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + code + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.expiresAt").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(json).at("/data/proof").asText();
+    }
+
+    @TestConfiguration
+    static class PrivacyTestConfiguration {
+        @Bean @Primary MutableClock privacyTestClock() {
+            return new MutableClock(Instant.parse("2026-07-24T08:00:00Z"));
+        }
+    }
+
+    static final class MutableClock extends Clock {
+        private Instant now;
+        private MutableClock(Instant now) { this.now = now; }
+        synchronized void advance(Duration duration) { now = now.plus(duration); }
+        @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+        @Override public Clock withZone(ZoneId zone) { return this; }
+        @Override public synchronized Instant instant() { return now; }
     }
 }

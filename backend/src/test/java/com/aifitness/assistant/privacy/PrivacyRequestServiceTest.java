@@ -10,6 +10,7 @@ import com.aifitness.assistant.privacy.application.PrivacyDataPort;
 import com.aifitness.assistant.privacy.application.PrivacyRepository;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
 import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyRepository;
+import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyExportRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -26,12 +27,16 @@ class PrivacyRequestServiceTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private final AuthenticatedUserId user = new AuthenticatedUserId(UUID.randomUUID());
     private final InMemoryPrivacyRepository repository = new InMemoryPrivacyRepository();
+    private final InMemoryPrivacyExportRepository exportRepository = new InMemoryPrivacyExportRepository();
     private final RecordingDataLifecycle data = new RecordingDataLifecycle();
     private final PrivacyRequestService service = new PrivacyRequestService(
             repository,
+            exportRepository,
             (subject, proof) -> proof.equals("fresh-proof") && subject.equals(user),
             data,
-            CLOCK);
+            CLOCK,
+            data,
+            (subject, action, now) -> true);
 
     @Test
     void exportRequiresFreshIdentityProofAndContainsOnlyTheAuthenticatedUsersDeclaration() {
@@ -106,11 +111,20 @@ class PrivacyRequestServiceTest {
         AtomicReference<String> auditAction = new AtomicReference<>();
         PrivacyRequestService limited = new PrivacyRequestService(
                 repository,
+                exportRepository,
                 (subject, proof) -> { throw new AssertionError("proof must not be evaluated"); },
-                (subject, action, requestId) -> auditAction.set(action),
+                new PrivacyRequestService.AuditPort() {
+                    @Override public void record(UUID subject, String action, UUID requestId) {
+                        auditAction.set(action);
+                    }
+                    @Override public void recordStepOnce(UUID subject, String action, UUID requestId) {
+                        auditAction.set(action);
+                    }
+                },
                 CLOCK,
-                subject -> java.util.List.of(new PrivacyDataPort.ResourceSummary(
-                        PrivacyDataPort.Category.PROFILE, 1)),
+                subject -> java.util.List.of(new PrivacyDataPort.ResourceExport(
+                        PrivacyDataPort.Category.PROFILE,
+                        java.util.List.of(new PrivacyDataPort.ExportRecord("profile", "档案")))),
                 (subject, action, now) -> false);
 
         assertThatThrownBy(() -> limited.export(user, "sensitive-proof"))
@@ -118,6 +132,53 @@ class PrivacyRequestServiceTest {
         assertThat(auditAction.get())
                 .isEqualTo("EXPORT_RATE_LIMITED")
                 .doesNotContain("sensitive-proof");
+    }
+
+    @Test
+    void exportDataFailureIsAuditedWithoutProofAndPropagatedUnchanged() {
+        RecordingDataLifecycle audit = new RecordingDataLifecycle();
+        IllegalStateException expected = new IllegalStateException("fixture export failed");
+        PrivacyRequestService failing = new PrivacyRequestService(
+                repository,
+                exportRepository,
+                (subject, proof) -> true,
+                audit,
+                CLOCK,
+                subject -> { throw expected; },
+                (subject, action, now) -> true);
+
+        assertThatThrownBy(() -> failing.export(user, "sensitive-proof"))
+                .isSameAs(expected);
+        assertThat(audit.auditActions)
+                .containsExactly("PRIVACY_EXPORT_FAILED")
+                .allMatch(action -> !action.contains("sensitive-proof"));
+    }
+
+    @Test
+    void deletionRepositorySaveFailureIsAuditedWithoutProofAndPropagatedUnchanged() {
+        RecordingDataLifecycle audit = new RecordingDataLifecycle();
+        IllegalStateException expected = new IllegalStateException("repository save failed");
+        PrivacyRepository failingRepository = new PrivacyRepository() {
+            @Override public Optional<DeletionRequest> findById(UUID id) { return Optional.empty(); }
+            @Override public Optional<DeletionRequest> findActiveByUser(UUID userId) {
+                return Optional.empty();
+            }
+            @Override public DeletionRequest save(DeletionRequest request) { throw expected; }
+        };
+        PrivacyRequestService failing = new PrivacyRequestService(
+                failingRepository,
+                exportRepository,
+                (subject, proof) -> true,
+                audit,
+                CLOCK,
+                audit,
+                (subject, action, now) -> true);
+
+        assertThatThrownBy(() -> failing.requestDeletion(user, "sensitive-proof", "DELETE"))
+                .isSameAs(expected);
+        assertThat(audit.auditActions)
+                .containsExactly("PRIVACY_DELETION_FAILED")
+                .allMatch(action -> !action.contains("sensitive-proof"));
     }
 
     @ParameterizedTest
@@ -147,7 +208,9 @@ class PrivacyRequestServiceTest {
     }
 
     private static final class RecordingDataLifecycle
-            implements PrivacyDeletionWorker.DataLifecyclePort, PrivacyRequestService.AuditPort {
+            implements PrivacyDeletionWorker.DataLifecyclePort,
+            PrivacyRequestService.AuditPort,
+            PrivacyDataPort {
         private boolean accessRevoked;
         private boolean ordinaryBusinessDataPresent = true;
         private boolean legalRetentionPresent = true;
@@ -174,6 +237,13 @@ class PrivacyRequestServiceTest {
                 }
                 case SEPARATE_REQUIRED_RETENTION -> transitions.add("RETENTION_SEPARATED");
             }
+        }
+
+        @Override
+        public java.util.List<ResourceExport> export(UUID userId) {
+            return java.util.List.of(new ResourceExport(
+                    Category.PROFILE,
+                    java.util.List.of(new ExportRecord("profile-1", "训练档案"))));
         }
 
         @Override

@@ -5,6 +5,8 @@ import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
 import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
+import com.aifitness.assistant.privacy.application.ReauthenticationProofIssuer;
+import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
 import java.time.Clock;
 import java.time.Instant;
@@ -30,12 +32,23 @@ public final class PrivacyController {
     private final PrivacyRequestService privacy;
     private final Clock clock;
     private final PrivacyDeletionWorker deletionWorker;
+    private final ReauthenticationProofIssuer proofIssuer;
 
     public PrivacyController(
-            PrivacyRequestService privacy, Clock clock, PrivacyDeletionWorker deletionWorker) {
+            PrivacyRequestService privacy,
+            Clock clock,
+            PrivacyDeletionWorker deletionWorker,
+            ReauthenticationProofIssuer proofIssuer) {
         this.privacy = privacy;
         this.clock = clock;
         this.deletionWorker = deletionWorker;
+        this.proofIssuer = proofIssuer;
+    }
+
+    @PostMapping("/reauthentication-proofs")
+    public ApiResponse<ReauthenticationProofData> issueReauthenticationProof(
+            AuthenticatedUserId user, @RequestBody CreateReauthenticationProofRequest request) {
+        return response(ReauthenticationProofData.from(proofIssuer.issue(user, request.code())));
     }
 
     @GetMapping("/export")
@@ -43,6 +56,12 @@ public final class PrivacyController {
             AuthenticatedUserId user,
             @RequestHeader(value = "X-Reauthentication-Proof", required = false) String reauthenticationProof) {
         return response(PrivacyExportData.from(privacy.export(user, reauthenticationProof)));
+    }
+
+    @GetMapping("/exports/{id}")
+    public ApiResponse<PrivacyExportData> getExport(
+            AuthenticatedUserId user, @PathVariable UUID id) {
+        return response(PrivacyExportData.from(privacy.getExport(user, id)));
     }
 
     @PostMapping("/deletion-requests")
@@ -80,28 +99,47 @@ public final class PrivacyController {
 
     public record CreateDeletionRequest(String reauthenticationProof, String confirmationText) {}
 
+    public record CreateReauthenticationProofRequest(String code) {}
+
+    public record ReauthenticationProofData(String proof, Instant issuedAt, Instant expiresAt) {
+        static ReauthenticationProofData from(ReauthenticationProofIssuer.IssuedProof issued) {
+            return new ReauthenticationProofData(
+                    issued.proof(), issued.issuedAt(), issued.expiresAt());
+        }
+    }
+
     public record PrivacyExportData(
             UUID id,
-            PrivacyRequestService.ExportStatus status,
+            String status,
             Instant generatedAt,
+            Instant expiresAt,
             List<PrivacyResourceData> resources,
             List<String> scope,
             List<String> excludedRetentionCategories) {
-        static PrivacyExportData from(PrivacyRequestService.PrivacyExport export) {
+        static PrivacyExportData from(PrivacyExportRepository.ExportArtifact export) {
             return new PrivacyExportData(
                     export.id(),
                     export.status(),
                     export.generatedAt(),
+                    export.expiresAt(),
                     export.resources().stream()
                             .map(resource -> new PrivacyResourceData(
-                                    resource.category().name(), resource.recordCount()))
+                                    resource.category().name(),
+                                    resource.recordCount(),
+                                    resource.records().stream()
+                                            .map(record -> new PrivacyRecordData(
+                                                    record.id(), record.summary()))
+                                            .toList()))
                             .toList(),
                     export.scope(),
                     export.excludedRetentionCategories());
         }
     }
 
-    public record PrivacyResourceData(String category, int recordCount) {}
+    public record PrivacyResourceData(
+            String category, int recordCount, List<PrivacyRecordData> records) {}
+
+    public record PrivacyRecordData(String id, String summary) {}
 
     public record DeletionRequestData(
             UUID id,

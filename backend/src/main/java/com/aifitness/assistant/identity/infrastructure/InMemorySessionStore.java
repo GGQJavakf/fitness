@@ -11,7 +11,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public final class InMemorySessionStore implements SessionStore {
 
@@ -20,6 +22,7 @@ public final class InMemorySessionStore implements SessionStore {
     private final SecureRandom secureRandom;
     private final Map<String, SessionState> byAccessHash = new HashMap<>();
     private final Map<String, SessionState> byRefreshHash = new HashMap<>();
+    private final Set<AuthenticatedUserId> blockedUsers = new HashSet<>();
 
     public InMemorySessionStore() {
         this(new SecureRandom());
@@ -31,6 +34,9 @@ public final class InMemorySessionStore implements SessionStore {
 
     @Override
     public synchronized WechatLoginService.SessionTokens issue(AuthenticatedUserId userId, Instant now) {
+        if (blockedUsers.contains(userId)) {
+            throw new WechatLoginService.AuthenticationRequiredException();
+        }
         return rotate(new SessionState(userId), now);
     }
 
@@ -57,6 +63,21 @@ public final class InMemorySessionStore implements SessionStore {
         }
         state.revoked = true;
         byRefreshHash.remove(state.refreshHash);
+    }
+
+    @Override
+    public synchronized void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId) {
+        blockedUsers.add(userId);
+        Set<SessionState> sessions = new HashSet<>(byAccessHash.values());
+        sessions.addAll(byRefreshHash.values());
+        sessions.stream()
+                .filter(state -> state.userId.equals(userId))
+                .toList()
+                .forEach(state -> {
+                    state.revoked = true;
+                    byAccessHash.remove(state.accessHash);
+                    byRefreshHash.remove(state.refreshHash);
+                });
     }
 
     @Override

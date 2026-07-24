@@ -36,7 +36,11 @@ describe('privacy flow', () => {
       exportData: vi.fn().mockResolvedValue({
         id: 'export-1', status: 'READY',
         generatedAt: '2026-07-24T08:00:00Z',
-        resources: [{ category: 'PROFILE', recordCount: 1 }, { category: 'EQUIPMENT', recordCount: 2 }],
+        expiresAt: '2026-07-24T08:10:00Z',
+        resources: [
+          { category: 'PROFILE', recordCount: 1, records: [{ id: 'profile-1', summary: '训练档案' }] },
+          { category: 'EQUIPMENT', recordCount: 2, records: [{ id: 'equipment-1', summary: '哑铃' }, { id: 'equipment-2', summary: '训练凳' }] },
+        ],
         scope: ['PROFILE', 'EQUIPMENT'],
         excludedRetentionCategories: ['SECURITY_AUDIT', 'LEGAL_HOLD'],
       }),
@@ -77,7 +81,8 @@ describe('privacy flow', () => {
         data: {
           id: 'export-1', status: 'READY',
           generatedAt: '2026-07-24T08:00:00Z',
-          resources: [{ category: 'PROFILE', recordCount: 1 }],
+          expiresAt: '2026-07-24T08:10:00Z',
+          resources: [{ category: 'PROFILE', recordCount: 1, records: [{ id: 'profile-1', summary: '训练档案' }] }],
           scope: ['PROFILE'],
           excludedRetentionCategories: ['SECURITY_AUDIT'],
         },
@@ -115,6 +120,7 @@ describe('privacy flow', () => {
       exportData: vi.fn().mockResolvedValue({
         id: 'export-1', status: 'READY',
         generatedAt: '2026-07-24T08:00:00Z',
+        expiresAt: '2026-07-24T08:10:00Z',
         resources: [],
         scope: [],
         excludedRetentionCategories: [],
@@ -137,6 +143,39 @@ describe('privacy flow', () => {
       reauthenticationProof: 'one-time-wechat-code',
       confirmationText: 'DELETE',
     })
+  })
+
+  it('obtains privacy proof from the authenticated server issuance endpoint', async () => {
+    const request = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      data: {
+        data: {
+          proof: 'server-issued-proof',
+          issuedAt: '2026-07-24T08:00:00Z',
+          expiresAt: '2026-07-24T08:05:00Z',
+        },
+        meta: { requestId: 'request-1', serverTime: '2026-07-24T08:00:00Z' },
+      },
+    })
+    const client = new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      { request },
+      {
+        load: vi.fn().mockResolvedValue({
+          accessToken: 'access-redacted', refreshToken: 'refresh-redacted',
+          expiresAt: '2026-07-24T09:00:00Z',
+        }),
+        save: vi.fn(), clear: vi.fn(),
+      },
+    )
+
+    await expect(client.issueReauthenticationProof('fresh-wechat-code')).resolves.toBe('server-issued-proof')
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'http://127.0.0.1:8080/api/v1/privacy/reauthentication-proofs',
+      method: 'POST',
+      body: { code: 'fresh-wechat-code' },
+      headers: expect.objectContaining({ Authorization: 'Bearer access-redacted' }),
+    }))
   })
 
   it('does not clear the valid app session when only reauthentication proof is rejected', async () => {

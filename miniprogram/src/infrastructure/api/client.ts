@@ -58,6 +58,7 @@ type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
+type ReauthenticationProofResponse = components['schemas']['ReauthenticationProofResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
@@ -203,6 +204,15 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       { 'X-Reauthentication-Proof': reauthenticationProof },
     )
     return toPrivacyExportData(requireData(response.data))
+  }
+
+  async issueReauthenticationProof(code: string): Promise<string> {
+    const response = await this.request<ReauthenticationProofResponse>(
+      '/api/v1/privacy/reauthentication-proofs',
+      'POST',
+      { code },
+    )
+    return requireData(response.data).proof
   }
 
   async requestDeletion(request: {

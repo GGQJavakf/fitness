@@ -12,10 +12,38 @@ components:
     PrivacyExportResource:
       type: object
       additionalProperties: false
-      required: [category, recordCount]
+      required: [category, recordCount, records]
       properties:
         category: {$ref: '#/components/schemas/PrivacyDataCategory'}
         recordCount: {type: integer, minimum: 0}
+        records:
+          type: array
+          items: {$ref: '#/components/schemas/PrivacyExportRecord'}
+    PrivacyExportRecord:
+      type: object
+      additionalProperties: false
+      required: [id, summary]
+      properties:
+        id: {type: string, minLength: 1}
+        summary: {type: string, minLength: 1, maxLength: 256}
+    ReauthenticationProofData:
+      type: object
+      additionalProperties: false
+      required: [proof, issuedAt, expiresAt]
+      properties:
+        proof: {type: string, minLength: 32, maxLength: 256}
+        issuedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        expiresAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    CreateReauthenticationProofRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          writeOnly: true
     DeletionStatus:
       type: string
       enum:
@@ -41,11 +69,12 @@ components:
     PrivacyExportData:
       type: object
       additionalProperties: false
-      required: [id, status, generatedAt, resources, scope, excludedRetentionCategories]
+      required: [id, status, generatedAt, expiresAt, resources, scope, excludedRetentionCategories]
       properties:
         id: {type: string, format: uuid}
         status: {$ref: '#/components/schemas/PrivacyExportStatus'}
         generatedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        expiresAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         resources:
           type: array
           items:
@@ -85,6 +114,13 @@ components:
       required: [data, meta]
       properties:
         data: {$ref: '#/components/schemas/PrivacyExportData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    ReauthenticationProofResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/ReauthenticationProofData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     DeletionRequestResponse:
       type: object

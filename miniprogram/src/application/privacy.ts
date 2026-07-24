@@ -20,12 +20,16 @@ export type RetentionCategory = 'SECURITY_AUDIT' | 'LEGAL_HOLD'
 export interface PrivacyExportResource {
   category: PrivacyDataCategory
   recordCount: number
+  records: PrivacyExportRecord[]
 }
+
+export interface PrivacyExportRecord { id: string; summary: string }
 
 export interface PrivacyExportData {
   id: string
   status: 'READY'
   generatedAt: string
+  expiresAt: string
   resources: PrivacyExportResource[]
   scope: PrivacyDataCategory[]
   excludedRetentionCategories: RetentionCategory[]

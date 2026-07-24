@@ -475,6 +475,39 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/reauthentication-proofs:
+    post:
+      tags: [Privacy]
+      operationId: issueLocalReauthenticationProof
+      description: 仅 local/test 隔离环境签发；先用新的微信一次性 code 重新核验当前用户，再签发绑定用户、有效期且只能消费一次的 proof。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: './schemas/privacy.yaml#/components/schemas/CreateReauthenticationProofRequest'}
+      responses:
+        '200':
+          description: 服务端签发的一次性重新认证证明
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/ReauthenticationProofResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/privacy/exports/{id}:
+    get:
+      tags: [Privacy]
+      operationId: getPrivacyExport
+      parameters:
+        - {$ref: '#/components/parameters/IdPath'}
+      responses:
+        '200':
+          description: 当前用户自己的、未过期的导出制品
+          content:
+            application/json:
+              schema: {$ref: './schemas/privacy.yaml#/components/schemas/PrivacyExportResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/deletion-requests:
     post:
       tags: [Privacy]

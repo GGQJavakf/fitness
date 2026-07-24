@@ -11,5 +11,7 @@ public interface SessionStore {
 
     void revoke(String accessToken);
 
+    void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId);
+
     AuthenticatedUserId authenticate(String accessToken, Instant now);
 }

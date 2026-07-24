@@ -555,6 +555,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy/reauthentication-proofs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 仅 local/test 隔离环境签发；先用新的微信一次性 code 重新核验当前用户，再签发绑定用户、有效期且只能消费一次的 proof。 */
+        post: operations["issueLocalReauthenticationProof"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/privacy/exports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getPrivacyExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy/deletion-requests": {
         parameters: {
             query?: never;
@@ -1034,9 +1067,14 @@ export interface components {
         PrivacyExportStatus: "READY";
         /** @enum {string} */
         PrivacyDataCategory: "PROFILE" | "EQUIPMENT" | "PREFERENCES" | "PLANS" | "WORKOUTS";
+        PrivacyExportRecord: {
+            id: string;
+            summary: string;
+        };
         PrivacyExportResource: {
             category: components["schemas"]["PrivacyDataCategory"];
             recordCount: number;
+            records: components["schemas"]["PrivacyExportRecord"][];
         };
         /** @enum {string} */
         RetentionCategory: "SECURITY_AUDIT" | "LEGAL_HOLD";
@@ -1045,12 +1083,25 @@ export interface components {
             id: string;
             status: components["schemas"]["PrivacyExportStatus"];
             generatedAt: components["schemas"]["UtcDateTime"];
+            expiresAt: components["schemas"]["UtcDateTime"];
             resources: components["schemas"]["PrivacyExportResource"][];
             scope: components["schemas"]["PrivacyDataCategory"][];
             excludedRetentionCategories: components["schemas"]["RetentionCategory"][];
         };
         PrivacyExportResponse: {
             data: components["schemas"]["PrivacyExportData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        CreateReauthenticationProofRequest: {
+            code: string;
+        };
+        ReauthenticationProofData: {
+            proof: string;
+            issuedAt: components["schemas"]["UtcDateTime"];
+            expiresAt: components["schemas"]["UtcDateTime"];
+        };
+        ReauthenticationProofResponse: {
+            data: components["schemas"]["ReauthenticationProofData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         CreateDeletionRequest: {
@@ -2005,6 +2056,57 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    issueLocalReauthenticationProof: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReauthenticationProofRequest"];
+            };
+        };
+        responses: {
+            /** @description 服务端签发的一次性重新认证证明 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReauthenticationProofResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getPrivacyExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["IdPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前用户自己的、未过期的导出制品 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyExportResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             429: components["responses"]["TooManyRequests"];
             default: components["responses"]["DefaultError"];
         };
