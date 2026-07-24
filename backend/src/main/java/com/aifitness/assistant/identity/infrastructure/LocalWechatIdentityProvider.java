@@ -5,14 +5,21 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Local/test substitute only. A real adapter must exchange the code server-side with WeChat. */
 public final class LocalWechatIdentityProvider implements WechatIdentityProvider {
+
+    private final Set<String> consumedCodes = ConcurrentHashMap.newKeySet();
 
     @Override
     public ProviderSubject exchange(String oneTimeCode) {
         if (oneTimeCode == null || oneTimeCode.isBlank()) {
             throw new IllegalArgumentException("wechat code must not be blank");
+        }
+        if (!consumedCodes.add(oneTimeCode)) {
+            throw new IllegalArgumentException("wechat code has already been consumed");
         }
         try {
             String fixtureSubject = oneTimeCode.split("\\|", 2)[0];

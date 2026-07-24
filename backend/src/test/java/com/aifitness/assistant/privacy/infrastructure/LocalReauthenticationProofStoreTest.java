@@ -31,6 +31,7 @@ class LocalReauthenticationProofStoreTest {
         assertThat(store.verify(bob, issued.proof())).isFalse();
         assertThat(store.verify(alice, issued.proof())).isTrue();
         assertThat(store.verify(alice, issued.proof())).isFalse();
+        assertThat(retainedRecordCount(store)).isZero();
     }
 
     @Test
@@ -47,6 +48,18 @@ class LocalReauthenticationProofStoreTest {
         clock.advance(Duration.ofMinutes(5));
 
         assertThat(store.verify(user, issued.proof())).isFalse();
+        assertThat(retainedRecordCount(store)).isZero();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int retainedRecordCount(LocalReauthenticationProofStore store) {
+        try {
+            var records = LocalReauthenticationProofStore.class.getDeclaredField("records");
+            records.setAccessible(true);
+            return ((java.util.Map<String, ?>) records.get(store)).size();
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     private static WechatIdentityResolver matchingResolver(Clock clock) {

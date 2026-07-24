@@ -21,6 +21,7 @@ public final class PrivacyRequestService {
     private final PrivacyRepository repository;
     private final PrivacyExportRepository exportRepository;
     private final ReauthenticationPort reauthentication;
+    private final ReauthenticationProofIssuer proofIssuer;
     private final AuditPort audit;
     private final PrivacyDataPort data;
     private final PrivacyRateLimitPort rateLimit;
@@ -30,6 +31,7 @@ public final class PrivacyRequestService {
             PrivacyRepository repository,
             PrivacyExportRepository exportRepository,
             ReauthenticationPort reauthentication,
+            ReauthenticationProofIssuer proofIssuer,
             AuditPort audit,
             Clock clock,
             PrivacyDataPort data,
@@ -37,10 +39,31 @@ public final class PrivacyRequestService {
         this.repository = Objects.requireNonNull(repository);
         this.exportRepository = Objects.requireNonNull(exportRepository);
         this.reauthentication = Objects.requireNonNull(reauthentication);
+        this.proofIssuer = Objects.requireNonNull(proofIssuer);
         this.audit = Objects.requireNonNull(audit);
         this.clock = Objects.requireNonNull(clock);
         this.data = Objects.requireNonNull(data);
         this.rateLimit = Objects.requireNonNull(rateLimit);
+    }
+
+    public ReauthenticationProofIssuer.IssuedProof issueReauthenticationProof(
+            AuthenticatedUserId user, String oneTimeCredential) {
+        requireAllowed(user, PrivacyRateLimitPort.Action.REAUTHENTICATION_PROOF_ISSUE, null);
+        try {
+            ReauthenticationProofIssuer.IssuedProof issued =
+                    proofIssuer.issue(user, oneTimeCredential);
+            audit.recordAttempt(
+                    user.value(), "REAUTHENTICATION_PROOF_ISSUE", "SUCCEEDED", null);
+            return issued;
+        } catch (ReauthenticationRequiredException rejected) {
+            audit.recordAttempt(
+                    user.value(), "REAUTHENTICATION_PROOF_ISSUE", "REJECTED", null);
+            throw rejected;
+        } catch (RuntimeException failure) {
+            audit.recordAttempt(
+                    user.value(), "REAUTHENTICATION_PROOF_ISSUE", "FAILED", null);
+            throw failure;
+        }
     }
 
     public PrivacyExportRepository.ExportArtifact export(AuthenticatedUserId user, String proof) {

@@ -148,7 +148,7 @@ class ProfileEndpointIntegrationTest {
     private String login() throws Exception {
         String response = mvc.perform(post("/api/v1/auth/wechat/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"profile-test-code\"}"))
+                        .content("{\"code\":\"profile-test|" + UUID.randomUUID() + "\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         JsonNode body = objectMapper.readTree(response);

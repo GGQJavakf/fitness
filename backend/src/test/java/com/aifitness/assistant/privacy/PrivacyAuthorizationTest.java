@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.aifitness.assistant.identity.application.ResourceOwnershipGuard;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
+import com.aifitness.assistant.privacy.application.ReauthenticationProofIssuer;
 import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyRepository;
 import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyExportRepository;
 import com.aifitness.assistant.privacy.application.PrivacyDataPort;
@@ -21,8 +22,10 @@ class PrivacyAuthorizationTest {
         InMemoryPrivacyRepository repository = new InMemoryPrivacyRepository();
         PrivacyRequestService service = new PrivacyRequestService(
                 repository,
-                new InMemoryPrivacyExportRepository(),
+                new InMemoryPrivacyExportRepository(Clock.systemUTC()),
                 (user, proof) -> true,
+                (user, code) -> new ReauthenticationProofIssuer.IssuedProof(
+                        "proof", java.time.Instant.now(), java.time.Instant.now().plusSeconds(60)),
                 new NoOpAudit(),
                 Clock.systemUTC(),
                 user -> java.util.List.of(new PrivacyDataPort.ResourceExport(

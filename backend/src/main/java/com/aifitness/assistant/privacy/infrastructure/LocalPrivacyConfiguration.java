@@ -24,8 +24,8 @@ public class LocalPrivacyConfiguration {
     }
 
     @Bean
-    PrivacyExportRepository privacyExportRepository() {
-        return new InMemoryPrivacyExportRepository();
+    PrivacyExportRepository privacyExportRepository(Clock identityClock) {
+        return new InMemoryPrivacyExportRepository(identityClock);
     }
 
     @Bean
@@ -60,7 +60,14 @@ public class LocalPrivacyConfiguration {
             PrivacyDataPort data,
             PrivacyRateLimitPort rateLimit) {
         return new PrivacyRequestService(
-                repository, exportRepository, reauthentication, audit, identityClock, data, rateLimit);
+                repository,
+                exportRepository,
+                reauthentication,
+                reauthentication,
+                audit,
+                identityClock,
+                data,
+                rateLimit);
     }
 
     @Bean

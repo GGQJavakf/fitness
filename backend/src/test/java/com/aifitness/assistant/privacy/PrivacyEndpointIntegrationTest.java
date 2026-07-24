@@ -41,6 +41,15 @@ class PrivacyEndpointIntegrationTest {
         String aliceAccess = login("privacy-alice");
         String bobAccess = login("privacy-bob");
 
+        String duplicateCode = "privacy-alice|duplicate-proof-code";
+        issueProof(aliceAccess, duplicateCode);
+        mvc.perform(post("/api/v1/privacy/reauthentication-proofs")
+                        .header("Authorization", "Bearer " + aliceAccess)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"" + duplicateCode + "\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
+
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .header("X-Reauthentication-Proof", "privacy-alice|forged-suffix"))
@@ -50,11 +59,11 @@ class PrivacyEndpointIntegrationTest {
         mvc.perform(post("/api/v1/privacy/reauthentication-proofs")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"privacy-bob\"}"))
+                        .content("{\"code\":\"privacy-bob|wrong-user-proof\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
 
-        String aliceProof = issueProof(aliceAccess, "privacy-alice");
+        String aliceProof = issueFreshProof(aliceAccess, "privacy-alice");
         String exportJson = mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .header("X-Reauthentication-Proof", aliceProof))
@@ -83,7 +92,7 @@ class PrivacyEndpointIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("REAUTHENTICATION_REQUIRED"));
 
-        String expiringProof = issueProof(aliceAccess, "privacy-alice");
+        String expiringProof = issueFreshProof(aliceAccess, "privacy-alice");
         privacyTestClock.advance(Duration.ofMinutes(5));
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + aliceAccess)
@@ -109,7 +118,7 @@ class PrivacyEndpointIntegrationTest {
         String requestJson = mvc.perform(post("/api/v1/privacy/deletion-requests")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reauthenticationProof\":\"" + issueProof(aliceAccess, "deletion-alice")
+                        .content("{\"reauthenticationProof\":\"" + issueFreshProof(aliceAccess, "deletion-alice")
                                 + "\",\"confirmationText\":\"DELETE\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.deletionScope[0]").value("PROFILE"))
@@ -120,7 +129,7 @@ class PrivacyEndpointIntegrationTest {
         String duplicateJson = mvc.perform(post("/api/v1/privacy/deletion-requests")
                         .header("Authorization", "Bearer " + aliceAccess)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"reauthenticationProof\":\"" + issueProof(aliceAccess, "deletion-alice")
+                        .content("{\"reauthenticationProof\":\"" + issueFreshProof(aliceAccess, "deletion-alice")
                                 + "\",\"confirmationText\":\"DELETE\"}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
@@ -128,7 +137,7 @@ class PrivacyEndpointIntegrationTest {
 
         mvc.perform(post("/api/v1/privacy/deletion-requests/" + requestId + "/process")
                         .header("Authorization", "Bearer " + aliceAccess)
-                        .header("X-Reauthentication-Proof", issueProof(aliceAccess, "deletion-alice"))
+                        .header("X-Reauthentication-Proof", issueFreshProof(aliceAccess, "deletion-alice"))
                         .header("X-Local-Deletion-Approval", "LOCAL_TEST_APPROVED"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("COMPLETED"));
@@ -138,11 +147,11 @@ class PrivacyEndpointIntegrationTest {
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/auth/wechat/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"code\":\"deletion-alice\"}"))
+                        .content("{\"code\":\"deletion-alice|relogin\"}"))
                 .andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + bobAccess)
-                        .header("X-Reauthentication-Proof", issueProof(bobAccess, "deletion-bob")))
+                        .header("X-Reauthentication-Proof", issueFreshProof(bobAccess, "deletion-bob")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.resources[0].recordCount").value(1))
                 .andExpect(jsonPath("$.data.resources[0].records[0].id").isNotEmpty());
@@ -165,13 +174,13 @@ class PrivacyEndpointIntegrationTest {
         for (int attempt = 0; attempt < 20; attempt++) {
             mvc.perform(get("/api/v1/privacy/export")
                             .header("Authorization", "Bearer " + access)
-                            .header("X-Reauthentication-Proof", issueProof(access, "privacy-rate-user")))
+                            .header("X-Reauthentication-Proof", issueFreshProof(access, "privacy-rate-user")))
                     .andExpect(status().isOk());
         }
 
         mvc.perform(get("/api/v1/privacy/export")
                         .header("Authorization", "Bearer " + access)
-                        .header("X-Reauthentication-Proof", issueProof(access, "privacy-rate-user")))
+                        .header("X-Reauthentication-Proof", "rate-limit-checked-before-proof"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"));
     }
@@ -195,6 +204,10 @@ class PrivacyEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.expiresAt").isNotEmpty())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(json).at("/data/proof").asText();
+    }
+
+    private String issueFreshProof(String accessToken, String subject) throws Exception {
+        return issueProof(accessToken, subject + "|" + java.util.UUID.randomUUID());
     }
 
     @TestConfiguration

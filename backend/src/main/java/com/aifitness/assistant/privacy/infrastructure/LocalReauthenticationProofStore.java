@@ -1,7 +1,7 @@
 package com.aifitness.assistant.privacy.infrastructure;
 
-import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.identity.application.WechatIdentityResolver;
+import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
 import com.aifitness.assistant.privacy.application.ReauthenticationProofIssuer;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +57,7 @@ final class LocalReauthenticationProofStore
             throw new PrivacyRequestService.ReauthenticationRequiredException();
         }
         Instant issuedAt = clock.instant();
+        removeStaleRecords(issuedAt);
         Instant expiresAt = issuedAt.plus(timeToLive);
         String proof = randomProof();
         records.put(digest(proof), new ProofRecord(userId, issuedAt, expiresAt, false));
@@ -69,14 +70,21 @@ final class LocalReauthenticationProofStore
             return false;
         }
         String proofDigest = digest(oneTimeProof);
-        ProofRecord record = records.get(proofDigest);
         Instant now = clock.instant();
+        removeStaleRecords(now);
+        ProofRecord record = records.get(proofDigest);
         if (record == null || record.consumed || !record.userId.equals(user)
                 || now.isBefore(record.issuedAt) || !now.isBefore(record.expiresAt)) {
             return false;
         }
         records.put(proofDigest, record.markConsumed());
+        removeStaleRecords(now);
         return true;
+    }
+
+    private void removeStaleRecords(Instant now) {
+        records.values().removeIf(record -> record.consumed
+                || !now.isBefore(record.expiresAt));
     }
 
     private String randomProof() {

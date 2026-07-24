@@ -43,13 +43,16 @@ class LocalIdentityConfigurationTest {
     }
 
     @Test
-    void localProviderKeepsSameCodeStableAndDifferentCodesIsolatedWithoutExposingCodes() {
+    void localProviderKeepsSameSubjectStableAcrossFreshCodesWithoutExposingCodes() {
         LocalWechatIdentityProvider provider = new LocalWechatIdentityProvider();
 
-        String first = provider.exchange("test-code-a").subject();
-        String repeated = provider.exchange("test-code-a").subject();
-        String second = provider.exchange("test-code-b").subject();
+        String first = provider.exchange("test-subject-a|nonce-1").subject();
+        String repeatedSubject = provider.exchange("test-subject-a|nonce-2").subject();
+        String second = provider.exchange("test-subject-b|nonce-1").subject();
 
-        assertThat(first).isEqualTo(repeated).isNotEqualTo(second).doesNotContain("test-code-a");
+        assertThat(first)
+                .isEqualTo(repeatedSubject)
+                .isNotEqualTo(second)
+                .doesNotContain("test-subject-a");
     }
 }

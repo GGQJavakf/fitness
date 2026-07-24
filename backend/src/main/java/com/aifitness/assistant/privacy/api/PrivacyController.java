@@ -32,23 +32,21 @@ public final class PrivacyController {
     private final PrivacyRequestService privacy;
     private final Clock clock;
     private final PrivacyDeletionWorker deletionWorker;
-    private final ReauthenticationProofIssuer proofIssuer;
 
     public PrivacyController(
             PrivacyRequestService privacy,
             Clock clock,
-            PrivacyDeletionWorker deletionWorker,
-            ReauthenticationProofIssuer proofIssuer) {
+            PrivacyDeletionWorker deletionWorker) {
         this.privacy = privacy;
         this.clock = clock;
         this.deletionWorker = deletionWorker;
-        this.proofIssuer = proofIssuer;
     }
 
     @PostMapping("/reauthentication-proofs")
     public ApiResponse<ReauthenticationProofData> issueReauthenticationProof(
             AuthenticatedUserId user, @RequestBody CreateReauthenticationProofRequest request) {
-        return response(ReauthenticationProofData.from(proofIssuer.issue(user, request.code())));
+        return response(ReauthenticationProofData.from(
+                privacy.issueReauthenticationProof(user, request.code())));
     }
 
     @GetMapping("/export")

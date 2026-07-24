@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public final class InMemorySessionStore implements SessionStore {
 
@@ -23,6 +24,7 @@ public final class InMemorySessionStore implements SessionStore {
     private final Map<String, SessionState> byAccessHash = new HashMap<>();
     private final Map<String, SessionState> byRefreshHash = new HashMap<>();
     private final Set<AuthenticatedUserId> blockedUsers = new HashSet<>();
+    private final Set<RevocationKey> completedRevocations = new HashSet<>();
 
     public InMemorySessionStore() {
         this(new SecureRandom());
@@ -66,7 +68,12 @@ public final class InMemorySessionStore implements SessionStore {
     }
 
     @Override
-    public synchronized void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId) {
+    public synchronized void revokeAllSessionsAndBlockLogin(
+            AuthenticatedUserId userId, UUID requestId) {
+        RevocationKey key = new RevocationKey(userId, requestId);
+        if (completedRevocations.contains(key)) {
+            return;
+        }
         blockedUsers.add(userId);
         Set<SessionState> sessions = new HashSet<>(byAccessHash.values());
         sessions.addAll(byRefreshHash.values());
@@ -78,6 +85,7 @@ public final class InMemorySessionStore implements SessionStore {
                     byAccessHash.remove(state.accessHash);
                     byRefreshHash.remove(state.refreshHash);
                 });
+        completedRevocations.add(key);
     }
 
     @Override
@@ -140,4 +148,6 @@ public final class InMemorySessionStore implements SessionStore {
             this.userId = userId;
         }
     }
+
+    private record RevocationKey(AuthenticatedUserId userId, UUID requestId) {}
 }

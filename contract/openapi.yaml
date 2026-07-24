@@ -492,6 +492,7 @@ paths:
             application/json:
               schema: {$ref: './schemas/privacy.yaml#/components/schemas/ReauthenticationProofResponse'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/exports/{id}:
     get:

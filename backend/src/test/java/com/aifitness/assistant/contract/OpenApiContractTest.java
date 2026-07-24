@@ -245,12 +245,14 @@ class OpenApiContractTest {
                 .containsExactlyInAnyOrder("proof", "issuedAt", "expiresAt");
 
         for (String path : List.of(
+                "/api/v1/privacy/reauthentication-proofs",
                 "/api/v1/privacy/export",
                 "/api/v1/privacy/exports/{id}",
                 "/api/v1/privacy/deletion-requests",
                 "/api/v1/privacy/deletion-requests/{id}",
                 "/api/v1/privacy/deletion-requests/{id}/process")) {
-            String method = path.equals("/api/v1/privacy/deletion-requests")
+            String method = path.equals("/api/v1/privacy/reauthentication-proofs")
+                    || path.equals("/api/v1/privacy/deletion-requests")
                     || path.endsWith("/process") ? "post" : "get";
             Map<String, Object> operation = map(map(map(openApi.get("paths")).get(path)).get(method));
             assertThat(map(operation.get("responses"))).containsKey("429");

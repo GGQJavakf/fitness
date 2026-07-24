@@ -38,13 +38,13 @@ final class LocalPrivacyDataFixture implements PrivacyDataPort, PrivacyDeletionW
     @Override
     public synchronized void execute(PrivacyDeletionWorker.LifecycleCommand command) {
         CommandKey key = new CommandKey(command.requestId(), command.step());
-        if (!executed.add(key)) {
+        if (executed.contains(key)) {
             return;
         }
         switch (command.step()) {
             case REVOKE_ACCESS -> {
                 accessRevocation.revokeAllSessionsAndBlockLogin(
-                        new AuthenticatedUserId(command.userId()));
+                        new AuthenticatedUserId(command.userId()), command.requestId());
                 accessRevoked.add(command.userId());
             }
             case ANONYMIZE_BUSINESS_DATA -> {
@@ -54,6 +54,7 @@ final class LocalPrivacyDataFixture implements PrivacyDataPort, PrivacyDeletionW
             }
             case SEPARATE_REQUIRED_RETENTION -> retentionSeparated.add(command.userId());
         }
+        executed.add(key);
     }
 
     synchronized boolean accessRevoked(UUID userId) {

@@ -2,6 +2,7 @@ package com.aifitness.assistant.identity.application;
 
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import java.time.Instant;
+import java.util.UUID;
 
 public interface SessionStore {
 
@@ -11,7 +12,7 @@ public interface SessionStore {
 
     void revoke(String accessToken);
 
-    void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId);
+    void revokeAllSessionsAndBlockLogin(AuthenticatedUserId userId, UUID requestId);
 
     AuthenticatedUserId authenticate(String accessToken, Instant now);
 }

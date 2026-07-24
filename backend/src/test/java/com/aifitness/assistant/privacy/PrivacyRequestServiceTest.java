@@ -8,10 +8,12 @@ import com.aifitness.assistant.privacy.application.PrivacyDeletionWorker;
 import com.aifitness.assistant.privacy.application.PrivacyRequestService;
 import com.aifitness.assistant.privacy.application.PrivacyDataPort;
 import com.aifitness.assistant.privacy.application.PrivacyRepository;
+import com.aifitness.assistant.privacy.application.ReauthenticationProofIssuer;
 import com.aifitness.assistant.privacy.domain.DeletionRequest;
 import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyRepository;
 import com.aifitness.assistant.privacy.infrastructure.InMemoryPrivacyExportRepository;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -27,12 +29,14 @@ class PrivacyRequestServiceTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
     private final AuthenticatedUserId user = new AuthenticatedUserId(UUID.randomUUID());
     private final InMemoryPrivacyRepository repository = new InMemoryPrivacyRepository();
-    private final InMemoryPrivacyExportRepository exportRepository = new InMemoryPrivacyExportRepository();
+    private final InMemoryPrivacyExportRepository exportRepository =
+            new InMemoryPrivacyExportRepository(CLOCK);
     private final RecordingDataLifecycle data = new RecordingDataLifecycle();
     private final PrivacyRequestService service = new PrivacyRequestService(
             repository,
             exportRepository,
             (subject, proof) -> proof.equals("fresh-proof") && subject.equals(user),
+            (subject, code) -> issuedProof(),
             data,
             CLOCK,
             data,
@@ -113,6 +117,7 @@ class PrivacyRequestServiceTest {
                 repository,
                 exportRepository,
                 (subject, proof) -> { throw new AssertionError("proof must not be evaluated"); },
+                (subject, code) -> { throw new AssertionError("code must not be evaluated"); },
                 new PrivacyRequestService.AuditPort() {
                     @Override public void record(UUID subject, String action, UUID requestId) {
                         auditAction.set(action);
@@ -142,6 +147,7 @@ class PrivacyRequestServiceTest {
                 repository,
                 exportRepository,
                 (subject, proof) -> true,
+                (subject, code) -> issuedProof(),
                 audit,
                 CLOCK,
                 subject -> { throw expected; },
@@ -169,6 +175,7 @@ class PrivacyRequestServiceTest {
                 failingRepository,
                 exportRepository,
                 (subject, proof) -> true,
+                (subject, code) -> issuedProof(),
                 audit,
                 CLOCK,
                 audit,
@@ -179,6 +186,77 @@ class PrivacyRequestServiceTest {
         assertThat(audit.auditActions)
                 .containsExactly("PRIVACY_DELETION_FAILED")
                 .allMatch(action -> !action.contains("sensitive-proof"));
+    }
+
+    @Test
+    void reauthenticationProofIssuanceIsRateLimitedAndAuditsSuccessWithoutSecrets() {
+        var issued = service.issueReauthenticationProof(user, "sensitive-code");
+
+        assertThat(issued.proof()).isEqualTo("server-issued-sensitive-proof");
+        assertThat(data.auditActions)
+                .containsExactly("REAUTHENTICATION_PROOF_ISSUE_SUCCEEDED")
+                .allMatch(action -> !action.contains("sensitive-code")
+                        && !action.contains("server-issued-sensitive-proof"));
+    }
+
+    @Test
+    void reauthenticationProofIssuanceAuditsRejectedCredentialWithoutSecrets() {
+        PrivacyRequestService rejecting = serviceWithIssuer((subject, code) -> {
+            throw new PrivacyRequestService.ReauthenticationRequiredException();
+        }, data, (subject, action, now) -> true);
+
+        assertThatThrownBy(() -> rejecting.issueReauthenticationProof(user, "rejected-sensitive-code"))
+                .isInstanceOf(PrivacyRequestService.ReauthenticationRequiredException.class);
+        assertThat(data.auditActions)
+                .containsExactly("REAUTHENTICATION_PROOF_ISSUE_REJECTED")
+                .allMatch(action -> !action.contains("rejected-sensitive-code"));
+    }
+
+    @Test
+    void reauthenticationProofIssuanceAuditsRateLimitWithoutCallingIssuer() {
+        PrivacyRequestService limited = serviceWithIssuer(
+                (subject, code) -> { throw new AssertionError("issuer must not run"); },
+                data,
+                (subject, action, now) -> false);
+
+        assertThatThrownBy(() -> limited.issueReauthenticationProof(user, "rate-sensitive-code"))
+                .isInstanceOf(PrivacyRequestService.PrivacyRateLimitedException.class);
+        assertThat(data.auditActions)
+                .containsExactly("REAUTHENTICATION_PROOF_ISSUE_RATE_LIMITED")
+                .allMatch(action -> !action.contains("rate-sensitive-code"));
+    }
+
+    @Test
+    void reauthenticationProofIssuanceAuditsRuntimeFailureAndRethrowsSameException() {
+        IllegalStateException expected = new IllegalStateException("issuer unavailable");
+        PrivacyRequestService failing = serviceWithIssuer(
+                (subject, code) -> { throw expected; }, data, (subject, action, now) -> true);
+
+        assertThatThrownBy(() -> failing.issueReauthenticationProof(user, "failure-sensitive-code"))
+                .isSameAs(expected);
+        assertThat(data.auditActions)
+                .containsExactly("REAUTHENTICATION_PROOF_ISSUE_FAILED")
+                .allMatch(action -> !action.contains("failure-sensitive-code"));
+    }
+
+    private PrivacyRequestService serviceWithIssuer(
+            ReauthenticationProofIssuer issuer,
+            RecordingDataLifecycle audit,
+            com.aifitness.assistant.privacy.application.PrivacyRateLimitPort limiter) {
+        return new PrivacyRequestService(
+                repository,
+                exportRepository,
+                (subject, proof) -> true,
+                issuer,
+                audit,
+                CLOCK,
+                audit,
+                limiter);
+    }
+
+    private static ReauthenticationProofIssuer.IssuedProof issuedProof() {
+        return new ReauthenticationProofIssuer.IssuedProof(
+                "server-issued-sensitive-proof", NOW, NOW.plus(Duration.ofMinutes(5)));
     }
 
     @ParameterizedTest
