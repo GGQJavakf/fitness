@@ -882,14 +882,60 @@ export interface components {
         CreatePlanRequest: {
             candidateId: string;
         };
-        CreatePlanVersionRequest: {
+        PlanVersionData: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            planId: string;
+            versionNumber: number;
+            /** @enum {string} */
+            sourceType: "INITIAL" | "USER_EDIT" | "REBALANCE" | "PROGRESSION";
             plan: components["schemas"]["PlanDraft"];
-            expectedVersion: components["schemas"]["ExpectedVersion"];
+            ruleReference: components["schemas"]["RuleReference"];
+            confirmedWarningCodes: string[];
+            createdAt: components["schemas"]["UtcDateTime"];
+        };
+        ActivePlanData: {
+            /** Format: uuid */
+            planId: string;
+            activeVersion: components["schemas"]["PlanVersionData"];
+        };
+        ActivePlanResponse: {
+            data: components["schemas"]["ActivePlanData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanVersionResponse: {
+            data: components["schemas"]["PlanVersionData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @enum {string} */
+        LockCommandStatus: "USER_LOCKED" | "UNLOCKED";
+        CreatePlanVersionRequest: {
+            plan: components["schemas"]["PlanValidationDraft"];
+            baseVersionNumber: number;
+            locks: {
+                [key: string]: components["schemas"]["LockCommandStatus"];
+            };
+            warningConfirmationToken?: string;
+        };
+        /** @enum {string} */
+        PlanVersionStatus: "PREVIEW" | "WARNING_CONFIRMATION_REQUIRED" | "VALIDATION_ERROR" | "CREATED";
+        PlanVersionResultData: {
+            status: components["schemas"]["PlanVersionStatus"];
+            plan: components["schemas"]["PlanDraft"];
+            validationIssues: components["schemas"]["ValidationIssue"][];
+            warningConfirmationToken?: string;
+            version?: components["schemas"]["PlanVersionData"];
+        };
+        PlanVersionResultResponse: {
+            data: components["schemas"]["PlanVersionResultData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         RebalancePlanRequest: {
-            expectedVersion: components["schemas"]["ExpectedVersion"];
-            lockedFields: {
-                [key: string]: unknown;
+            plan: components["schemas"]["PlanValidationDraft"];
+            baseVersionNumber: number;
+            locks: {
+                [key: string]: components["schemas"]["LockCommandStatus"];
             };
         };
         StartWorkoutSessionRequest: {
@@ -1459,7 +1505,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanCreation"];
         responses: {
-            201: components["responses"]["Success"];
+            /** @description 已创建不可变的首个计划版本 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivePlanResponse"];
+                };
+            };
             400: components["responses"]["BadRequest"];
             default: components["responses"]["DefaultError"];
         };
@@ -1473,7 +1527,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 当前活动计划及其不可变版本 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivePlanResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
@@ -1490,7 +1552,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 指定的历史计划版本 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             default: components["responses"]["DefaultError"];
         };
@@ -1506,7 +1576,24 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanVersionCreation"];
         responses: {
-            201: components["responses"]["Success"];
+            /** @description 存在警告，必须携带 warningConfirmationToken 再次确认 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResultResponse"];
+                };
+            };
+            /** @description 新不可变版本已创建并切换为活动版本 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResultResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -1522,7 +1609,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanRebalance"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 重平衡预览，不创建版本 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResultResponse"];
+                };
+            };
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };

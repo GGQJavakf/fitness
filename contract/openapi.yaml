@@ -197,7 +197,11 @@ paths:
       operationId: createInitialPlan
       requestBody: {$ref: '#/components/requestBodies/PlanCreation'}
       responses:
-        '201': {$ref: '#/components/responses/Success'}
+        '201':
+          description: 已创建不可变的首个计划版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/ActivePlanResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/active:
@@ -205,7 +209,11 @@ paths:
       tags: [Plans]
       operationId: getActivePlan
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 当前活动计划及其不可变版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/ActivePlanResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/{planId}/versions/{versionNo}:
@@ -216,7 +224,11 @@ paths:
         - {$ref: '#/components/parameters/PlanIdPath'}
         - {$ref: '#/components/parameters/VersionNoPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 指定的历史计划版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/{planId}/versions:
@@ -227,7 +239,16 @@ paths:
         - {$ref: '#/components/parameters/PlanIdPath'}
       requestBody: {$ref: '#/components/requestBodies/PlanVersionCreation'}
       responses:
-        '201': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 存在警告，必须携带 warningConfirmationToken 再次确认
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
+        '201':
+          description: 新不可变版本已创建并切换为活动版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/{planId}/rebalance:
@@ -239,7 +260,11 @@ paths:
         - {$ref: '#/components/parameters/PlanIdPath'}
       requestBody: {$ref: '#/components/requestBodies/PlanRebalance'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 重平衡预览，不创建版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workouts/today:

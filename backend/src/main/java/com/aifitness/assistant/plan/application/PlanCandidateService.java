@@ -5,6 +5,8 @@ import com.aifitness.assistant.content.application.ExerciseQueryService;
 import com.aifitness.assistant.content.application.TemplateQueryService;
 import com.aifitness.assistant.content.domain.PlanTemplateCatalog;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
+import com.aifitness.assistant.plan.domain.FieldLock;
+import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
@@ -20,6 +22,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 public final class PlanCandidateService {
@@ -32,6 +36,7 @@ public final class PlanCandidateService {
     private final PlanRulePolicy policy;
     private final Clock clock;
     private final boolean aiEnabled;
+    private final ConcurrentMap<String, CandidateEnvelope> generatedCandidates = new ConcurrentHashMap<>();
 
     public PlanCandidateService(
             ProfileService profiles,
@@ -73,35 +78,68 @@ public final class PlanCandidateService {
                         eligibleTemplates,
                         eligibleExercises,
                         lockedNumbers == null ? Map.of() : lockedNumbers));
-        Optional<CandidateEnvelope> candidate = result.candidate().map(value -> envelope(user, profile, value));
+        List<PlanVersionService.ValidationIssue> issues = result.issues().stream()
+                .map(PlanCandidateService::toApplication)
+                .toList();
+        Map<String, FieldLock.Status> lockedOutcomes = result.lockedFieldOutcomes().keySet().stream()
+                .collect(Collectors.toUnmodifiableMap(path -> path, ignored -> FieldLock.Status.USER_LOCKED));
+        Optional<CandidateEnvelope> candidate = result.candidate()
+                .map(value -> envelope(user, profile, value, lockedOutcomes));
+        candidate.ifPresent(value -> generatedCandidates.put(candidateKey(user, value.candidateId()), value));
         return new GeneratedCandidates(
-                result.status(), candidate, result.issues(), result.lockedFieldOutcomes());
+                GenerationStatus.valueOf(result.status().name()), candidate, issues, lockedOutcomes);
     }
 
-    public List<PlanGenerationEngine.ValidationIssue> validate(
-            AuthenticatedUserId user, PlanGenerationEngine.Candidate candidate) {
+    public List<PlanVersionService.ValidationIssue> validate(
+            AuthenticatedUserId user, PlanDraft candidate, RuleReference reference) {
         Objects.requireNonNull(user, "authenticated user must not be null");
         Objects.requireNonNull(candidate, "candidate must not be null");
-        if (!currentReference().equals(candidate.ruleReference())) {
+        Objects.requireNonNull(reference, "rule reference must not be null");
+        if (!currentReference().equals(reference)) {
             throw new IllegalArgumentException("candidate rule reference is not active");
         }
         return validator.validate(
-                candidate, profiles.getProfile(user).details().sessionMinutes(), eligibleExercises(user));
+                toRules(candidate, reference), profiles.getProfile(user).details().sessionMinutes(), eligibleExercises(user))
+                .stream().map(PlanCandidateService::toApplication).toList();
     }
 
     public RuleReference currentReference() {
         return new RuleReference(policy.version(), templates.version(), exercises.version());
     }
 
+    public CandidateEnvelope candidate(AuthenticatedUserId user, String candidateId) {
+        Objects.requireNonNull(user, "authenticated user must not be null");
+        if (candidateId == null || candidateId.isBlank()) {
+            throw new IllegalArgumentException("candidateId must not be blank");
+        }
+        CandidateEnvelope candidate = generatedCandidates.get(candidateKey(user, candidateId));
+        if (candidate == null || !candidate.expiresAt().isAfter(clock.instant())) {
+            if (candidate != null) {
+                generatedCandidates.remove(candidateKey(user, candidateId));
+            }
+            throw new CandidateNotFoundException();
+        }
+        return candidate;
+    }
+
+    private static String candidateKey(AuthenticatedUserId user, String candidateId) {
+        return user.value() + ":" + candidateId;
+    }
+
     private CandidateEnvelope envelope(
-            AuthenticatedUserId user, UserProfile profile, PlanGenerationEngine.Candidate candidate) {
-        String identity = user.value() + "|" + profile.version() + "|" + candidate;
+            AuthenticatedUserId user,
+            UserProfile profile,
+            PlanGenerationEngine.Candidate candidate,
+            Map<String, FieldLock.Status> locks) {
+        String identity = user.value() + "|" + profile.version() + "|" + candidate
+                + "|" + new java.util.TreeMap<>(locks);
         String candidateId = UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)).toString();
         ExplanationStatus status = aiEnabled ? ExplanationStatus.PENDING : ExplanationStatus.DEGRADED;
         String explanation = "计划结构和全部训练数字由规则版本 " + policy.version()
                 + " 生成；未知初始重量保留为待校准状态。";
         Instant expiresAt = clock.instant().plus(15, ChronoUnit.MINUTES);
-        return new CandidateEnvelope(candidateId, candidate, status, explanation, expiresAt);
+        return new CandidateEnvelope(
+                candidateId, toPlanDraft(candidate, locks), candidate.ruleReference(), status, explanation, expiresAt);
     }
 
     private static PlanGenerationEngine.Template toDomain(PlanTemplateCatalog.Template template) {
@@ -128,18 +166,55 @@ public final class PlanCandidateService {
                                 exercise.movementPattern(), exercise.primaryMuscles())));
     }
 
+    private static PlanDraft toPlanDraft(
+            PlanGenerationEngine.Candidate candidate, Map<String, FieldLock.Status> locks) {
+        return new PlanDraft(
+                candidate.templateCode(), candidate.name(), candidate.days().stream()
+                .map(day -> new PlanDraft.Day(
+                        day.code(), day.name(), day.exercises().stream()
+                        .map(exercise -> new PlanDraft.Exercise(
+                                exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
+                                exercise.restSeconds(), PlanDraft.WeightStatus.valueOf(exercise.weightStatus().name())))
+                        .toList()))
+                .toList(), locks);
+    }
+
+    private static PlanGenerationEngine.Candidate toRules(PlanDraft plan, RuleReference reference) {
+        return new PlanGenerationEngine.Candidate(
+                plan.templateCode(), plan.name(), plan.days().stream()
+                .map(day -> new PlanGenerationEngine.Day(
+                        day.code(), day.name(), day.exercises().stream()
+                        .map(exercise -> new PlanGenerationEngine.Exercise(
+                                exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
+                                exercise.restSeconds(),
+                                PlanGenerationEngine.WeightStatus.valueOf(exercise.weightStatus().name())))
+                        .toList()))
+                .toList(), reference);
+    }
+
+    private static PlanVersionService.ValidationIssue toApplication(
+            PlanGenerationEngine.ValidationIssue issue) {
+        return new PlanVersionService.ValidationIssue(
+                PlanVersionService.Severity.valueOf(issue.severity().name()),
+                issue.reasonCode(), issue.fieldPath());
+    }
+
     public record GeneratedCandidates(
-            PlanGenerationEngine.GenerationStatus status,
+            GenerationStatus status,
             Optional<CandidateEnvelope> candidate,
-            List<PlanGenerationEngine.ValidationIssue> issues,
-            Map<String, PlanGenerationEngine.LockStatus> lockedFieldOutcomes) {}
+            List<PlanVersionService.ValidationIssue> issues,
+            Map<String, FieldLock.Status> lockedFieldOutcomes) {}
 
     public record CandidateEnvelope(
             String candidateId,
-            PlanGenerationEngine.Candidate plan,
+            PlanDraft plan,
+            RuleReference ruleReference,
             ExplanationStatus explanationStatus,
             String explanation,
             Instant expiresAt) {}
 
     public enum ExplanationStatus { PENDING, DEGRADED }
+    public enum GenerationStatus { CANDIDATE_READY, NO_CANDIDATE }
+
+    public static final class CandidateNotFoundException extends RuntimeException {}
 }

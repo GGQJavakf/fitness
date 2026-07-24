@@ -179,6 +179,37 @@ class OpenApiContractTest {
     }
 
     @Test
+    void planVersionOperationsExposeTypedImmutableContracts() {
+        assertThat(successSchemaRef("/api/v1/plans", "post"))
+                .endsWith("/ActivePlanResponse");
+        assertThat(successSchemaRef("/api/v1/plans/active", "get"))
+                .endsWith("/ActivePlanResponse");
+        assertThat(successSchemaRef("/api/v1/plans/{planId}/versions/{versionNo}", "get"))
+                .endsWith("/PlanVersionResponse");
+        assertThat(successSchemaRef("/api/v1/plans/{planId}/versions", "post"))
+                .endsWith("/PlanVersionResultResponse");
+        assertThat(successSchemaRef("/api/v1/plans/{planId}/rebalance", "post"))
+                .endsWith("/PlanVersionResultResponse");
+
+        Map<String, Object> schemas = map(planSchemas.get("schemas"));
+        assertThat(required(schemas, "CreatePlanVersionRequest"))
+                .containsExactlyInAnyOrder("plan", "baseVersionNumber", "locks");
+        assertThat(map(map(schemas.get("CreatePlanVersionRequest")).get("properties")))
+                .containsKey("warningConfirmationToken")
+                .doesNotContainKey("expectedVersion");
+        Map<String, Object> versionProperties =
+                map(map(schemas.get("CreatePlanVersionRequest")).get("properties"));
+        assertThat(map(versionProperties.get("plan")))
+                .containsEntry("$ref", "#/components/schemas/PlanValidationDraft");
+        Map<String, Object> lockCommands = map(schemas.get("LockCommandStatus"));
+        assertThat(list(lockCommands.get("enum")))
+                .containsExactly("USER_LOCKED", "UNLOCKED")
+                .doesNotContain("RULE_LOCKED");
+        assertThat(required(schemas, "PlanVersionData"))
+                .contains("versionNumber", "plan", "ruleReference", "confirmedWarningCodes", "createdAt");
+    }
+
+    @Test
     void equipmentUpdateInputDoesNotExposeServerManagedProfileId() {
         Map<String, Object> schemas = map(profileSchemas.get("schemas"));
         Map<String, Object> inputWeight = map(schemas.get("EquipmentWeightInput"));
@@ -194,7 +225,8 @@ class OpenApiContractTest {
 
     private static String successSchemaRef(String path, String method) {
         Map<String, Object> operation = map(map(map(openApi.get("paths")).get(path)).get(method));
-        Map<String, Object> response = map(map(operation.get("responses")).get("200"));
+        Map<String, Object> responses = map(operation.get("responses"));
+        Map<String, Object> response = map(responses.containsKey("200") ? responses.get("200") : responses.get("201"));
         Map<String, Object> content = map(response.get("content"));
         return (String) map(map(content.get("application/json")).get("schema")).get("$ref");
     }

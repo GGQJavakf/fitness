@@ -3,9 +3,16 @@ package com.aifitness.assistant.database;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
+import com.aifitness.assistant.common.domain.RuleReference;
+import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
+import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
@@ -16,6 +23,7 @@ import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -204,10 +212,113 @@ class MigrationTest {
         equipmentClientKeysAreScopedToTheirOwner();
         databaseEnforcesRequiredUniqueConstraintsAndCrossUserSessions();
         databaseAllowsBuildingThenSealingAndActivatingOnlyTheSamePlanVersion();
+        databasePreservesTheOldPlanWhenANewVersionBecomesActive();
         databaseRejectsUnsealedSealingEntryPoints();
         databaseRejectsCrossPlanSnapshotsAndProtectsWorkoutFacts();
         progressionFactsAreImmutableAndAppliedPlanMustBelongToTheUser();
         databaseRejectsHistoricalDeletesAndRevisionRewrites();
+    }
+
+    @Test
+    void applicationRepositoryAtomicallyPersistsImmutablePlanVersionsAndRollsBackFailures() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID userId = UUID.fromString(createUser());
+        UUID exerciseId = UUID.nameUUIDFromBytes(
+                "ai-fitness-exercise:SQUAT".getBytes(StandardCharsets.UTF_8));
+        createExercise(exerciseId.toString());
+        PlanDraft initial = planDraft("SQUAT", 90);
+        PlanVersionService.PlanPolicy policy = new PlanVersionService.PlanPolicy() {
+            @Override
+            public PlanVersionService.CandidatePlan candidate(
+                    AuthenticatedUserId user, String candidateId) {
+                return new PlanVersionService.CandidatePlan(
+                        candidateId, initial, new RuleReference("rule-v1", "template-v1", "content-v1"));
+            }
+
+            @Override
+            public List<PlanVersionService.ValidationIssue> validate(
+                    AuthenticatedUserId user, PlanDraft plan, RuleReference reference) {
+                return List.of();
+            }
+        };
+        JdbcPlanRepository repository = new JdbcPlanRepository(
+                dataSource, new ObjectMapper(), ignored -> exerciseId);
+        PlanVersionService service = new PlanVersionService(
+                repository, policy, java.time.Clock.systemUTC());
+        AuthenticatedUserId user = new AuthenticatedUserId(userId);
+
+        var created = service.createInitial(user, "candidate-db");
+        var updated = service.createVersion(
+                user, created.id(), 1, planDraft("SQUAT", 120), Map.of(), null);
+
+        assertThat(updated.version()).get().extracting(version -> version.versionNumber()).isEqualTo(2);
+        assertThat(repository.findByIdAndUser(created.id(), userId).orElseThrow().version(1)
+                .plan().valueAt("/days/DAY_A/exercises/SQUAT/restSeconds")).contains(90);
+        assertThat(repository.findActiveByUser(userId).orElseThrow().activeVersion()
+                .plan().valueAt("/days/DAY_A/exercises/SQUAT/restSeconds")).contains(120);
+        assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
+                + binary(created.id().toString()))).isEqualTo("2");
+
+        JdbcPlanRepository failingRepository = new JdbcPlanRepository(
+                dataSource, new ObjectMapper(), code -> {
+                    throw new IllegalArgumentException("exercise code cannot be resolved");
+                });
+        assertThatThrownBy(() -> failingRepository.append(
+                userId, created.id(), 2,
+                new com.aifitness.assistant.plan.domain.TrainingPlanVersion(
+                        UUID.randomUUID(), created.id(), 3,
+                        com.aifitness.assistant.plan.domain.TrainingPlanVersion.SourceType.USER_EDIT,
+                        planDraft("UNKNOWN", 150),
+                        new RuleReference("rule-v1", "template-v1", "content-v1"),
+                        java.util.Set.of(), java.time.Instant.now())))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
+                + binary(created.id().toString()))).isEqualTo("2");
+    }
+
+    private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
+        return new PlanDraft(
+                "FULL_BODY_3D", "全身训练",
+                List.of(new PlanDraft.Day(
+                        "DAY_A", "训练 A",
+                        List.of(new PlanDraft.Exercise(
+                                exerciseCode, 3, 8, 12, restSeconds,
+                                PlanDraft.WeightStatus.NEEDS_CALIBRATION)))),
+                Map.of());
+    }
+
+    private static void databasePreservesTheOldPlanWhenANewVersionBecomesActive() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture first = createPlanFixture(userId, exerciseId);
+        execute("UPDATE plan_exercise SET prescription_json = JSON_OBJECT('restSeconds', 90) WHERE id = %s"
+                .formatted(binary(first.planExerciseId())));
+        seal(first);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s"
+                .formatted(binary(first.versionId()), binary(first.planId())));
+
+        String secondVersionId = newId();
+        String secondDayId = newId();
+        String secondExerciseId = newId();
+        execute("INSERT INTO training_plan_version (id, plan_id, version_no, source_type, split_type, frequency, template_version, rule_version, change_summary_json, created_at) VALUES (%s, %s, 2, 'USER_EDIT', 'FULL_BODY', 3, 'template-v1', 'rule-v1', JSON_OBJECT('confirmedWarnings', JSON_ARRAY('INITIAL_WEIGHT_NEEDS_CALIBRATION')), UTC_TIMESTAMP(6))"
+                .formatted(binary(secondVersionId), binary(first.planId())));
+        execute("INSERT INTO training_day (id, plan_version_id, day_order, name, estimated_minutes) VALUES (%s, %s, 1, 'Day 1', 45)"
+                .formatted(binary(secondDayId), binary(secondVersionId)));
+        execute("INSERT INTO plan_exercise (id, training_day_id, plan_version_id, exercise_id, exercise_order, prescription_json, weight_status, status) VALUES (%s, %s, %s, %s, 1, JSON_OBJECT('restSeconds', 120), 'KNOWN', 'ACTIVE')"
+                .formatted(binary(secondExerciseId), binary(secondDayId), binary(secondVersionId), binary(exerciseId)));
+        execute("INSERT INTO plan_field_lock (plan_exercise_id, field_path, lock_status, locked_at) VALUES (%s, '/days/DAY_A/exercises/SQUAT/restSeconds', 'USER_LOCKED', UTC_TIMESTAMP(6))"
+                .formatted(binary(secondExerciseId)));
+        execute("UPDATE training_plan_version SET sealed_at = UTC_TIMESTAMP(6) WHERE id = %s"
+                .formatted(binary(secondVersionId)));
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s"
+                .formatted(binary(secondVersionId), binary(first.planId())));
+
+        assertThat(queryOne("SELECT JSON_UNQUOTE(JSON_EXTRACT(prescription_json, '$.restSeconds')) FROM plan_exercise WHERE id = %s"
+                .formatted(binary(first.planExerciseId())))).isEqualTo("90");
+        assertThat(queryOne("SELECT JSON_UNQUOTE(JSON_EXTRACT(prescription_json, '$.restSeconds')) FROM plan_exercise WHERE id = %s"
+                .formatted(binary(secondExerciseId)))).isEqualTo("120");
+        assertThat(queryOne("SELECT version_no FROM training_plan_version WHERE id = (SELECT active_version_id FROM training_plan WHERE id = %s)"
+                .formatted(binary(first.planId())))).isEqualTo("2");
     }
 
     private static void equipmentClientKeysAreScopedToTheirOwner() throws Exception {
@@ -541,8 +652,12 @@ class MigrationTest {
 
     private static String createExercise() throws Exception {
         String exerciseId = newId();
-        execute("INSERT INTO exercise (id, measurement_type, movement_pattern, difficulty, status, content_version, review_status) VALUES (%s, 'WEIGHTED', 'SQUAT', 'BEGINNER', 'ACTIVE', 'v1', 'AI_VALIDATED')".formatted(binary(exerciseId)));
+        createExercise(exerciseId);
         return exerciseId;
+    }
+
+    private static void createExercise(String exerciseId) throws Exception {
+        execute("INSERT INTO exercise (id, measurement_type, movement_pattern, difficulty, status, content_version, review_status) VALUES (%s, 'WEIGHTED', 'SQUAT', 'BEGINNER', 'ACTIVE', 'v1', 'AI_VALIDATED')".formatted(binary(exerciseId)));
     }
 
     private static PlanFixture createPlanFixture(String userId, String exerciseId) throws Exception {

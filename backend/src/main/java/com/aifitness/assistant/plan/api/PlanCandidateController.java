@@ -5,7 +5,8 @@ import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.common.domain.RuleReference;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
-import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
+import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.domain.FieldLock;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -45,25 +46,20 @@ public final class PlanCandidateController {
                 generated.status(),
                 generated.candidate().map(candidate -> CandidateData.from(
                         candidate, generated.issues(), generated.lockedFieldOutcomes())),
-                generated.issues(),
-                generated.lockedFieldOutcomes()));
+                generated.issues(), generated.lockedFieldOutcomes()));
     }
 
     @PostMapping("/validate")
     public ApiResponse<ValidationData> validate(
             AuthenticatedUserId user, @RequestBody ValidateRequest request) {
-        PlanGenerationEngine.Candidate candidate = requiredCandidate(request);
-        List<PlanGenerationEngine.ValidationIssue> issues = candidates.validate(user, candidate);
-        boolean valid = issues.stream().noneMatch(
-                issue -> issue.severity() == PlanGenerationEngine.ValidationSeverity.ERROR);
-        return response(new ValidationData(valid, issues));
-    }
-
-    private static PlanGenerationEngine.Candidate requiredCandidate(ValidateRequest request) {
         if (request == null || request.plan() == null || request.ruleReference() == null) {
             throw new IllegalArgumentException("candidate plan and ruleReference are required");
         }
-        return request.plan().toDomain(request.ruleReference().toDomain());
+        List<PlanVersionService.ValidationIssue> issues = candidates.validate(
+                user, request.plan().toDomain(), request.ruleReference().toDomain());
+        boolean valid = issues.stream().noneMatch(
+                issue -> issue.severity() == PlanVersionService.Severity.ERROR);
+        return response(new ValidationData(valid, issues));
     }
 
     private static Map<String, Integer> validLockedFields(Map<String, Integer> lockedFields) {
@@ -94,105 +90,31 @@ public final class PlanCandidateController {
 
     public record CandidateRequest(Long profileVersion, Map<String, Integer> lockedFields) {}
 
-    public record ValidateRequest(ValidationDraftData plan, RuleReferenceData ruleReference) {}
+    public record ValidateRequest(PlanController.PlanData plan, RuleReferenceData ruleReference) {}
 
     public record GenerationData(
-            PlanGenerationEngine.GenerationStatus status,
+            PlanCandidateService.GenerationStatus status,
             Optional<CandidateData> candidate,
-            List<PlanGenerationEngine.ValidationIssue> validationIssues,
-            Map<String, PlanGenerationEngine.LockStatus> lockedFieldOutcomes) {}
+            List<PlanVersionService.ValidationIssue> validationIssues,
+            Map<String, FieldLock.Status> lockedFieldOutcomes) {}
 
     public record CandidateData(
             String candidateId,
-            PlanDraftData plan,
-            List<PlanGenerationEngine.ValidationIssue> validationIssues,
+            PlanController.PlanData plan,
+            List<PlanVersionService.ValidationIssue> validationIssues,
             RuleReferenceData ruleReference,
-            Map<String, PlanGenerationEngine.LockStatus> lockedFieldOutcomes,
+            Map<String, FieldLock.Status> lockedFieldOutcomes,
             PlanCandidateService.ExplanationStatus explanationStatus,
             String explanation,
             Instant expiresAt) {
-
         static CandidateData from(
                 PlanCandidateService.CandidateEnvelope envelope,
-                List<PlanGenerationEngine.ValidationIssue> issues,
-                Map<String, PlanGenerationEngine.LockStatus> lockedFieldOutcomes) {
-            PlanGenerationEngine.Candidate candidate = envelope.plan();
+                List<PlanVersionService.ValidationIssue> issues,
+                Map<String, FieldLock.Status> lockedFieldOutcomes) {
             return new CandidateData(
-                    envelope.candidateId(),
-                    PlanDraftData.from(candidate, lockedFieldOutcomes),
-                    issues,
-                    RuleReferenceData.from(candidate.ruleReference()),
-                    lockedFieldOutcomes,
-                    envelope.explanationStatus(),
-                    envelope.explanation(),
-                    envelope.expiresAt());
-        }
-    }
-
-    public record PlanDraftData(
-            String templateCode,
-            String name,
-            List<DayData> days,
-            Map<String, PlanGenerationEngine.LockStatus> locks) {
-
-        static PlanDraftData from(
-                PlanGenerationEngine.Candidate candidate,
-                Map<String, PlanGenerationEngine.LockStatus> locks) {
-            return new PlanDraftData(
-                    candidate.templateCode(), candidate.name(),
-                    candidate.days().stream().map(DayData::from).toList(), locks);
-        }
-
-        PlanGenerationEngine.Candidate toDomain(RuleReference reference) {
-            if (days == null || days.isEmpty() || days.size() > 6 || days.stream().anyMatch(day -> day == null)) {
-                throw new IllegalArgumentException("plan must contain between 1 and 6 days");
-            }
-            return new PlanGenerationEngine.Candidate(
-                    templateCode, name, days.stream().map(DayData::toDomain).toList(), reference);
-        }
-    }
-
-    public record ValidationDraftData(String templateCode, String name, List<DayData> days) {
-        PlanGenerationEngine.Candidate toDomain(RuleReference reference) {
-            if (days == null || days.isEmpty() || days.size() > 6 || days.stream().anyMatch(day -> day == null)) {
-                throw new IllegalArgumentException("plan must contain between 1 and 6 days");
-            }
-            return new PlanGenerationEngine.Candidate(
-                    templateCode, name, days.stream().map(DayData::toDomain).toList(), reference);
-        }
-    }
-
-    public record DayData(String code, String name, List<ExerciseData> exercises) {
-        static DayData from(PlanGenerationEngine.Day day) {
-            return new DayData(day.code(), day.name(), day.exercises().stream().map(ExerciseData::from).toList());
-        }
-
-        PlanGenerationEngine.Day toDomain() {
-            if (exercises == null || exercises.isEmpty() || exercises.size() > 8
-                    || exercises.stream().anyMatch(exercise -> exercise == null)) {
-                throw new IllegalArgumentException("day must contain between 1 and 8 exercises");
-            }
-            return new PlanGenerationEngine.Day(
-                    code, name, exercises.stream().map(ExerciseData::toDomain).toList());
-        }
-    }
-
-    public record ExerciseData(
-            String exerciseCode,
-            int workSets,
-            int repMin,
-            int repMax,
-            int restSeconds,
-            PlanGenerationEngine.WeightStatus weightStatus) {
-        static ExerciseData from(PlanGenerationEngine.Exercise exercise) {
-            return new ExerciseData(
-                    exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
-                    exercise.restSeconds(), exercise.weightStatus());
-        }
-
-        PlanGenerationEngine.Exercise toDomain() {
-            return new PlanGenerationEngine.Exercise(
-                    exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus);
+                    envelope.candidateId(), PlanController.PlanData.from(envelope.plan()), issues,
+                    RuleReferenceData.from(envelope.ruleReference()), lockedFieldOutcomes,
+                    envelope.explanationStatus(), envelope.explanation(), envelope.expiresAt());
         }
     }
 
@@ -207,5 +129,6 @@ public final class PlanCandidateController {
         }
     }
 
-    public record ValidationData(boolean valid, List<PlanGenerationEngine.ValidationIssue> validationIssues) {}
+    public record ValidationData(
+            boolean valid, List<PlanVersionService.ValidationIssue> validationIssues) {}
 }

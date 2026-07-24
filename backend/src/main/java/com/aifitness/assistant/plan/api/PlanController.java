@@ -1,0 +1,216 @@
+package com.aifitness.assistant.plan.api;
+
+import com.aifitness.assistant.common.api.ApiResponse;
+import com.aifitness.assistant.common.api.ResponseMeta;
+import com.aifitness.assistant.common.domain.RuleReference;
+import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
+import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.domain.FieldLock;
+import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.domain.TrainingPlan;
+import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.slf4j.MDC;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/api/v1/plans")
+@Profile({"local", "test"})
+public final class PlanController {
+    private final PlanVersionService versions;
+    private final Clock clock;
+
+    public PlanController(PlanVersionService versions, Clock clock) {
+        this.versions = versions;
+        this.clock = clock;
+    }
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<ActivePlanData>> create(
+            AuthenticatedUserId user, @RequestBody CreatePlanRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("request is required");
+        }
+        TrainingPlan plan = versions.createInitial(user, request.candidateId());
+        return ResponseEntity.status(HttpStatus.CREATED).body(response(ActivePlanData.from(plan)));
+    }
+
+    @GetMapping("/active")
+    public ApiResponse<ActivePlanData> active(AuthenticatedUserId user) {
+        return response(ActivePlanData.from(versions.getActive(user)));
+    }
+
+    @GetMapping("/{planId}/versions/{versionNo}")
+    public ApiResponse<VersionData> version(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId,
+            @PathVariable int versionNo) {
+        return response(VersionData.from(versions.getVersion(user, planId, versionNo)));
+    }
+
+    @PostMapping("/{planId}/versions")
+    public ResponseEntity<ApiResponse<VersionResultData>> createVersion(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId,
+            @RequestBody VersionRequest request) {
+        PlanVersionService.VersionResult result = versions.createVersion(
+                user, planId, request.baseVersionNumber(), request.plan().toDomain(),
+                safeLocks(request.locks()), request.warningConfirmationToken());
+        HttpStatus status = result.status() == PlanVersionService.VersionStatus.CREATED
+                ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(response(VersionResultData.from(result)));
+    }
+
+    @PostMapping("/{planId}/rebalance")
+    public ApiResponse<VersionResultData> rebalance(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId,
+            @RequestBody VersionRequest request) {
+        return response(VersionResultData.from(versions.previewRebalance(
+                user, planId, request.baseVersionNumber(), request.plan().toDomain(),
+                safeLocks(request.locks()))));
+    }
+
+    private static Map<String, FieldLock.Status> safeLocks(Map<String, FieldLock.Status> locks) {
+        if (locks == null) {
+            return Map.of();
+        }
+        if (locks.size() > 100 || locks.entrySet().stream().anyMatch(
+                entry -> entry.getKey() == null || entry.getValue() == null
+                        || entry.getValue() == FieldLock.Status.RULE_LOCKED)) {
+            throw new IllegalArgumentException("locks are invalid");
+        }
+        return Map.copyOf(locks);
+    }
+
+    private <T> ApiResponse<T> response(T data) {
+        String requestId = MDC.get("requestId");
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
+        }
+        return new ApiResponse<>(data, new ResponseMeta(requestId, clock.instant()));
+    }
+
+    public record CreatePlanRequest(String candidateId) {}
+
+    public record VersionRequest(
+            int baseVersionNumber,
+            PlanData plan,
+            Map<String, FieldLock.Status> locks,
+            String warningConfirmationToken) {
+        public VersionRequest {
+            if (baseVersionNumber < 1 || plan == null) {
+                throw new IllegalArgumentException("baseVersionNumber and plan are required");
+            }
+        }
+    }
+
+    public record ActivePlanData(UUID planId, VersionData activeVersion) {
+        static ActivePlanData from(TrainingPlan plan) {
+            return new ActivePlanData(plan.id(), VersionData.from(plan.activeVersion()));
+        }
+    }
+
+    public record VersionData(
+            UUID id,
+            UUID planId,
+            int versionNumber,
+            TrainingPlanVersion.SourceType sourceType,
+            PlanData plan,
+            RuleReferenceData ruleReference,
+            Set<String> confirmedWarningCodes,
+            Instant createdAt) {
+        static VersionData from(TrainingPlanVersion version) {
+            return new VersionData(
+                    version.id(), version.planId(), version.versionNumber(), version.sourceType(),
+                    PlanData.from(version.plan()), RuleReferenceData.from(version.ruleReference()),
+                    version.confirmedWarningCodes(), version.createdAt());
+        }
+    }
+
+    public record VersionResultData(
+            PlanVersionService.VersionStatus status,
+            PlanData plan,
+            List<PlanVersionService.ValidationIssue> validationIssues,
+            Optional<String> warningConfirmationToken,
+            Optional<VersionData> version) {
+        static VersionResultData from(PlanVersionService.VersionResult result) {
+            return new VersionResultData(
+                    result.status(), PlanData.from(result.plan()), result.validationIssues(),
+                    result.warningConfirmationToken(), result.version().map(VersionData::from));
+        }
+    }
+
+    public record PlanData(
+            String templateCode,
+            String name,
+            List<DayData> days,
+            Map<String, FieldLock.Status> locks) {
+        PlanDraft toDomain() {
+            if (days == null || days.stream().anyMatch(java.util.Objects::isNull)) {
+                throw new IllegalArgumentException("plan days are required");
+            }
+            return new PlanDraft(
+                    templateCode, name, days.stream().map(DayData::toDomain).toList(),
+                    Map.of());
+        }
+
+        static PlanData from(PlanDraft plan) {
+            return new PlanData(
+                    plan.templateCode(), plan.name(), plan.days().stream().map(DayData::from).toList(), plan.locks());
+        }
+    }
+
+    public record DayData(String code, String name, List<ExerciseData> exercises) {
+        PlanDraft.Day toDomain() {
+            if (exercises == null || exercises.stream().anyMatch(java.util.Objects::isNull)) {
+                throw new IllegalArgumentException("day exercises are required");
+            }
+            return new PlanDraft.Day(code, name, exercises.stream().map(ExerciseData::toDomain).toList());
+        }
+
+        static DayData from(PlanDraft.Day day) {
+            return new DayData(day.code(), day.name(), day.exercises().stream().map(ExerciseData::from).toList());
+        }
+    }
+
+    public record ExerciseData(
+            String exerciseCode,
+            int workSets,
+            int repMin,
+            int repMax,
+            int restSeconds,
+            PlanDraft.WeightStatus weightStatus) {
+        PlanDraft.Exercise toDomain() {
+            return new PlanDraft.Exercise(
+                    exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus);
+        }
+
+        static ExerciseData from(PlanDraft.Exercise exercise) {
+            return new ExerciseData(
+                    exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
+                    exercise.restSeconds(), exercise.weightStatus());
+        }
+    }
+
+    public record RuleReferenceData(String ruleVersion, String templateVersion, String contentVersion) {
+        static RuleReferenceData from(RuleReference reference) {
+            return new RuleReferenceData(
+                    reference.ruleVersion(), reference.templateVersion(), reference.contentVersion());
+        }
+    }
+}

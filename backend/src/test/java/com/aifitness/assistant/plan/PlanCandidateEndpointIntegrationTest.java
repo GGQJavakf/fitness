@@ -68,6 +68,55 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void candidateLockSurvivesInitialVersionAndRebalancePreview() throws Exception {
+        String token = login();
+        configureProfile(token);
+        configureEquipment(token);
+        String path = "/days/DAY_A/exercises/GOBLET_SQUAT/restSeconds";
+
+        JsonNode candidate = objectMapper.readTree(mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"profileVersion\":1,\"lockedFields\":{\"" + path + "\":180}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.candidate.plan.locks['" + path + "']")
+                        .value("USER_LOCKED"))
+                .andReturn().getResponse().getContentAsString()).at("/data/candidate");
+
+        JsonNode unlockedCandidate = objectMapper.readTree(mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString()).at("/data/candidate");
+        org.assertj.core.api.Assertions.assertThat(unlockedCandidate.path("candidateId").asText())
+                .isNotEqualTo(candidate.path("candidateId").asText());
+
+        JsonNode active = objectMapper.readTree(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + candidate.path("candidateId").asText() + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.activeVersion.plan.locks['" + path + "']")
+                        .value("USER_LOCKED"))
+                .andReturn().getResponse().getContentAsString()).at("/data");
+
+        JsonNode proposed = candidate.path("plan").deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) proposed.at("/days/0/exercises/0"))
+                .put("restSeconds", 240);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) proposed).remove("locks");
+        String request = objectMapper.writeValueAsString(Map.of(
+                "baseVersionNumber", 1, "plan", proposed, "locks", Map.of()));
+        mvc.perform(post("/api/v1/plans/{planId}/rebalance", active.path("planId").asText())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.plan.days[0].exercises[0].restSeconds").value(180))
+                .andExpect(jsonPath("$.data.plan.locks['" + path + "']").value("USER_LOCKED"));
+    }
+
+    @Test
     void rejectsStaleProfileVersionWithoutGeneratingCandidate() throws Exception {
         String token = login();
         configureProfile(token);

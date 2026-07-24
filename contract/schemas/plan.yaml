@@ -15,6 +15,9 @@ components:
     LockStatus:
       type: string
       enum: [USER_LOCKED, RULE_LOCKED, UNLOCKED]
+    LockCommandStatus:
+      type: string
+      enum: [USER_LOCKED, UNLOCKED]
     ValidationIssue:
       type: object
       additionalProperties: false
@@ -184,16 +187,90 @@ components:
     CreatePlanVersionRequest:
       type: object
       additionalProperties: false
-      required: [plan, expectedVersion]
+      required: [plan, baseVersionNumber, locks]
       properties:
-        plan: {$ref: '#/components/schemas/PlanDraft'}
-        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        plan: {$ref: '#/components/schemas/PlanValidationDraft'}
+        baseVersionNumber: {type: integer, minimum: 1}
+        locks:
+          type: object
+          maxProperties: 100
+          propertyNames:
+            type: string
+            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds)$'
+          additionalProperties: {$ref: '#/components/schemas/LockCommandStatus'}
+        warningConfirmationToken: {type: string, minLength: 1, maxLength: 128}
     RebalancePlanRequest:
       type: object
       additionalProperties: false
-      required: [expectedVersion, lockedFields]
+      required: [plan, baseVersionNumber, locks]
       properties:
-        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
-        lockedFields:
+        plan: {$ref: '#/components/schemas/PlanValidationDraft'}
+        baseVersionNumber: {type: integer, minimum: 1}
+        locks:
           type: object
-          additionalProperties: true
+          maxProperties: 100
+          propertyNames:
+            type: string
+            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds)$'
+          additionalProperties: {$ref: '#/components/schemas/LockCommandStatus'}
+    PlanVersionStatus:
+      type: string
+      enum: [PREVIEW, WARNING_CONFIRMATION_REQUIRED, VALIDATION_ERROR, CREATED]
+    PlanVersionData:
+      type: object
+      additionalProperties: false
+      required: [id, planId, versionNumber, sourceType, plan, ruleReference, confirmedWarningCodes, createdAt]
+      properties:
+        id: {type: string, format: uuid}
+        planId: {type: string, format: uuid}
+        versionNumber: {type: integer, minimum: 1}
+        sourceType:
+          type: string
+          enum: [INITIAL, USER_EDIT, REBALANCE, PROGRESSION]
+        plan: {$ref: '#/components/schemas/PlanDraft'}
+        ruleReference: {$ref: './common.yaml#/components/schemas/RuleReference'}
+        confirmedWarningCodes:
+          type: array
+          uniqueItems: true
+          items: {type: string}
+        createdAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    ActivePlanData:
+      type: object
+      additionalProperties: false
+      required: [planId, activeVersion]
+      properties:
+        planId: {type: string, format: uuid}
+        activeVersion: {$ref: '#/components/schemas/PlanVersionData'}
+    PlanVersionResultData:
+      type: object
+      additionalProperties: false
+      required: [status, plan, validationIssues]
+      properties:
+        status: {$ref: '#/components/schemas/PlanVersionStatus'}
+        plan: {$ref: '#/components/schemas/PlanDraft'}
+        validationIssues:
+          type: array
+          items: {$ref: '#/components/schemas/ValidationIssue'}
+        warningConfirmationToken: {type: string}
+        version: {$ref: '#/components/schemas/PlanVersionData'}
+    ActivePlanResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/ActivePlanData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    PlanVersionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanVersionData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    PlanVersionResultResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanVersionResultData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

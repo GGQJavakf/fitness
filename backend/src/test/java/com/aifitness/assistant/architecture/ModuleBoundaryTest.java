@@ -44,4 +44,10 @@ class ModuleBoundaryTest {
             .should().dependOnClassesThat().resideInAnyPackage("..api..")
             .because("infrastructure implements inner ports and is not coupled to transport adapters")
             .allowEmptyShould(true);
+
+    @ArchTest
+    static final ArchRule planApiUsesPlanContractsInsteadOfRulesInternals = noClasses()
+            .that().resideInAPackage("com.aifitness.assistant.plan.api..")
+            .should().dependOnClassesThat().resideInAPackage("com.aifitness.assistant.rules.domain..")
+            .because("the plan transport boundary exposes plan-domain contracts, not rule-engine internals");
 }

@@ -3,6 +3,8 @@ package com.aifitness.assistant.plan.infrastructure;
 import com.aifitness.assistant.content.application.ExerciseQueryService;
 import com.aifitness.assistant.content.application.TemplateQueryService;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
+import com.aifitness.assistant.plan.application.PlanRepository;
+import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
 import com.aifitness.assistant.rules.domain.PlanRulePolicy;
@@ -14,6 +16,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @Configuration
 @Profile({"local", "test"})
@@ -46,5 +52,25 @@ public class LocalPlanConfiguration {
             @Value("${fitness.ai.enabled:false}") boolean aiEnabled) {
         return new PlanCandidateService(
                 profiles, templates, exercises, generator, validator, policy, clock, aiEnabled);
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "fitness.plan", name = "repository", havingValue = "memory", matchIfMissing = true)
+    PlanRepository planRepository() {
+        return new InMemoryPlanRepository();
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.plan", name = "repository", havingValue = "mysql")
+    PlanRepository mysqlPlanRepository(DataSource dataSource, ObjectMapper objectMapper) {
+        return new JdbcPlanRepository(dataSource, objectMapper, code -> UUID.nameUUIDFromBytes(
+                ("ai-fitness-exercise:" + code).getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Bean
+    PlanVersionService planVersionService(
+            PlanRepository repository, PlanCandidateService candidates, Clock clock) {
+        return new PlanVersionService(repository, new RulesPlanPolicy(candidates), clock);
     }
 }
