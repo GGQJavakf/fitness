@@ -187,6 +187,14 @@ class OpenApiContractTest {
     }
 
     @Test
+    void aiOperationsExposeTypedValidatedOrDegradedContent() {
+        assertThat(successSchemaRef("/api/v1/ai/plan-explanations", "post"))
+                .endsWith("/AiGeneratedContentResponse");
+        assertThat(successSchemaRef("/api/v1/ai/workout-summaries", "post"))
+                .endsWith("/AiGeneratedContentResponse");
+    }
+
+    @Test
     void planVersionOperationsExposeTypedImmutableContracts() {
         assertThat(successSchemaRef("/api/v1/plans", "post"))
                 .endsWith("/ActivePlanResponse");

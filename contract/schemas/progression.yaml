@@ -108,3 +108,42 @@ components:
       required: [workoutSessionId]
       properties:
         workoutSessionId: {type: string}
+    AiContentStatus:
+      type: string
+      enum: [READY, PENDING, DEGRADED]
+    AiStructuredSummary:
+      type: object
+      additionalProperties: false
+      required: [summary, highlights, issues, nextActions, explanation, safetyNotice]
+      properties:
+        summary: {type: string, minLength: 1, maxLength: 300}
+        highlights:
+          type: array
+          maxItems: 5
+          items: {type: string, minLength: 1, maxLength: 160}
+        issues:
+          type: array
+          maxItems: 5
+          items: {type: string, minLength: 1, maxLength: 160}
+        nextActions:
+          type: array
+          maxItems: 5
+          items: {type: string, minLength: 1, maxLength: 160}
+        explanation: {type: string, minLength: 1, maxLength: 500}
+        safetyNotice: {type: [string, 'null'], minLength: 1, maxLength: 240}
+    AiGeneratedContentData:
+      type: object
+      additionalProperties: false
+      required: [status, content, validationStatus]
+      properties:
+        status: {$ref: '#/components/schemas/AiContentStatus'}
+        content: {type: string, minLength: 1, maxLength: 1000}
+        validationStatus: {type: string, minLength: 1, maxLength: 64}
+        structured: {$ref: '#/components/schemas/AiStructuredSummary'}
+    AiGeneratedContentResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/AiGeneratedContentData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

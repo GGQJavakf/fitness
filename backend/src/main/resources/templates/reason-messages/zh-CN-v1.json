@@ -1,0 +1,8 @@
+{
+  "templateVersion": "zh-CN-v1",
+  "messages": {
+    "PLAN_EXPLANATION_DEFAULT": "计划结构和全部训练数字由规则版本 {ruleVersion} 生成；AI 暂不可用，不影响采用或编辑计划。",
+    "WORKOUT_SUMMARY_DEFAULT": "本次已记录 {completedWorkSets} 个有效正式组，训练容量为 {completedVolumeKg} KG·次；进阶结论仍以规则卡片为准。",
+    "ALTERNATIVE_RANKING_DEFAULT": "替代动作已按规则审核顺序展示；AI 暂不可用时不会新增动作。"
+  }
+}

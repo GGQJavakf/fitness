@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 
@@ -11,6 +11,16 @@ export default function PlanCandidatesPage() {
   const [candidate] = useState(() => application.getCandidate())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [explanation, setExplanation] = useState(candidate?.explanationMessage ?? '')
+
+  useEffect(() => {
+    if (!candidate?.candidateId) return
+    let active = true
+    void application.requestPlanExplanation(candidate.candidateId)
+      .then((result) => { if (active) setExplanation(result.content) })
+      .catch(() => { /* The rule template already shown remains authoritative. */ })
+    return () => { active = false }
+  }, [candidate?.candidateId])
 
   async function accept(): Promise<void> {
     setBusy(true)
@@ -49,7 +59,7 @@ export default function PlanCandidatesPage() {
       <View className='card'>
         <Text className='title'>{candidate.status === 'READY' ? '候选计划已生成' : '暂未生成候选'}</Text>
         {candidate.status === 'READY'
-          ? <View className={candidate.explanationMessage.includes('暂不可用') ? 'warning-box' : 'info-box'}>{candidate.explanationMessage}</View>
+          ? <View className={explanation.includes('暂不可用') ? 'warning-box' : 'info-box'}>{explanation}</View>
           : <View className='error-box'>{candidate.reason}</View>}
       </View>
 

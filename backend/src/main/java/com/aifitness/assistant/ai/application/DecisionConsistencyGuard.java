@@ -2,22 +2,18 @@ package com.aifitness.assistant.ai.application;
 
 import java.util.LinkedHashSet;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Set;
 
 public final class DecisionConsistencyGuard {
     private static final Set<String> DECISIONS = Set.of("INCREASE", "KEEP", "REDUCE", "REVIEW");
 
-    public boolean conflicts(String content, Optional<String> authoritativeDecision) {
-        if (authoritativeDecision == null || authoritativeDecision.isEmpty()) {
-            return false;
-        }
-        String authority = authoritativeDecision.orElseThrow().toUpperCase(Locale.ROOT);
-        if (!DECISIONS.contains(authority)) {
-            throw new IllegalArgumentException("unsupported authoritative decision");
-        }
+    public boolean conflicts(String content, Set<String> authoritativeDecisions) {
+        Set<String> authority = authoritativeDecisions.stream()
+                .map(value -> value.toUpperCase(Locale.ROOT))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (!DECISIONS.containsAll(authority)) throw new IllegalArgumentException("unsupported authoritative decision");
         Set<String> mentioned = decisionsMentioned(content == null ? "" : content);
-        return mentioned.stream().anyMatch(decision -> !decision.equals(authority));
+        return !authority.containsAll(mentioned);
     }
 
     private static Set<String> decisionsMentioned(String content) {

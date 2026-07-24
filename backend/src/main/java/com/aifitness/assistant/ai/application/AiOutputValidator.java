@@ -45,7 +45,7 @@ public final class AiOutputValidator {
         if (isUnsafe(content)) {
             return ValidationResult.rejected(ValidationStatus.UNSAFE);
         }
-        if (decisionGuard.conflicts(content, facts.decision())) {
+        if (decisionGuard.conflicts(content, facts.decisions())) {
             return ValidationResult.rejected(ValidationStatus.DECISION_CONFLICT);
         }
         return new ValidationResult(ValidationStatus.VALID, Optional.of(summary));
@@ -123,10 +123,11 @@ public final class AiOutputValidator {
         UNSAFE
     }
 
-    public record AuthoritativeFacts(Set<BigDecimal> allowedNumbers, Optional<String> decision) {
+    public record AuthoritativeFacts(Set<BigDecimal> allowedNumbers, Set<String> decisions) {
         public AuthoritativeFacts {
             allowedNumbers = Set.copyOf(Objects.requireNonNull(allowedNumbers, "allowed numbers must not be null"));
-            decision = decision == null ? Optional.empty() : decision.map(String::strip);
+            decisions = decisions == null ? Set.of() : decisions.stream()
+                    .map(String::strip).collect(java.util.stream.Collectors.toUnmodifiableSet());
         }
     }
 

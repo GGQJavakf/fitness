@@ -66,6 +66,11 @@ export function getWeappApplication() {
     ) => api.applyRecommendation(id, expectedVersion, acceptedWeightKg, idempotencyKey),
     dismissProgressionRecommendation: (id: string) => api.dismissRecommendation(id),
     getExerciseTrend: (exerciseCode: string) => api.getExerciseTrend(exerciseCode),
+    requestPlanExplanation: (candidateId: string) => api.requestPlanExplanation(candidateId),
+    requestWorkoutSummary: async () => {
+      const draft = await workoutDrafts.loadActive()
+      return draft?.sessionId ? api.requestWorkoutSummary(draft.sessionId) : null
+    },
     routeParameter: (name: string) => currentWeappRouteParameter(name),
   }
 }

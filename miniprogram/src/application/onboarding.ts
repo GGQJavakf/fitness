@@ -116,6 +116,7 @@ export interface CandidateExerciseViewModel {
 }
 
 export interface CandidateViewModel {
+  candidateId?: string
   status: 'READY' | 'NO_CANDIDATE'
   canContinue: boolean
   explanationMessage: string
@@ -244,6 +245,7 @@ export function buildCandidateViewModel(
 
   const { candidate } = data
   return {
+    candidateId: candidate.candidateId,
     status: 'READY',
     canContinue: true,
     explanationMessage: explanationMessage(candidate.explanationStatus, candidate.explanation),

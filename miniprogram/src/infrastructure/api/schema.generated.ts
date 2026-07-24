@@ -1307,6 +1307,26 @@ export interface components {
         AiPlanExplanationRequest: {
             candidateId: string;
         };
+        /** @enum {string} */
+        AiContentStatus: "READY" | "PENDING" | "DEGRADED";
+        AiStructuredSummary: {
+            summary: string;
+            highlights: string[];
+            issues: string[];
+            nextActions: string[];
+            explanation: string;
+            safetyNotice: string | null;
+        };
+        AiGeneratedContentData: {
+            status: components["schemas"]["AiContentStatus"];
+            content: string;
+            validationStatus: string;
+            structured?: components["schemas"]["AiStructuredSummary"];
+        };
+        AiGeneratedContentResponse: {
+            data: components["schemas"]["AiGeneratedContentData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         AiWorkoutSummaryRequest: {
             workoutSessionId: string;
         };
@@ -2402,7 +2422,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["AiPlanExplanation"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已校验的 AI 解释或模板降级结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGeneratedContentResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2415,7 +2443,15 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["AiWorkoutSummary"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已校验的训练总结或模板降级结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGeneratedContentResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };

@@ -39,6 +39,18 @@ public final class WorkoutHistoryQueryService {
         return new Page(items, next, hasMore);
     }
 
+    public Summary summary(AuthenticatedUserId user, UUID sessionId) {
+        Objects.requireNonNull(user);
+        Objects.requireNonNull(sessionId);
+        WorkoutSession session = sessions.findByIdAndUser(sessionId, user.value())
+                .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
+        List<WorkoutSet> facts = sets.findBySession(user.value(), sessionId);
+        List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
+        BigDecimal volume = completed.stream().map(set -> set.actual().weight()
+                .multiply(BigDecimal.valueOf(set.actual().reps()))).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new Summary(session.id(), session.status(), completed.size(), volume.stripTrailingZeros());
+    }
+
     private Item item(UUID userId, WorkoutSession session) {
         List<WorkoutSet> facts = sets.findBySession(userId, session.id());
         List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
@@ -67,6 +79,8 @@ public final class WorkoutHistoryQueryService {
     private record Cursor(Instant startedAt, UUID id) {}
     public record Item(UUID sessionId, String trainingDayCode, WorkoutStatus status, Instant startedAt,
                        Instant completedAt, int completedWorkSets, BigDecimal completedVolumeKg) {}
+    public record Summary(
+            UUID sessionId, WorkoutStatus status, int completedWorkSets, BigDecimal completedVolumeKg) {}
     public record Page(List<Item> items, Optional<String> nextCursor, boolean hasMore) {
         public Page { items = List.copyOf(items); Objects.requireNonNull(nextCursor); }
     }

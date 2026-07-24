@@ -517,7 +517,11 @@ paths:
       description: 仅请求解释，不得改变规则生成的关键数字。
       requestBody: {$ref: '#/components/requestBodies/AiPlanExplanation'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已校验的 AI 解释或模板降级结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/AiGeneratedContentResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/ai/workout-summaries:
     post:
@@ -526,7 +530,11 @@ paths:
       description: 仅请求解释性总结，规则结论保持权威。
       requestBody: {$ref: '#/components/requestBodies/AiWorkoutSummary'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已校验的训练总结或模板降级结果
+          content:
+            application/json:
+              schema: {$ref: './schemas/progression.yaml#/components/schemas/AiGeneratedContentResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/privacy/export:
     get:

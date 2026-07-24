@@ -34,6 +34,7 @@ import type { WorkoutHistoryPage, WorkoutHistoryPort } from '../../application/h
 import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionType } from '../../application/ports/WorkoutCompletionPort'
 import type { ExerciseReplacementCandidate, ReplacedWorkoutSession, WorkoutReplacementPort } from '../../application/ports/WorkoutReplacementPort'
 import type { components } from './schema.generated'
+import type { AiGeneratedContent } from '../../application/ai'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT'
 
@@ -81,6 +82,7 @@ type ExerciseReplacementResponse = components['schemas']['ExerciseReplacementRes
 type ProgressionRecommendationListResponse = components['schemas']['ProgressionRecommendationListResponse']
 type ProgressionRecommendationResponse = components['schemas']['ProgressionRecommendationResponse']
 type ExerciseTrendResponse = components['schemas']['ExerciseTrendResponse']
+type AiGeneratedContentResponse = components['schemas']['AiGeneratedContentResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
@@ -311,6 +313,24 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     const response = await this.request<ExerciseTrendResponse>(
       `/api/v1/progress/exercises/${encodeURIComponent(exerciseCode)}`,
       'GET',
+    )
+    return requireData(response.data)
+  }
+
+  async requestPlanExplanation(candidateId: string): Promise<AiGeneratedContent> {
+    const response = await this.request<AiGeneratedContentResponse>(
+      '/api/v1/ai/plan-explanations',
+      'POST',
+      { candidateId } satisfies components['schemas']['AiPlanExplanationRequest'],
+    )
+    return requireData(response.data)
+  }
+
+  async requestWorkoutSummary(workoutSessionId: string): Promise<AiGeneratedContent> {
+    const response = await this.request<AiGeneratedContentResponse>(
+      '/api/v1/ai/workout-summaries',
+      'POST',
+      { workoutSessionId } satisfies components['schemas']['AiWorkoutSummaryRequest'],
     )
     return requireData(response.data)
   }

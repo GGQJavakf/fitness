@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +27,7 @@ class AiOutputValidationTest {
         AiOutputValidator.ValidationResult result = validator.validate(
                 raw,
                 new AiOutputValidator.AuthoritativeFacts(
-                        Set.of(new BigDecimal("3"), new BigDecimal("20")), Optional.of("KEEP")));
+                        Set.of(new BigDecimal("3"), new BigDecimal("20")), Set.of("KEEP")));
 
         assertThat(result.status()).isEqualTo(AiOutputValidator.ValidationStatus.VALID);
         assertThat(result.summary()).isPresent();
@@ -55,7 +54,7 @@ class AiOutputValidationTest {
                 .normalize();
         JsonNode cases = json.readTree(Files.readString(fixture)).path("cases");
         AiOutputValidator.AuthoritativeFacts facts = new AiOutputValidator.AuthoritativeFacts(
-                Set.of(new BigDecimal("20")), Optional.of("KEEP"));
+                Set.of(new BigDecimal("20")), Set.of("KEEP"));
 
         for (JsonNode testCase : cases) {
             AiOutputValidator.ValidationResult result = validator.validate(testCase.path("raw").asText(), facts);
@@ -66,7 +65,7 @@ class AiOutputValidationTest {
         }
 
         assertThat(facts.allowedNumbers()).containsExactly(new BigDecimal("20"));
-        assertThat(facts.decision()).contains("KEEP");
+        assertThat(facts.decisions()).containsExactly("KEEP");
     }
 
     @Test
@@ -86,6 +85,6 @@ class AiOutputValidationTest {
     }
 
     private static AiOutputValidator.AuthoritativeFacts facts() {
-        return new AiOutputValidator.AuthoritativeFacts(Set.of(), Optional.of("KEEP"));
+        return new AiOutputValidator.AuthoritativeFacts(Set.of(), Set.of("KEEP"));
     }
 }
