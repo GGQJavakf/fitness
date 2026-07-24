@@ -225,7 +225,7 @@ components:
           maxProperties: 100
           propertyNames:
             type: string
-            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds)$'
+            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds|targetWeightKg)$'
           additionalProperties: {$ref: '#/components/schemas/LockCommandStatus'}
         warningConfirmationToken: {type: string, minLength: 1, maxLength: 128}
     RebalancePlanRequest:
@@ -240,7 +240,7 @@ components:
           maxProperties: 100
           propertyNames:
             type: string
-            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds)$'
+            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds|targetWeightKg)$'
           additionalProperties: {$ref: '#/components/schemas/LockCommandStatus'}
     PlanVersionStatus:
       type: string

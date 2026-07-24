@@ -222,6 +222,12 @@ class OpenApiContractTest {
         assertThat(list(lockCommands.get("enum")))
                 .containsExactly("USER_LOCKED", "UNLOCKED")
                 .doesNotContain("RULE_LOCKED");
+        for (String requestName : List.of("CreatePlanVersionRequest", "RebalancePlanRequest")) {
+            Map<String, Object> locks = map(map(map(schemas.get(requestName)).get("properties")).get("locks"));
+            assertThat(map(locks.get("propertyNames")).get("pattern"))
+                    .as("%s must accept every domain-supported editable lock path", requestName)
+                    .isEqualTo("^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds|targetWeightKg)$");
+        }
         assertThat(required(schemas, "PlanVersionData"))
                 .contains("versionNumber", "plan", "ruleReference", "confirmedWarningCodes", "createdAt");
     }
