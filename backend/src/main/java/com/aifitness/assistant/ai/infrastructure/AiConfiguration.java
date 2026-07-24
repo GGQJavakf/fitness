@@ -2,7 +2,10 @@ package com.aifitness.assistant.ai.infrastructure;
 
 import com.aifitness.assistant.ai.application.AiInputRedactor;
 import com.aifitness.assistant.ai.application.AiOrchestrator;
+import com.aifitness.assistant.ai.application.AiOutputValidator;
 import com.aifitness.assistant.ai.application.AiProvider;
+import com.aifitness.assistant.ai.application.DecisionConsistencyGuard;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -30,5 +33,15 @@ public class AiConfiguration {
             AiProvider provider,
             AiInputRedactor redactor) {
         return new AiOrchestrator(enabled, provider, redactor);
+    }
+
+    @Bean
+    DecisionConsistencyGuard decisionConsistencyGuard() {
+        return new DecisionConsistencyGuard();
+    }
+
+    @Bean
+    AiOutputValidator aiOutputValidator(ObjectMapper objectMapper, DecisionConsistencyGuard decisionGuard) {
+        return new AiOutputValidator(objectMapper, decisionGuard);
     }
 }

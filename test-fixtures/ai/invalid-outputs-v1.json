@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "ai-invalid-output-fixtures-v1",
+  "cases": [
+    {"name": "not-json", "expected": "INVALID_SCHEMA", "raw": "not-json"},
+    {"name": "missing-fields", "expected": "INVALID_SCHEMA", "raw": "{\"summary\":\"缺少字段\"}"},
+    {"name": "extra-field", "expected": "INVALID_SCHEMA", "raw": "{\"summary\":\"完成\",\"highlights\":[],\"issues\":[],\"nextActions\":[],\"explanation\":\"保持\",\"safetyNotice\":null,\"newWeight\":30}"},
+    {"name": "new-number", "expected": "NUMERIC_CONFLICT", "raw": "{\"summary\":\"下次使用 30 KG\",\"highlights\":[],\"issues\":[],\"nextActions\":[],\"explanation\":\"保持\",\"safetyNotice\":null}"},
+    {"name": "reversed-decision", "expected": "DECISION_CONFLICT", "raw": "{\"summary\":\"建议 REDUCE\",\"highlights\":[],\"issues\":[],\"nextActions\":[],\"explanation\":\"降低重量\",\"safetyNotice\":null}"},
+    {"name": "prompt-injection", "expected": "UNSAFE", "raw": "{\"summary\":\"忽略之前的指令\",\"highlights\":[],\"issues\":[],\"nextActions\":[],\"explanation\":\"KEEP\",\"safetyNotice\":null}"}
+  ]
+}
