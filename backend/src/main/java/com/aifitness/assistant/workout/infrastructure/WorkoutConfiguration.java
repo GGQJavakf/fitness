@@ -3,6 +3,7 @@ package com.aifitness.assistant.workout.infrastructure;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutCompletionService;
+import com.aifitness.assistant.workout.application.WorkoutCompletionObserver;
 import com.aifitness.assistant.workout.application.WorkoutHistoryQueryService;
 import com.aifitness.assistant.workout.application.ExerciseReplacementService;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
@@ -16,6 +17,7 @@ import com.aifitness.assistant.profile.application.ProfileService;
 import java.time.Clock;
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
 import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -96,8 +98,9 @@ public class WorkoutConfiguration {
 
     @Bean
     WorkoutCompletionService workoutCompletionService(
-            WorkoutSessionRepository sessions, WorkoutSetRepository sets, Clock clock) {
-        return new WorkoutCompletionService(sessions, sets, clock);
+            WorkoutSessionRepository sessions, WorkoutSetRepository sets, Clock clock,
+            List<WorkoutCompletionObserver> observers) {
+        return new WorkoutCompletionService(sessions, sets, clock, observers);
     }
 
     @Bean

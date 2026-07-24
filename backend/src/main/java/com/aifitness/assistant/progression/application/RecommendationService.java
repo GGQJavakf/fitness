@@ -46,9 +46,11 @@ public final class RecommendationService {
                 ProgressionRecommendation.Status.PENDING,
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), clock.instant());
         return recommendations.inTransaction(() -> {
-            ProgressionRecommendation saved = recommendations.save(recommendation);
-            recommendations.appendOutbox(saved.id(), "PROGRESSION_RECOMMENDATION_CREATED");
-            return saved;
+            RecommendationRepository.SaveResult result = recommendations.saveIfAbsent(recommendation);
+            if (result.created()) {
+                recommendations.appendOutbox(result.recommendation().id(), "PROGRESSION_RECOMMENDATION_CREATED");
+            }
+            return result.recommendation();
         });
     }
 

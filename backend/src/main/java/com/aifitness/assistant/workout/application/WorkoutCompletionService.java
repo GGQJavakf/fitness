@@ -13,11 +13,18 @@ public final class WorkoutCompletionService {
     private final WorkoutSessionRepository sessions;
     private final WorkoutSetRepository sets;
     private final Clock clock;
+    private final List<WorkoutCompletionObserver> observers;
 
     public WorkoutCompletionService(WorkoutSessionRepository sessions, WorkoutSetRepository sets, Clock clock) {
+        this(sessions, sets, clock, List.of());
+    }
+
+    public WorkoutCompletionService(WorkoutSessionRepository sessions, WorkoutSetRepository sets, Clock clock,
+                                    List<WorkoutCompletionObserver> observers) {
         this.sessions = Objects.requireNonNull(sessions);
         this.sets = Objects.requireNonNull(sets);
         this.clock = Objects.requireNonNull(clock);
+        this.observers = List.copyOf(Objects.requireNonNull(observers));
     }
 
     public Result complete(AuthenticatedUserId user, UUID sessionId, long expectedVersion, CompletionType type) {
@@ -31,7 +38,9 @@ public final class WorkoutCompletionService {
         if (current.status().terminal()) {
             if ((type == CompletionType.FULL && current.status() == WorkoutStatus.COMPLETED)
                     || (type == CompletionType.EARLY_END && current.status() == WorkoutStatus.ABORTED)) {
-                return result(current, completed, current.status() == WorkoutStatus.COMPLETED, facts);
+                Result result = result(current, completed, current.status() == WorkoutStatus.COMPLETED, facts);
+                if (result.complete()) notifyCompleted(user, current, facts);
+                return result;
             }
             throw new WorkoutSessionService.IdempotencyConflictException();
         }
@@ -47,7 +56,13 @@ public final class WorkoutCompletionService {
                         type == CompletionType.FULL ? WorkoutStatus.COMPLETED : WorkoutStatus.ABORTED,
                         clock.instant()),
                 expectedVersion);
-        return result(terminal, completed, type == CompletionType.FULL, facts);
+        Result result = result(terminal, completed, type == CompletionType.FULL, facts);
+        if (result.complete()) notifyCompleted(user, terminal, facts);
+        return result;
+    }
+
+    private void notifyCompleted(AuthenticatedUserId user, WorkoutSession session, List<WorkoutSet> facts) {
+        observers.forEach(observer -> observer.onCompleted(user, session, List.copyOf(facts)));
     }
 
     private static Result result(WorkoutSession session, long completed, boolean complete, List<WorkoutSet> facts) {

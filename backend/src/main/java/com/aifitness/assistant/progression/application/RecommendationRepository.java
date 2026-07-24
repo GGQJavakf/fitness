@@ -7,7 +7,16 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 public interface RecommendationRepository {
-    ProgressionRecommendation save(ProgressionRecommendation recommendation);
+    SaveResult saveIfAbsent(ProgressionRecommendation recommendation);
+
+    default ProgressionRecommendation save(ProgressionRecommendation recommendation) {
+        SaveResult result = saveIfAbsent(recommendation);
+        if (!result.created()) throw new IllegalStateException("recommendation already exists");
+        return result.recommendation();
+    }
+
+    Optional<ProgressionRecommendation> findBySource(
+            UUID userId, UUID sourceSessionId, UUID exerciseId, String algorithmVersion);
 
     Optional<ProgressionRecommendation> findByIdAndUser(UUID id, UUID userId);
 
@@ -19,4 +28,6 @@ public interface RecommendationRepository {
     void appendOutbox(UUID aggregateId, String eventType);
 
     <T> T inTransaction(Supplier<T> operation);
+
+    record SaveResult(ProgressionRecommendation recommendation, boolean created) {}
 }

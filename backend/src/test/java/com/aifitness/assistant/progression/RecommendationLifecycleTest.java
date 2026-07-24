@@ -42,6 +42,22 @@ class RecommendationLifecycleTest {
     }
 
     @Test
+    void repeatedGenerationForTheSameSourceIsIdempotent() {
+        InMemoryRecommendationRepository repository = new InMemoryRecommendationRepository();
+        RecommendationService service = service(repository);
+        UUID exerciseId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+
+        ProgressionRecommendation first = service.save(USER, exerciseId, "GOBLET_SQUAT", sessionId,
+                increaseDecision(), "{\"generation\":1}");
+        ProgressionRecommendation replay = service.save(USER, exerciseId, "GOBLET_SQUAT", sessionId,
+                increaseDecision(), "{\"generation\":2}");
+
+        assertThat(replay).isEqualTo(first);
+        assertThat(repository.outboxEvents()).hasSize(1);
+    }
+
+    @Test
     void dismissalIsTerminalAndAnotherUserCannotObserveTheRecommendation() {
         InMemoryRecommendationRepository repository = new InMemoryRecommendationRepository();
         RecommendationService service = service(repository);

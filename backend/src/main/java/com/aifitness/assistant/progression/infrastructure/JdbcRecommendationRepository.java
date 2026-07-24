@@ -39,7 +39,11 @@ public final class JdbcRecommendationRepository implements RecommendationReposit
     }
 
     @Override
-    public ProgressionRecommendation save(ProgressionRecommendation recommendation) {
+    public SaveResult saveIfAbsent(ProgressionRecommendation recommendation) {
+        Optional<ProgressionRecommendation> existing = findBySource(
+                recommendation.userId(), recommendation.sourceSessionId(), recommendation.exerciseId(),
+                recommendation.algorithmVersion());
+        if (existing.isPresent()) return new SaveResult(existing.orElseThrow(), false);
         Map<String, Object> current = prescription(recommendation.exerciseCode(), recommendation.currentPrescription());
         Map<String, Object> suggested = prescription(
                 recommendation.exerciseCode(), recommendation.recommendedPrescription());
@@ -54,11 +58,22 @@ public final class JdbcRecommendationRepository implements RecommendationReposit
                     (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json,
                      reason_code, input_snapshot_json, algorithm_version, user_decision, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+                ON DUPLICATE KEY UPDATE id = id
                 """, bytes(recommendation.id()), bytes(recommendation.userId()), bytes(recommendation.exerciseId()),
                 bytes(recommendation.sourceSessionId()), recommendation.decision().name(), writeJson(current),
                 writeJson(suggested), recommendation.reasonCode(), validJson(recommendation.inputSnapshotJson()),
                 recommendation.algorithmVersion(), Timestamp.from(recommendation.createdAt()));
-        return findByIdAndUser(recommendation.id(), recommendation.userId()).orElseThrow();
+        ProgressionRecommendation saved = findBySource(
+                recommendation.userId(), recommendation.sourceSessionId(), recommendation.exerciseId(),
+                recommendation.algorithmVersion()).orElseThrow();
+        return new SaveResult(saved, saved.id().equals(recommendation.id()));
+    }
+
+    @Override
+    public Optional<ProgressionRecommendation> findBySource(
+            UUID userId, UUID sourceSessionId, UUID exerciseId, String algorithmVersion) {
+        return query("WHERE user_id = ? AND source_session_id = ? AND exercise_id = ? AND algorithm_version = ?",
+                bytes(userId), bytes(sourceSessionId), bytes(exerciseId), algorithmVersion).stream().findFirst();
     }
 
     @Override

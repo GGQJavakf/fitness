@@ -25,7 +25,9 @@ import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
 import com.aifitness.assistant.progression.domain.ProgressionDecision;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
+import com.aifitness.assistant.progression.application.EffectiveSetSelector;
 import com.aifitness.assistant.progression.infrastructure.JdbcExerciseTrendQuery;
+import com.aifitness.assistant.progression.infrastructure.JdbcHistoricalProgressionFactProvider;
 import com.aifitness.assistant.progression.infrastructure.JdbcRecommendationRepository;
 import com.aifitness.assistant.privacy.application.PrivacyDataPort;
 import com.aifitness.assistant.privacy.application.PrivacyExportRepository;
@@ -610,6 +612,9 @@ class MigrationTest {
             return saved;
         });
         assertThat(repository.findByIdAndUser(recommendation.id(), userId)).contains(persisted);
+        assertThat(repository.saveIfAbsent(recommendation).created()).isFalse();
+        assertThat(queryOne("SELECT COUNT(*) FROM progression_recommendation WHERE source_session_id = %s"
+                .formatted(binary(sessionId.toString())))).isEqualTo("1");
 
         ProgressionRecommendation dismissed = persisted.dismiss("NOT_NOW");
         repository.inTransaction(() -> {
@@ -673,6 +678,20 @@ class MigrationTest {
             assertThat(point.totalReps()).isEqualTo(18);
             assertThat(point.workSetCount()).isEqualTo(2);
         });
+
+        WorkoutExerciseSnapshot currentExercise = new WorkoutExerciseSnapshot(
+                UUID.fromString(snapshotId), UUID.fromString(sessionId), UUID.fromString(plan.planExerciseId()), 1,
+                "GOBLET_SQUAT", "Goblet squat", "content-v1", java.util.Set.of("DUMBBELL"),
+                new WorkoutExerciseSnapshot.Prescription(2, 8, 12, 90, "KNOWN", "KG"),
+                WorkoutExerciseSnapshot.Status.COMPLETED);
+        var historicalFacts = new JdbcHistoricalProgressionFactProvider(dataSource).facts(
+                new AuthenticatedUserId(UUID.fromString(userId)), currentExercise, List.of());
+        assertThat(historicalFacts).hasSize(6).allSatisfy(fact -> {
+            assertThat(fact.sessionId()).isEqualTo(UUID.fromString(sessionId));
+            assertThat(fact.exerciseId()).isEqualTo(UUID.fromString(plan.planExerciseId()));
+            assertThat(fact.payloadDigest()).hasSize(64);
+        });
+        assertThat(historicalFacts).filteredOn(EffectiveSetSelector.RawSetFact::anomalous).hasSize(1);
     }
 
     @Test

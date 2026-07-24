@@ -1,13 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { FitnessApiClient, type TransportRequest } from '../src/infrastructure/api/client'
+import { FitnessApiClient, type TransportPort, type TransportRequest } from '../src/infrastructure/api/client'
 
 const meta = { requestId: 'request-1', serverTime: '2026-07-24T12:00:00Z' }
 
 function client(request: (value: TransportRequest) => unknown): FitnessApiClient {
+  const transport: TransportPort = {
+    async request<T>(value: TransportRequest) {
+      return { statusCode: 200, data: request(value) as T }
+    },
+  }
   return new FitnessApiClient(
     'http://127.0.0.1:8080',
-    { request: vi.fn(async (value) => ({ statusCode: 200, data: request(value) })) },
+    transport,
     {
       load: vi.fn().mockResolvedValue({
         accessToken: 'access-redacted', refreshToken: 'refresh-redacted', expiresAt: '2026-07-25T00:00:00Z',

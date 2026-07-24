@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.workout.application.WorkoutCompletionService;
+import com.aifitness.assistant.workout.application.WorkoutCompletionObserver;
 import com.aifitness.assistant.workout.application.WorkoutSetService;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
@@ -13,6 +14,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class WorkoutCompletionTest {
@@ -66,9 +68,11 @@ class WorkoutCompletionTest {
         saveCompleted(fixture, "set-full-0001", 1, 1);
         saveCompleted(fixture, "set-full-0002", 2, 2);
         saveCompleted(fixture, "set-full-0003", 3, 3);
+        AtomicInteger observed = new AtomicInteger();
+        WorkoutCompletionObserver observer = (user, session, facts) -> observed.incrementAndGet();
         WorkoutCompletionService service = new WorkoutCompletionService(
                 fixture.sessions(), fixture.repository(),
-                Clock.fixed(Instant.parse("2026-07-24T08:05:00Z"), ZoneOffset.UTC));
+                Clock.fixed(Instant.parse("2026-07-24T08:05:00Z"), ZoneOffset.UTC), java.util.List.of(observer));
 
         WorkoutCompletionService.Result first = service.complete(
                 new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID,
@@ -81,6 +85,7 @@ class WorkoutCompletionTest {
         assertThat(first.completedWorkSets()).isEqualTo(3);
         assertThat(first.automaticProgressionEligible()).isTrue();
         assertThat(retry).isEqualTo(first);
+        assertThat(observed).hasValue(2);
     }
 
     @Test

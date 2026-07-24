@@ -15,11 +15,22 @@ public final class InMemoryRecommendationRepository implements RecommendationRep
     private final List<OutboxEvent> outboxEvents = new ArrayList<>();
 
     @Override
-    public synchronized ProgressionRecommendation save(ProgressionRecommendation recommendation) {
-        if (recommendations.putIfAbsent(recommendation.id(), recommendation) != null) {
-            throw new IllegalStateException("recommendation already exists");
-        }
-        return recommendation;
+    public synchronized SaveResult saveIfAbsent(ProgressionRecommendation recommendation) {
+        Optional<ProgressionRecommendation> existing = findBySource(
+                recommendation.userId(), recommendation.sourceSessionId(), recommendation.exerciseId(),
+                recommendation.algorithmVersion());
+        if (existing.isPresent()) return new SaveResult(existing.orElseThrow(), false);
+        recommendations.put(recommendation.id(), recommendation);
+        return new SaveResult(recommendation, true);
+    }
+
+    @Override
+    public synchronized Optional<ProgressionRecommendation> findBySource(
+            UUID userId, UUID sourceSessionId, UUID exerciseId, String algorithmVersion) {
+        return recommendations.values().stream().filter(value -> value.userId().equals(userId))
+                .filter(value -> value.sourceSessionId().equals(sourceSessionId))
+                .filter(value -> value.exerciseId().equals(exerciseId))
+                .filter(value -> value.algorithmVersion().equals(algorithmVersion)).findFirst();
     }
 
     @Override
