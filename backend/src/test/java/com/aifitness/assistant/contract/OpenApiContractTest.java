@@ -64,6 +64,7 @@ class OpenApiContractTest {
     private static Map<String, Object> openApi;
     private static Map<String, Object> commonSchemas;
     private static Map<String, Object> profileSchemas;
+    private static Map<String, Object> planSchemas;
 
     @BeforeAll
     static void loadContract() throws IOException {
@@ -71,6 +72,7 @@ class OpenApiContractTest {
         openApi = loadYaml(contractRoot.resolve("openapi.yaml"));
         commonSchemas = map(loadYaml(contractRoot.resolve("schemas/common.yaml")).get("components"));
         profileSchemas = map(loadYaml(contractRoot.resolve("schemas/profile.yaml")).get("components"));
+        planSchemas = map(loadYaml(contractRoot.resolve("schemas/plan.yaml")).get("components"));
     }
 
     @Test
@@ -161,6 +163,19 @@ class OpenApiContractTest {
                 .endsWith("/ExerciseDetailResponse");
         assertThat(successSchemaRef("/api/v1/plan-templates", "get"))
                 .endsWith("/PlanTemplateListResponse");
+    }
+
+    @Test
+    void planCandidateOperationsExposeTypedDeterministicContracts() {
+        assertThat(successSchemaRef("/api/v1/plans/candidates", "post"))
+                .endsWith("/PlanCandidateGenerationResponse");
+        assertThat(successSchemaRef("/api/v1/plans/validate", "post"))
+                .endsWith("/PlanValidationResponse");
+        Map<String, Object> schemas = map(planSchemas.get("schemas"));
+        assertThat(required(schemas, "PlanExercise"))
+                .contains("workSets", "repMin", "repMax", "restSeconds", "weightStatus");
+        assertThat(required(schemas, "PlanCandidate"))
+                .contains("ruleReference", "explanationStatus", "explanation");
     }
 
     @Test

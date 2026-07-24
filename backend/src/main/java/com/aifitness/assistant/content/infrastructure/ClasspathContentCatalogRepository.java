@@ -83,8 +83,24 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
         List<PlanTemplateCatalog.Template> templates = new ArrayList<>();
         document.path("templates").forEach(node -> templates.add(new PlanTemplateCatalog.Template(
                 node.path("code").asText(), node.path("name").asText(),
-                node.path("sessionsPerWeek").asInt(), templateExerciseCodes(node.path("days")))));
+                node.path("sessionsPerWeek").asInt(), templateExerciseCodes(node.path("days")),
+                templateDays(node.path("days")))));
         return new PlanTemplateCatalog(metadata, metadataNode.path("contentVersion").asText(), templates);
+    }
+
+    private static List<PlanTemplateCatalog.Day> templateDays(JsonNode nodes) {
+        List<PlanTemplateCatalog.Day> days = new ArrayList<>();
+        nodes.forEach(day -> {
+            List<PlanTemplateCatalog.ExerciseSlot> exercises = new ArrayList<>();
+            day.path("exercises").forEach(slot -> exercises.add(new PlanTemplateCatalog.ExerciseSlot(
+                    slot.path("exerciseCode").asText(), slot.path("order").asInt(),
+                    slot.path("workSets").asInt(), slot.at("/repRange/min").asInt(),
+                    slot.at("/repRange/max").asInt(), slot.path("restSeconds").asInt(),
+                    slot.path("initialWeightState").asText())));
+            days.add(new PlanTemplateCatalog.Day(
+                    day.path("code").asText(), day.path("name").asText(), exercises));
+        });
+        return List.copyOf(days);
     }
 
     private static Set<String> templateExerciseCodes(JsonNode days) {

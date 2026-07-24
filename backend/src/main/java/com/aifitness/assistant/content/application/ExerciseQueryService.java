@@ -56,7 +56,9 @@ public final class ExerciseQueryService {
         if (code == null || code.isBlank()) {
             throw new IllegalArgumentException("exercise id is required");
         }
-        return list(user, Filter.none()).stream().filter(exercise -> exercise.code().equals(code)).findFirst();
+        return list(user, Filter.none()).stream()
+                .filter(exercise -> exercise.code().equals(code) || exercise.stableId().toString().equals(code))
+                .findFirst();
     }
 
     public String version() {

@@ -6,6 +6,9 @@ import com.aifitness.assistant.profile.domain.PreferenceProfile;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 public final class ProfileService {
 
@@ -35,6 +38,14 @@ public final class ProfileService {
 
     public PreferenceProfile getPreferences(AuthenticatedUserId user) {
         return profiles.findPreferences(user.value()).orElseThrow(ProfileNotFoundException::new);
+    }
+
+    public Set<UUID> excludedExerciseIds(AuthenticatedUserId user) {
+        return profiles.findPreferences(user.value()).stream()
+                .flatMap(profile -> profile.preferences().stream())
+                .filter(preference -> preference.preferenceType() == PreferenceProfile.PreferenceType.EXCLUDED)
+                .map(PreferenceProfile.Preference::exerciseId)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public PreferenceProfile updatePreferences(

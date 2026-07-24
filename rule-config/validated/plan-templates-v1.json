@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.0.0", "ruleVersion": "1.0.0", "contentVersion": "1.0.0", "status": "AI_VALIDATED",
+    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.0.0", "ruleVersion": "1.1.0", "contentVersion": "1.0.0", "status": "AI_VALIDATED",
     "generatedAt": "2026-07-23T12:00:00Z",
     "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写"],
     "sourceReferences": [{ "id": "ACSM_PTR_11", "title": "ACSM Position Stand for Healthy Adults", "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/", "accessedAt": "2026-07-23", "usage": "用于模板频率和训练范围候选，不用于个体绝对重量" }],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "089a762981057230565cb0ead9611dfac77b253492ee2722d0633648a0eb0b29"
+    "digestSha256": "eafd6cde33330cb8c12a1efbc0bbbda316d59e5fde8cceeb33cc6c7d326c169d"
   },
   "templates": [
     {

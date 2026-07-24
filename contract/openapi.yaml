@@ -168,8 +168,14 @@ paths:
       description: 规则引擎生成合法结构和全部关键数字；AI 解释允许为空、异步或降级。
       requestBody: {$ref: '#/components/requestBodies/PlanCandidates'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 确定性候选或可操作失败原因
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanCandidateGenerationResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/validate:
     post:
@@ -177,8 +183,13 @@ paths:
       operationId: validatePlanDraft
       requestBody: {$ref: '#/components/requestBodies/PlanValidation'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 按指定规则版本校验计划草稿
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanValidationResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans:
     post:

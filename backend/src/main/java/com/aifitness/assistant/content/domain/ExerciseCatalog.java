@@ -1,8 +1,10 @@
 package com.aifitness.assistant.content.domain;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises) {
@@ -45,6 +47,10 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
 
         public boolean hasValidRights() {
             return "ORIGINAL_SUMMARY".equals(rightsStatus);
+        }
+
+        public UUID stableId() {
+            return UUID.nameUUIDFromBytes(("ai-fitness-exercise:" + code).getBytes(StandardCharsets.UTF_8));
         }
 
         public boolean supports(Set<String> availableEquipment) {

@@ -83,7 +83,7 @@ class ValidatedConfigValidationTest {
         Set<String> exerciseCodes = new HashSet<>();
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
-        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.0.0");
+        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.1.0");
         assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.0.0");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());

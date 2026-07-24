@@ -52,7 +52,8 @@ public final class ExerciseController {
 
     private ExerciseData toData(ExerciseCatalog.Exercise exercise) {
         return new ExerciseData(
-                exercise.code(), exercise.name(), exercise.plainLanguage(), exercise.movementPattern(),
+                exercise.stableId().toString(), exercise.code(), exercise.name(),
+                exercise.plainLanguage(), exercise.movementPattern(),
                 exercise.equipment().stream().sorted().toList(),
                 exercise.primaryMuscles().stream().sorted().toList(), exercise.instructions(),
                 exercise.safetyCues(), new ImageData(exercise.image().primaryRef(), exercise.image().fallbackRef()),
@@ -74,7 +75,7 @@ public final class ExerciseController {
     public record ExerciseListData(List<ExerciseData> items, String contentVersion) {}
 
     public record ExerciseData(
-            String id, String name, String plainLanguage, String movementPattern, List<String> equipment,
+            String id, String code, String name, String plainLanguage, String movementPattern, List<String> equipment,
             List<String> primaryMuscles, List<String> instructions, List<String> safetyCues, ImageData image,
             List<AlternativeData> alternatives, String contentVersion) {}
 

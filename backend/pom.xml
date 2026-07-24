@@ -87,6 +87,7 @@
                 <directory>${project.basedir}/../rule-config/validated</directory>
                 <targetPath>rule-config</targetPath>
                 <includes>
+                    <include>rule-config-v1.json</include>
                     <include>exercises-v1.json</include>
                     <include>plan-templates-v1.json</include>
                 </includes>

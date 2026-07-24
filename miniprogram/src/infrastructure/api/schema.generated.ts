@@ -758,7 +758,9 @@ export interface components {
             rank: number;
         };
         Exercise: {
+            /** Format: uuid */
             id: string;
+            code: string;
             name: string;
             plainLanguage: string;
             movementPattern: string;
@@ -802,20 +804,80 @@ export interface components {
         PlanCandidateRequest: {
             profileVersion: components["schemas"]["ExpectedVersion"];
             lockedFields?: {
-                [key: string]: unknown;
+                [key: string]: number;
             };
         };
+        /** @enum {string} */
+        PlanGenerationStatus: "CANDIDATE_READY" | "NO_CANDIDATE";
+        PlanExercise: {
+            exerciseCode: string;
+            workSets: number;
+            repMin: number;
+            repMax: number;
+            restSeconds: number;
+            weightStatus: components["schemas"]["WeightStatus"];
+        };
+        PlanDay: {
+            code: string;
+            name: string;
+            exercises: components["schemas"]["PlanExercise"][];
+        };
         PlanDraft: {
-            days: {
-                [key: string]: unknown;
-            }[];
+            templateCode: string;
+            name: string;
+            days: components["schemas"]["PlanDay"][];
             locks: {
                 [key: string]: components["schemas"]["LockStatus"];
             };
         };
-        ValidatePlanRequest: {
+        ValidationIssue: {
+            severity: components["schemas"]["ValidationSeverity"];
+            reasonCode: string;
+            fieldPath: string;
+            parameters?: {
+                [key: string]: unknown;
+            };
+        };
+        PlanCandidate: {
+            candidateId: string;
             plan: components["schemas"]["PlanDraft"];
+            validationIssues: components["schemas"]["ValidationIssue"][];
             ruleReference: components["schemas"]["RuleReference"];
+            lockedFieldOutcomes: {
+                [key: string]: components["schemas"]["LockStatus"];
+            };
+            explanationStatus: components["schemas"]["AiExplanationStatus"];
+            explanation: string;
+            expiresAt: components["schemas"]["UtcDateTime"];
+        };
+        PlanCandidateGenerationData: {
+            status: components["schemas"]["PlanGenerationStatus"];
+            candidate?: components["schemas"]["PlanCandidate"];
+            validationIssues: components["schemas"]["ValidationIssue"][];
+            lockedFieldOutcomes: {
+                [key: string]: components["schemas"]["LockStatus"];
+            };
+        };
+        PlanCandidateGenerationResponse: {
+            data: components["schemas"]["PlanCandidateGenerationData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanValidationDraft: {
+            templateCode: string;
+            name: string;
+            days: components["schemas"]["PlanDay"][];
+        };
+        ValidatePlanRequest: {
+            plan: components["schemas"]["PlanValidationDraft"];
+            ruleReference: components["schemas"]["RuleReference"];
+        };
+        PlanValidationData: {
+            valid: boolean;
+            validationIssues: components["schemas"]["ValidationIssue"][];
+        };
+        PlanValidationResponse: {
+            data: components["schemas"]["PlanValidationData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CreatePlanRequest: {
             candidateId: string;
@@ -1350,8 +1412,18 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanCandidates"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 确定性候选或可操作失败原因 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanCandidateGenerationResponse"];
+                };
+            };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1364,8 +1436,17 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanValidation"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 按指定规则版本校验计划草稿 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanValidationResponse"];
+                };
+            };
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             default: components["responses"]["DefaultError"];
         };
     };

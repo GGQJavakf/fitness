@@ -2,7 +2,7 @@
   "metadata": {
     "schemaVersion": "1.0.0",
     "kind": "RULE_CONFIG",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "status": "AI_VALIDATED",
     "generatedAt": "2026-07-23T12:00:00Z",
     "promptConstraints": [
@@ -22,7 +22,7 @@
       }
     ],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "fc434e68500f3bf83262e972e672a78ba4bb6de29616b7eb6739d512ec0088e6"
+    "digestSha256": "e62cd692ec9460bf147b52152595d28ba17dfdead8677bb0020d61b1b3f5cfa3"
   },
   "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
   "parameters": {
@@ -32,6 +32,7 @@
     "warmup": { "maximumRampSets": 3, "knownWorkWeightRatios": [0.5, 0.7, 0.85], "unknownWeightResult": "CALIBRATION_STEPS_ONLY", "countsTowardTrainingVolume": false },
     "initialWeight": { "sourcePriority": ["RECENT_VALID_RECORD", "USER_INPUT", "CALIBRATION", "BODYWEIGHT"], "unknownResult": "NEEDS_CALIBRATION", "demographicEstimationAllowed": false },
     "duration": { "secondsPerWorkSet": 45, "secondsPerWarmupSet": 30, "secondsPerExerciseTransition": 75 },
+    "balance": { "maximumMovementPatternOccurrencesPerSession": 1, "maximumWorkSetsPerPrimaryMusclePerSession": 12, "minimumRecoveryHoursBetweenPrimaryMuscleSessions": 48 },
     "equipmentIncrements": [
       { "equipmentType": "BARBELL", "unit": "KG", "allowedSteps": [1.25, 2.5, 5] },
       { "equipmentType": "DUMBBELL", "unit": "KG", "allowedSteps": [1, 2, 2.5] },

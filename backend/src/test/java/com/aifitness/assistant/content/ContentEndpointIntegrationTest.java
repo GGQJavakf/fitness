@@ -48,7 +48,8 @@ class ContentEndpointIntegrationTest {
         mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").value("GOBLET_SQUAT"))
+                .andExpect(jsonPath("$.data.id").isNotEmpty())
+                .andExpect(jsonPath("$.data.code").value("GOBLET_SQUAT"))
                 .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"));
 
         mvc.perform(get("/api/v1/exercises/UNKNOWN")
