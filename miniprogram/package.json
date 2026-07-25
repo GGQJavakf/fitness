@@ -5,6 +5,8 @@
   "description": "AI 健身助手微信小程序",
   "scripts": {
     "build:weapp": "taro build --type weapp",
+    "build:weapp:device": "node scripts/device-preflight.mjs --build",
+    "preflight:device": "node scripts/device-preflight.mjs",
     "dev:weapp": "taro build --type weapp --watch",
     "generate:api-types": "openapi-typescript ../contract/openapi.yaml -o src/infrastructure/api/schema.generated.ts",
     "check:api-types": "openapi-typescript ../contract/openapi.yaml -o src/infrastructure/api/schema.generated.ts --check",
