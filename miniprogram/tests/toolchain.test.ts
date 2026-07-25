@@ -42,4 +42,21 @@ describe('Taro weapp toolchain', () => {
     expect(compositionRoot).toContain('__FITNESS_API_BASE_URL__')
     expect(compositionRoot).not.toMatch(/\bprocess\s*\./)
   })
+
+  it('keeps the Taro glob chain on the patched expansion implementation', () => {
+    const packageJson = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8')) as {
+      overrides?: Record<string, unknown>
+    }
+    const lock = JSON.parse(readFileSync(resolve(projectRoot, 'package-lock.json'), 'utf8')) as {
+      packages?: Record<string, { version?: string }>
+    }
+
+    expect(packageJson.overrides).toMatchObject({
+      globs: { glob: '13.0.6' },
+      'webpack-dev-server': '5.2.6',
+    })
+    expect(lock.packages?.['node_modules/glob']?.version).toBe('13.0.6')
+    expect(lock.packages?.['node_modules/glob/node_modules/brace-expansion']?.version).toBe('5.0.8')
+    expect(lock.packages?.['node_modules/webpack-dev-server']?.version).toBe('5.2.6')
+  })
 })

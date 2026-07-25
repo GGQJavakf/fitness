@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createWorkoutFlow,
+  beginWorkSets,
+  completeGeneralWarmup,
+  completedRampSets,
   recordWorkoutSet,
   replaceExerciseForSession,
   summarizeWorkout,
@@ -20,13 +23,56 @@ const baseInput = {
   }],
 } as const
 
+function createWorkFlow() {
+  return beginWorkSets(completeGeneralWarmup(createWorkoutFlow(baseInput)))
+}
+
 describe('workout execution state', () => {
+  it('moves explicitly through general warmup, ramp sets, and work sets', () => {
+    const general = createWorkoutFlow({ ...baseInput, warmupDurationSeconds: 300 })
+    expect(general.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300, maximumRampSets: 3 })
+
+    let ramp = completeGeneralWarmup(general)
+    ramp = recordWorkoutSet(ramp, {
+      clientSetKey: 'ramp-1', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
+      actualWeightKg: 10, actualReps: 8,
+    })
+
+    expect(completedRampSets(ramp)).toBe(1)
+    expect(ramp.currentSetIndex).toBe(0)
+    expect(beginWorkSets(ramp).warmup.phase).toBe('WORK')
+  })
+
+  it('rejects set records that bypass the warmup state machine', () => {
+    const general = createWorkoutFlow(baseInput)
+    expect(() => beginWorkSets(general)).toThrow(/general warmup/i)
+    expect(() => recordWorkoutSet(general, {
+      clientSetKey: 'work-too-early', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })).toThrow(/after warmup/i)
+  })
+
+  it('enforces the deterministic three-set ramp warmup ceiling', () => {
+    let state = completeGeneralWarmup(createWorkoutFlow(baseInput))
+    for (let order = 1; order <= 3; order += 1) {
+      state = recordWorkoutSet(state, {
+        clientSetKey: `ramp-${order}`, exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
+        actualWeightKg: order * 5, actualReps: 8,
+      })
+    }
+    expect(() => recordWorkoutSet(state, {
+      clientSetKey: 'ramp-4', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 6,
+    })).toThrow(/maximum ramp warmup sets/i)
+  })
+
   it('keeps missing RIR unknown and excludes warm-up, failed, and skipped sets from volume', () => {
-    let state = createWorkoutFlow(baseInput)
+    let state = completeGeneralWarmup(createWorkoutFlow(baseInput))
     state = recordWorkoutSet(state, {
       clientSetKey: 'warmup-1', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
       actualWeightKg: 10, actualReps: 10,
     })
+    state = beginWorkSets(state)
     state = recordWorkoutSet(state, {
       clientSetKey: 'work-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
       actualWeightKg: 20, actualReps: 10,
@@ -54,7 +100,7 @@ describe('workout execution state', () => {
       clientSetKey: 'work-click', exerciseIndex: 0, setType: 'WORK' as const, status: 'COMPLETED' as const,
       actualWeightKg: 20, actualReps: 10,
     }
-    const once = recordWorkoutSet(createWorkoutFlow(baseInput), input)
+    const once = recordWorkoutSet(createWorkFlow(), input)
     const twice = recordWorkoutSet(once, input)
 
     expect(twice).toBe(once)
@@ -81,7 +127,7 @@ describe('workout execution state', () => {
   })
 
   it('turns off automatic progression and exposes a safety message when pain is reported', () => {
-    const state = recordWorkoutSet(createWorkoutFlow(baseInput), {
+    const state = recordWorkoutSet(createWorkFlow(), {
       clientSetKey: 'pain-set', exerciseIndex: 0, setType: 'WORK', status: 'FAILED',
       actualWeightKg: 20, actualReps: 2, discomfort: 'PAIN',
     })

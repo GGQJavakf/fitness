@@ -7,6 +7,8 @@ import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionT
 import type { ExerciseReplacementCandidate, WorkoutReplacementPort } from '../ports/WorkoutReplacementPort'
 import {
   createWorkoutFlow,
+  beginWorkSets,
+  completeGeneralWarmup,
   recordWorkoutSet,
   replaceExerciseForSession,
   type RecordWorkoutSetInput,
@@ -29,10 +31,22 @@ export class WorkoutFlowService {
     clientSessionKey: string
     planVersionId: string
     exercises: readonly WorkoutExerciseSnapshot[]
+    warmupDurationSeconds?: 180 | 300 | 480
     serverSessionId?: string
     serverVersion?: number
   }): Promise<WorkoutFlowState> {
-    const state = createWorkoutFlow(input)
+    const created = createWorkoutFlow(input)
+    const state = {
+      ...created,
+      warmup: {
+        ...created.warmup,
+        generalTimer: startRestTimer({
+          sourceSetKey: `${input.clientSessionKey}-general-warmup`,
+          configuredDurationSeconds: created.warmup.generalDurationSeconds,
+          nowUtc: this.clock.nowUtc(),
+        }),
+      },
+    }
     const draft = toWorkoutDraft(state, null, this.clock.nowUtc())
     await this.drafts.save({
       ...draft,
@@ -79,8 +93,10 @@ export class WorkoutFlowService {
         sessionId: previous.sessionId,
         sessionExerciseId: updated.exercises[input.exerciseIndex].snapshotExerciseKey,
         setType: record.setType,
-        setOrder: state.currentSetIndex + 1,
-        target: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: updated.exercises[input.exerciseIndex].targetReps },
+        setOrder: input.setType === 'WARMUP'
+          ? updated.exercises[input.exerciseIndex].sets.filter((set) => set.setType === 'WARMUP').length
+          : state.currentSetIndex + 1,
+        target: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: input.setType === 'WARMUP' ? (record.actualReps ?? 0) : updated.exercises[input.exerciseIndex].targetReps },
         actual: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: record.actualReps ?? 0 },
         remainingReps: toRemainingReps(record.rir),
         completionStatus: record.status,
@@ -96,12 +112,31 @@ export class WorkoutFlowService {
   async resume(state: WorkoutFlowState): Promise<{
     state: WorkoutFlowState
     remainingSeconds: number
+    warmupRemainingSeconds: number
     clockRollbackDetected: boolean
   }> {
-    if (!state.restTimer) return { state, remainingSeconds: 0, clockRollbackDetected: false }
-    const snapshot = resumeRestTimer(state.restTimer, this.clock.nowUtc())
-    const updated = await this.save({ ...state, restTimer: snapshot.timer })
-    return { state: updated, remainingSeconds: snapshot.remainingSeconds, clockRollbackDetected: snapshot.clockRollbackDetected }
+    const nowUtc = this.clock.nowUtc()
+    const rest = state.restTimer ? resumeRestTimer(state.restTimer, nowUtc) : null
+    const general = state.warmup.generalTimer ? resumeRestTimer(state.warmup.generalTimer, nowUtc) : null
+    const updated = await this.save({
+      ...state,
+      restTimer: rest?.timer ?? state.restTimer,
+      warmup: { ...state.warmup, generalTimer: general?.timer ?? state.warmup.generalTimer },
+    })
+    return {
+      state: updated,
+      remainingSeconds: rest?.remainingSeconds ?? 0,
+      warmupRemainingSeconds: general?.remainingSeconds ?? 0,
+      clockRollbackDetected: Boolean(rest?.clockRollbackDetected || general?.clockRollbackDetected),
+    }
+  }
+
+  async completeGeneralWarmup(state: WorkoutFlowState): Promise<WorkoutFlowState> {
+    return this.save(completeGeneralWarmup(state))
+  }
+
+  async beginWorkSets(state: WorkoutFlowState): Promise<WorkoutFlowState> {
+    return this.save(beginWorkSets(state))
   }
 
   async adjustRest(state: WorkoutFlowState, seconds: 15 | -15): Promise<WorkoutFlowState> {

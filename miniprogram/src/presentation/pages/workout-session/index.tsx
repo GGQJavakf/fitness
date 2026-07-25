@@ -1,7 +1,7 @@
 import { Button, Input, Text, View } from '@tarojs/components'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import type { WorkoutFlowState, WorkoutRir } from '../../../application/workoutFlow'
+import { completedRampSets, type WorkoutFlowState, type WorkoutRir } from '../../../application/workoutFlow'
 import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecycle'
@@ -23,6 +23,7 @@ export default function WorkoutSessionPage() {
   const [reps, setReps] = useState('')
   const [rir, setRir] = useState<WorkoutRir>('UNKNOWN')
   const [remaining, setRemaining] = useState(0)
+  const [warmupRemaining, setWarmupRemaining] = useState(0)
   const [message, setMessage] = useState('正在恢复训练草稿…')
   const [replacements, setReplacements] = useState<readonly ExerciseReplacementCandidate[]>([])
 
@@ -32,6 +33,7 @@ export default function WorkoutSessionPage() {
       const resumed = await application.workouts.resume(loaded)
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
+      setWarmupRemaining(resumed.warmupRemainingSeconds)
       setMessage(resumed.clockRollbackDetected ? '检测到设备时间回拨，计时已按最近可信时间校准。' : '草稿已恢复。')
       application.telemetry.track('workout_resumed', { source: 'foreground' })
     }).catch(() => setMessage('训练草稿损坏或读取失败，未伪造任何完成记录。'))
@@ -40,6 +42,18 @@ export default function WorkoutSessionPage() {
   useWeappDidHide(() => {
     if (state) application.telemetry.track('workout_paused', { reason: 'background' })
   })
+
+  useEffect(() => {
+    if (state?.warmup.phase !== 'GENERAL' || warmupRemaining <= 0) return undefined
+    const timer = setInterval(() => setWarmupRemaining((value) => Math.max(0, value - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [state?.warmup.phase, warmupRemaining <= 0])
+
+  useEffect(() => {
+    if (state?.restTimer?.timerStatus !== 'RUNNING' || remaining <= 0) return undefined
+    const timer = setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [state?.restTimer?.timerStatus, remaining <= 0])
 
   async function record(status: 'COMPLETED' | 'FAILED' | 'SKIPPED', discomfort: 'NONE' | 'PAIN' = 'NONE'): Promise<void> {
     if (!state) return
@@ -94,6 +108,46 @@ export default function WorkoutSessionPage() {
     })
   }
 
+  async function recordRampSet(): Promise<void> {
+    if (!state) return
+    const exerciseIndex = state.warmup.rampExerciseIndex
+    const exercise = state.exercises[exerciseIndex]
+    const count = completedRampSets(state)
+    if (count >= state.warmup.maximumRampSets) { setMessage('递增热身组已达到规则上限，请进入正式组。'); return }
+    const parsedWeight = Number(weight)
+    const parsedReps = Number(reps)
+    if (weight.trim().length === 0 || !Number.isFinite(parsedWeight) || parsedWeight < 0) {
+      setMessage('请填写本组实际使用的非负 KG 重量。'); return
+    }
+    if (!Number.isSafeInteger(parsedReps) || parsedReps <= 0) {
+      setMessage('请填写本组实际完成的正整数次数。'); return
+    }
+    const updated = await application.workouts.recordSet(state, {
+      clientSetKey: `${state.clientSessionKey}-warmup-${count + 1}`,
+      exerciseIndex,
+      setType: 'WARMUP',
+      status: 'COMPLETED',
+      actualWeightKg: parsedWeight,
+      actualReps: parsedReps,
+    })
+    setState(updated); setWeight(''); setReps('')
+    setMessage('递增热身组已保存；它不会计入训练容量或重量进阶。')
+    void application.workouts.flush(updated).then(setState).catch(() => setMessage('网络不可用，热身组已保存在本地，稍后自动补传。'))
+  }
+
+  async function finishGeneralWarmup(): Promise<void> {
+    if (!state) return
+    const updated = await application.workouts.completeGeneralWarmup(state)
+    setState(updated); setMessage('通用热身完成。请为第一个动作逐级增加重量。')
+  }
+
+  async function enterWorkSets(): Promise<void> {
+    if (!state) return
+    const updated = await application.workouts.beginWorkSets(state)
+    setState(updated); setWeight(''); setReps('')
+    setMessage('递增热身完成，开始记录正式组。')
+  }
+
   async function adjust(seconds: 15 | -15): Promise<void> {
     if (!state) return
     const updated = await application.workouts.adjustRest(state, seconds)
@@ -125,6 +179,37 @@ export default function WorkoutSessionPage() {
   }
 
   const exercise = state?.exercises[state.currentExerciseIndex]
+  const rampExercise = state?.exercises[state.warmup.rampExerciseIndex]
+  if (state?.warmup.phase === 'GENERAL') return <View className='screen'>
+    <View className='card warmup-card'>
+      <Text className='eyebrow'>通用热身</Text>
+      <Text className='title'>让身体逐渐热起来</Text>
+      <Text className='subtitle'>进行轻松活动，并练习今天首个动作模式：{rampExercise?.name}。保持能正常说话的强度。</Text>
+      <Text className='timer'>{Math.floor(warmupRemaining / 60)}:{String(warmupRemaining % 60).padStart(2, '0')}</Text>
+      <View className='info-box'>计时按时间戳恢复，切到后台后仍会准确续算。</View>
+      <Button className='primary-action' onClick={() => void finishGeneralWarmup()}>{warmupRemaining === 0 ? '热身完成，继续' : '提前完成'}</Button>
+    </View>
+  </View>
+  if (state?.warmup.phase === 'RAMP' && rampExercise) {
+    const count = completedRampSets(state)
+    return <View className='screen'>
+      <View className='card'>
+        <Text className='eyebrow'>递增热身 · {count} / {state.warmup.maximumRampSets} 组</Text>
+        <Text className='title'>{rampExercise.name}</Text>
+        <Text className='subtitle'>{rampExercise.weightStatus === 'KNOWN' && rampExercise.targetWeightKg !== undefined
+          ? `正式组目标约 ${rampExercise.targetWeightKg} KG，请从明显更轻的重量逐级接近。`
+          : '当前没有可靠工作重量：从轻重量开始逐级尝试，找到能完成目标次数且还能做 2～3 次的重量。'}</Text>
+        <View className='warning-box'>疼痛不是正常训练信号。出现疼痛或明显不适请停止。</View>
+      </View>
+      <View className='card workout-entry'>
+        <View className='field-group'><Text className='field-label'>本组实际重量（KG）</Text><Input className='metric-input' type='digit' value={weight} placeholder='例如 10' onInput={(event) => setWeight(event.detail.value)} /></View>
+        <View className='field-group'><Text className='field-label'>本组实际次数</Text><Input className='metric-input' type='number' value={reps} placeholder='例如 8' onInput={(event) => setReps(event.detail.value)} /></View>
+        <View className='info-box'>{message}</View>
+        <Button className='primary-action' disabled={count >= state.warmup.maximumRampSets} onClick={() => void recordRampSet()}>记录本组并继续加重</Button>
+        <Button className='secondary-action' onClick={() => void enterWorkSets()}>{count === 0 ? '无需递增组，进入正式组' : '递增热身完成'}</Button>
+      </View>
+    </View>
+  }
   return <View className='screen'>
     <View className='card'>
       <Text className='title'>{exercise?.name ?? '训练恢复'}</Text>

@@ -4,6 +4,15 @@ export type WorkoutSetType = 'WARMUP' | 'WORK' | 'EXTRA'
 export type WorkoutSetStatus = 'COMPLETED' | 'FAILED' | 'SKIPPED'
 export type WorkoutRir = '0' | '1' | '2' | '3_PLUS' | 'UNKNOWN'
 export type WorkoutSyncStatus = 'LOCAL_ONLY' | 'OFFLINE_PENDING' | 'SYNCED' | 'CONFLICT' | 'SYNC_REJECTED'
+export type WarmupPhase = 'GENERAL' | 'RAMP' | 'WORK'
+
+export interface WarmupExecutionState {
+  readonly phase: WarmupPhase
+  readonly generalDurationSeconds: 180 | 300 | 480
+  readonly generalTimer: RestTimerState | null
+  readonly rampExerciseIndex: number
+  readonly maximumRampSets: 3
+}
 
 export interface WorkoutExerciseSnapshot {
   readonly snapshotExerciseKey: string
@@ -12,6 +21,8 @@ export interface WorkoutExerciseSnapshot {
   readonly targetWorkSets: number
   readonly targetReps: number
   readonly restSeconds: number
+  readonly weightStatus?: 'KNOWN' | 'NEEDS_CALIBRATION' | 'BODYWEIGHT'
+  readonly targetWeightKg?: number
 }
 
 export interface WorkoutSetRecord {
@@ -37,6 +48,7 @@ export interface WorkoutFlowState {
   readonly currentExerciseIndex: number
   readonly currentSetIndex: number
   readonly restTimer: RestTimerState | null
+  readonly warmup: WarmupExecutionState
   readonly syncStatus: WorkoutSyncStatus
   readonly automaticProgressionEligible: boolean
   readonly safetyNotice: string | null
@@ -57,6 +69,7 @@ export function createWorkoutFlow(input: {
   clientSessionKey: string
   planVersionId: string
   exercises: readonly WorkoutExerciseSnapshot[]
+  warmupDurationSeconds?: 180 | 300 | 480
 }): WorkoutFlowState {
   if (input.clientSessionKey.trim().length === 0 || input.planVersionId.trim().length === 0) {
     throw new Error('workout session and plan version are required')
@@ -71,10 +84,39 @@ export function createWorkoutFlow(input: {
     currentExerciseIndex: 0,
     currentSetIndex: 0,
     restTimer: null,
+    warmup: {
+      phase: 'GENERAL',
+      generalDurationSeconds: input.warmupDurationSeconds ?? 180,
+      generalTimer: null,
+      rampExerciseIndex: 0,
+      maximumRampSets: 3,
+    },
     syncStatus: 'LOCAL_ONLY',
     automaticProgressionEligible: true,
     safetyNotice: null,
   }
+}
+
+export function completeGeneralWarmup(state: WorkoutFlowState): WorkoutFlowState {
+  validateStateShape(state)
+  if (state.warmup.phase !== 'GENERAL') return state
+  const generalTimer = state.warmup.generalTimer?.timerStatus === 'RUNNING'
+    ? { ...state.warmup.generalTimer, timerStatus: 'SKIPPED' as const }
+    : state.warmup.generalTimer
+  return { ...state, warmup: { ...state.warmup, phase: 'RAMP', generalTimer } }
+}
+
+export function beginWorkSets(state: WorkoutFlowState): WorkoutFlowState {
+  validateStateShape(state)
+  if (state.warmup.phase === 'WORK') return state
+  if (state.warmup.phase !== 'RAMP') throw new Error('general warmup must finish before work sets begin')
+  return { ...state, warmup: { ...state.warmup, phase: 'WORK' } }
+}
+
+export function completedRampSets(state: WorkoutFlowState): number {
+  validateStateShape(state)
+  return state.exercises[state.warmup.rampExerciseIndex].sets
+    .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED').length
 }
 
 export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSetInput): WorkoutFlowState {
@@ -87,6 +129,16 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   if (existing) {
     if (JSON.stringify(existing) === JSON.stringify(record)) return state
     throw new Error('clientSetKey already identifies different workout facts')
+  }
+  if (record.setType === 'WARMUP') {
+    if (state.warmup.phase !== 'RAMP') throw new Error('ramp warmup sets can only be recorded during ramp warmup')
+    if (input.exerciseIndex !== state.warmup.rampExerciseIndex) {
+      throw new Error('ramp warmup sets belong to the first prescribed exercise')
+    }
+    const rampSetCount = exercise.sets.filter((set) => set.setType === 'WARMUP').length
+    if (rampSetCount >= state.warmup.maximumRampSets) throw new Error('maximum ramp warmup sets exceeded')
+  } else if (state.warmup.phase !== 'WORK') {
+    throw new Error('work sets can only be recorded after warmup')
   }
 
   const exercises = state.exercises.map((item, index) => index === input.exerciseIndex
@@ -133,6 +185,7 @@ export function restoreWorkoutFlow(value: unknown): WorkoutFlowState {
     || !Number.isSafeInteger(value.currentExerciseIndex)
     || !Number.isSafeInteger(value.currentSetIndex)
     || !(value.restTimer === null || isRecord(value.restTimer))
+    || !isRecord(value.warmup)
     || !['LOCAL_ONLY', 'OFFLINE_PENDING', 'SYNCED', 'CONFLICT', 'SYNC_REJECTED'].includes(String(value.syncStatus))
     || typeof value.automaticProgressionEligible !== 'boolean'
     || !(typeof value.safetyNotice === 'string' || value.safetyNotice === null)) {
@@ -221,6 +274,11 @@ function validateStateShape(state: WorkoutFlowState): void {
     throw new Error('workout state is invalid')
   }
   if (!Array.isArray(state.exercises) || state.exercises.length === 0) throw new Error('workout state is invalid')
+  if (!['GENERAL', 'RAMP', 'WORK'].includes(state.warmup.phase)
+    || ![180, 300, 480].includes(state.warmup.generalDurationSeconds)
+    || !(state.warmup.generalTimer === null || isRecord(state.warmup.generalTimer))
+    || state.warmup.rampExerciseIndex !== 0
+    || state.warmup.maximumRampSets !== 3) throw new Error('workout state is invalid')
   state.exercises.forEach((exercise) => {
     validateExercise(exercise)
     if (!Array.isArray(exercise.sets)) throw new Error('workout state is invalid')

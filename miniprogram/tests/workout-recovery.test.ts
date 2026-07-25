@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { resumeRestTimer, startRestTimer } from '../src/domain/workout/RestTimer'
 import {
+  beginWorkSets,
+  completeGeneralWarmup,
   createWorkoutFlow,
   markWorkoutSyncPending,
   recordWorkoutSet,
@@ -21,6 +23,7 @@ describe('workout recovery', () => {
         targetWorkSets: 2, targetReps: 8, restSeconds: 90,
       }],
     })
+    state = beginWorkSets(completeGeneralWarmup(state))
     state = recordWorkoutSet(state, {
       clientSetKey: 'set-a', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
       actualWeightKg: 30, actualReps: 8,
@@ -40,7 +43,28 @@ describe('workout recovery', () => {
     expect(restored.currentSetIndex).toBe(1)
     expect(restored.exercises[0].sets[0].status).toBe('COMPLETED')
     expect(restored.syncStatus).toBe('OFFLINE_PENDING')
+    expect(restored.warmup.phase).toBe('WORK')
     expect(rest.remainingSeconds).toBe(30)
+  })
+
+  it('restores a timestamp-based general warmup timer after process loss', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { nowUtc: () => '2026-07-24T09:00:00.000Z' },
+    )
+    const started = await service.start({
+      clientSessionKey: 'warmup-session', planVersionId: 'plan-version', warmupDurationSeconds: 300 as const,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+
+    const restored = await service.load()
+
+    expect(started.warmup.generalTimer?.configuredDurationSeconds).toBe(300)
+    expect(restored?.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300 })
+
+    const ramp = await service.completeGeneralWarmup(restored!)
+    expect(ramp.warmup).toMatchObject({ phase: 'RAMP', generalTimer: { timerStatus: 'SKIPPED' } })
   })
 
   it('rejects malformed persisted state instead of fabricating completed work', () => {
@@ -63,7 +87,7 @@ describe('workout recovery', () => {
         })),
       },
     )
-    const state = await service.start({
+    let state = await service.start({
       clientSessionKey: 'server-session-key',
       planVersionId: '00000000-0000-0000-0000-000000000010',
       serverSessionId: '00000000-0000-0000-0000-000000000020',
@@ -74,6 +98,7 @@ describe('workout recovery', () => {
       }],
     })
 
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
     const updated = await service.recordSet(state, {
       clientSetKey: 'set-server-0001', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
       actualWeightKg: 30, actualReps: 8, rir: '3_PLUS',
@@ -93,6 +118,26 @@ describe('workout recovery', () => {
     expect(synced.syncStatus).toBe('SYNCED')
     expect(stored!.queue.operations).toHaveLength(0)
     expect(stored!.lastServerVersion).toBe(2)
+  })
+
+  it('queues successive ramp warmup sets with their own order and no work-set rest timer', async () => {
+    let stored: WorkoutDraft | null = null
+    const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft } }
+    const service = new WorkoutFlowService(store, { nowUtc: () => '2026-07-24T09:00:00.000Z' })
+    let state = await service.start({
+      clientSessionKey: 'ramp-server-session', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 0,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'SQUAT', name: '深蹲', targetWorkSets: 3, targetReps: 8, restSeconds: 90 }],
+    })
+    state = await service.completeGeneralWarmup(state)
+    state = await service.recordSet(state, { clientSetKey: 'ramp-set-0001', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED', actualWeightKg: 10, actualReps: 10 })
+    state = await service.recordSet(state, { clientSetKey: 'ramp-set-0002', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED', actualWeightKg: 15, actualReps: 8 })
+
+    expect(state.currentSetIndex).toBe(0)
+    expect(state.restTimer).toBeNull()
+    expect(stored!.queue.operations.map((operation) => operation.payload)).toMatchObject([
+      { setType: 'WARMUP', setOrder: 1, target: { reps: 10 } },
+      { setType: 'WARMUP', setOrder: 2, target: { reps: 8 } },
+    ])
   })
 
   it('synchronizes pending facts before idempotent early completion', async () => {
@@ -115,7 +160,8 @@ describe('workout recovery', () => {
       clientSessionKey: 'server-session-key', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 1,
       exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
     })
-    const recorded = await service.recordSet(started, {
+    const ready = await service.beginWorkSets(await service.completeGeneralWarmup(started))
+    const recorded = await service.recordSet(ready, {
       clientSetKey: 'set-key-0001', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED', actualWeightKg: 20, actualReps: 8,
     })
 

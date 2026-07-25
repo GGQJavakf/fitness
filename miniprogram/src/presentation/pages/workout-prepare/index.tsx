@@ -14,6 +14,7 @@ export default function WorkoutPreparePage() {
   const [selectedDayCode, setSelectedDayCode] = useState('')
   const [message, setMessage] = useState('正在读取活动计划…')
   const [clientSessionKey] = useState(() => `weapp-session-${Date.now()}`)
+  const [warmupMinutes, setWarmupMinutes] = useState<3 | 5 | 8>(3)
 
   useEffect(() => {
     void application.loadActivePlan().then((value) => {
@@ -39,6 +40,7 @@ export default function WorkoutPreparePage() {
         planVersionId: session.planVersionId,
         serverSessionId: session.id,
         serverVersion: session.version,
+        warmupDurationSeconds: warmupMinutes * 60 as 180 | 300 | 480,
         exercises: session.exercises.map((exercise) => ({
           snapshotExerciseKey: exercise.id,
           exerciseCode: exercise.exerciseCode,
@@ -46,6 +48,8 @@ export default function WorkoutPreparePage() {
           targetWorkSets: exercise.prescription.workSets,
           targetReps: exercise.prescription.repMax,
           restSeconds: exercise.prescription.restSeconds,
+          weightStatus: exercise.prescription.weightStatus,
+          targetWeightKg: exercise.prescription.targetWeightKg,
         })),
       })
       application.telemetry.track('workout_started', { exerciseCount: session.exercises.length })
@@ -62,6 +66,13 @@ export default function WorkoutPreparePage() {
       <Text className='subtitle'>{message}</Text>
       <View className='warning-box'>先完成通用热身和动作递增热身。热身组不会计入训练容量或重量进阶。</View>
     </View>
+    {plan && <View className='card'>
+      <Text className='section-title'>通用热身时长</Text>
+      <Text className='subtitle'>按今天状态选择，开始训练后会持续计时，切到后台也不会丢失。</Text>
+      <View className='day-options warmup-options'>
+        {([3, 5, 8] as const).map((minutes) => <Button key={minutes} className={minutes === warmupMinutes ? 'day-option day-option--selected' : 'day-option'} onClick={() => setWarmupMinutes(minutes)}>{minutes} 分钟</Button>)}
+      </View>
+    </View>}
     {plan && <View className='card'>
       <Text className='section-title'>选择今天训练哪一天</Text>
       <Text className='subtitle'>这里只选择本次训练快照，不会改动你的计划版本。</Text>
@@ -84,6 +95,6 @@ export default function WorkoutPreparePage() {
         <Text className='subtitle'>{exercise.workSets} 组 × {exercise.repMin}～{exercise.repMax} 次 · 休息 {exercise.restSeconds} 秒</Text>
       </View>)}
     </View>
-    <View className='action-row action-row--sticky'><Button className='primary-action' disabled={!day} onClick={() => void start()}>完成热身，进入训练</Button></View>
+    <View className='action-row action-row--sticky'><Button className='primary-action' disabled={!day} onClick={() => void start()}>开始热身</Button></View>
   </View>
 }

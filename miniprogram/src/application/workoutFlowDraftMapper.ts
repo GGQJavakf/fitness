@@ -16,6 +16,7 @@ interface PersistedPlanSnapshot {
   syncStatus: WorkoutSyncStatus
   automaticProgressionEligible: boolean
   safetyNotice: string | null
+  warmup: WorkoutFlowState['warmup']
 }
 
 interface PersistedSetRecord extends WorkoutSetRecord {
@@ -33,6 +34,7 @@ export function toWorkoutDraft(
     syncStatus: state.syncStatus,
     automaticProgressionEligible: state.automaticProgressionEligible,
     safetyNotice: state.safetyNotice,
+    warmup: state.warmup,
   }
   const setRecords: PersistedSetRecord[] = state.exercises.flatMap((exercise, exerciseIndex) =>
     exercise.sets.map((set) => ({ ...set, exerciseIndex })))
@@ -69,6 +71,9 @@ export function restoreFlowFromDraft(draft: WorkoutDraft): WorkoutFlowState {
     const { exerciseIndex: _index, ...set } = value as unknown as PersistedSetRecord
     exercises[exerciseIndex].sets.push(set as PersistedSetRecord)
   }
+  const warmup = isRecord(snapshot.warmup) ? snapshot.warmup : {
+    phase: 'WORK', generalDurationSeconds: 180, generalTimer: null, rampExerciseIndex: 0, maximumRampSets: 3,
+  }
   return restoreWorkoutFlow({
     schemaVersion: 1,
     clientSessionKey: draft.clientSessionKey,
@@ -77,6 +82,7 @@ export function restoreFlowFromDraft(draft: WorkoutDraft): WorkoutFlowState {
     currentExerciseIndex: draft.currentExerciseIndex,
     currentSetIndex: draft.currentSetIndex,
     restTimer: draft.restTimer as RestTimerState | null,
+    warmup,
     syncStatus: typeof snapshot.syncStatus === 'string' ? snapshot.syncStatus : 'LOCAL_ONLY',
     automaticProgressionEligible: typeof snapshot.automaticProgressionEligible === 'boolean'
       ? snapshot.automaticProgressionEligible
