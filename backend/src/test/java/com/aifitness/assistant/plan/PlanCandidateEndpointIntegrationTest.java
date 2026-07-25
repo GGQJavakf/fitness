@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -65,6 +66,27 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.valid").value(true))
                 .andExpect(jsonPath("$.data.validationIssues[0].reasonCode")
                         .value("INITIAL_WEIGHT_NEEDS_CALIBRATION"));
+    }
+
+    @Test
+    void generatesRuleValidCandidateForEveryP0WeeklyFrequency() {
+        IntStream.rangeClosed(2, 6).forEach(frequency -> {
+            try {
+                String token = login();
+                configureProfile(token, frequency);
+                configureEquipment(token);
+
+                mvc.perform(post("/api/v1/plans/candidates")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                        .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(frequency));
+            } catch (Exception exception) {
+                throw new AssertionError("candidate generation failed for weekly frequency " + frequency, exception);
+            }
+        });
     }
 
     @Test
@@ -215,14 +237,18 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     private void configureProfile(String token) throws Exception {
+        configureProfile(token, 3);
+    }
+
+    private void configureProfile(String token, int weeklyFrequency) throws Exception {
         mvc.perform(put("/api/v1/profile")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"experience":"BEGINNER","goal":"GENERAL_FITNESS",
-                                 "weeklyFrequency":3,"sessionMinutes":60,"location":"GYM",
+                                 "weeklyFrequency":%d,"sessionMinutes":60,"location":"GYM",
                                  "expectedVersion":0}
-                                """))
+                                """.formatted(weeklyFrequency)))
                 .andExpect(status().isOk());
     }
 

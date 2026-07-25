@@ -9,7 +9,7 @@
       "Key numeric boundaries come from versioned rule configuration",
       "Unknown initial weight requires calibration rather than demographic estimation"
     ],
-    "digestSha256": "d31237df1e889a74d30bed9569972ade28faa2dfca036ba83ed43586d66f798d"
+    "digestSha256": "cccbc08e94cc2a7df7815793f761238145bd15b8b8b85424f76d1e1680d40821"
   },
   "cases": [
     {
@@ -29,7 +29,7 @@
     },
     {
       "id": "PLAN_FREQUENCY_TOO_HIGH",
-      "input": {"unit": "KG", "sessionsPerWeek": 6, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
+      "input": {"unit": "KG", "sessionsPerWeek": 7, "exerciseCount": 6, "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90, "weightStatus": "KNOWN"},
       "expected": {"outcome": "ERROR", "reasonCodes": ["SESSION_FREQUENCY_OUT_OF_RANGE"], "application": "REJECTED"}
     },
     {

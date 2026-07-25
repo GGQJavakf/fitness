@@ -74,13 +74,8 @@ class PlanGenerationFixtureTest {
             PlanGenerationEngine.GenerationResult result =
                     engine.generate(input(
                             frequency, 60, Set.of("SQUAT", "ROW", "PRESS", "HINGE"), Map.of()));
-            if (frequency == 3) {
-                assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.CANDIDATE_READY);
-            } else {
-                assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.NO_CANDIDATE);
-                assertThat(result.issues()).isNotEmpty();
-                assertThat(result.issues()).allMatch(issue -> !issue.reasonCode().isBlank());
-            }
+            assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.CANDIDATE_READY);
+            assertThat(result.candidate().orElseThrow().days()).hasSize(frequency);
         });
     }
 
@@ -116,18 +111,22 @@ class PlanGenerationFixtureTest {
         PlanGenerationEngine.Exercise hinge = new PlanGenerationEngine.Exercise(
                 "HINGE", 3, 8, 12, 120, PlanGenerationEngine.WeightStatus.NEEDS_CALIBRATION);
         List<PlanGenerationEngine.Exercise> exercises = List.of(squat, row, press, hinge);
-        List<PlanGenerationEngine.Day> days = List.of(
-                new PlanGenerationEngine.Day("DAY_A", "A", exercises),
-                new PlanGenerationEngine.Day("DAY_B", "B", exercises),
-                new PlanGenerationEngine.Day("DAY_C", "C", exercises));
-        PlanGenerationEngine.Template template =
-                new PlanGenerationEngine.Template("FULL_BODY_3_DAY_V1", "三日全身", 3, days);
+        List<PlanGenerationEngine.Template> templates = IntStream.rangeClosed(2, 6)
+                .mapToObj(value -> new PlanGenerationEngine.Template(
+                        value == 3 ? "FULL_BODY_3_DAY_V1" : "TEST_" + value + "_DAY_V1",
+                        value + "日训练",
+                        value,
+                        IntStream.rangeClosed(1, value)
+                                .mapToObj(day -> new PlanGenerationEngine.Day(
+                                        "DAY_" + day, "第" + day + "天", exercises))
+                                .toList()))
+                .toList();
         Map<String, PlanValidationEngine.ExerciseFacts> facts = eligibleExercises.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         code -> code,
                         code -> new PlanValidationEngine.ExerciseFacts(code, Set.of(code))));
         return new PlanGenerationEngine.GenerationInput(
-                REFERENCE, frequency, sessionMinutes, List.of(template), facts, lockedNumbers);
+                REFERENCE, frequency, sessionMinutes, templates, facts, lockedNumbers);
     }
 
     @Test
@@ -176,7 +175,7 @@ class PlanGenerationFixtureTest {
     private static PlanRulePolicy policy(int maximumPatternOccurrences, int maximumMuscleSets, int recoveryHours) {
         return new PlanRulePolicy(
                 "1.1.0",
-                new PlanRulePolicy.PlanLimits(2, 5, 8, 90),
+                new PlanRulePolicy.PlanLimits(2, 6, 8, 90),
                 new PlanRulePolicy.Prescription(2, 4, 5, 15),
                 new PlanRulePolicy.Rest(45, 240),
                 new PlanRulePolicy.Duration(45, 75),

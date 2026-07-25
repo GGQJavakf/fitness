@@ -22,11 +22,11 @@
       }
     ],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "e62cd692ec9460bf147b52152595d28ba17dfdead8677bb0020d61b1b3f5cfa3"
+    "digestSha256": "cd6e59e7f48fe6703b0ae4b276aa61e80b2f4c446bbf68c236e2b73564327995"
   },
   "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
   "parameters": {
-    "planLimits": { "minimumSessionsPerWeek": 2, "maximumSessionsPerWeek": 5, "maximumExercisesPerSession": 8, "maximumEstimatedMinutes": 90 },
+    "planLimits": { "minimumSessionsPerWeek": 2, "maximumSessionsPerWeek": 6, "maximumExercisesPerSession": 8, "maximumEstimatedMinutes": 90 },
     "prescription": { "minimumWorkSets": 2, "maximumWorkSets": 4, "minimumReps": 5, "maximumReps": 15 },
     "rest": { "minimumSeconds": 45, "defaultSeconds": 90, "maximumSeconds": 240 },
     "warmup": { "maximumRampSets": 3, "knownWorkWeightRatios": [0.5, 0.7, 0.85], "unknownWeightResult": "CALIBRATION_STEPS_ONLY", "countsTowardTrainingVolume": false },

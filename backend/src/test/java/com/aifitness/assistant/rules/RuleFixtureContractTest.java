@@ -270,7 +270,7 @@ class RuleFixtureContractTest {
             outcome = RuleEvaluationResult.PlanOutcome.ERROR;
             reason = RuleEvaluationResult.PlanReasonCode.P0_UNIT_NOT_SUPPORTED;
             application = RuleEvaluationResult.PlanApplication.REJECTED;
-        } else if (input.sessionsPerWeek() < 2 || input.sessionsPerWeek() > 5) {
+        } else if (input.sessionsPerWeek() < 2 || input.sessionsPerWeek() > 6) {
             outcome = RuleEvaluationResult.PlanOutcome.ERROR;
             reason = RuleEvaluationResult.PlanReasonCode.SESSION_FREQUENCY_OUT_OF_RANGE;
             application = RuleEvaluationResult.PlanApplication.REJECTED;

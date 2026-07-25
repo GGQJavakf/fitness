@@ -93,6 +93,15 @@ class ValidatedConfigValidationTest {
     }
 
     @Test
+    void templateCatalogCoversEveryP0FrequencyFromTwoThroughSixDays() throws IOException {
+        Set<Integer> frequencies = new HashSet<>();
+        readValidated("plan-templates-v1.json").path("templates")
+                .forEach(template -> frequencies.add(template.path("sessionsPerWeek").asInt()));
+
+        assertThat(frequencies).containsExactlyInAnyOrder(2, 3, 4, 5, 6);
+    }
+
+    @Test
     void ruleConfigForbidsDemographicWeightGuessingAndKeepsWarmupsOutOfVolume() throws IOException {
         JsonNode rules = readValidated("rule-config-v1.json");
 
