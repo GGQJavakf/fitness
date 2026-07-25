@@ -12,6 +12,7 @@ import {
   type RecordWorkoutSetInput,
   type WorkoutExerciseSnapshot,
   type WorkoutFlowState,
+  type WorkoutRir,
 } from '../workoutFlow'
 import { restoreFlowFromDraft, toWorkoutDraft } from '../workoutFlowDraftMapper'
 
@@ -81,6 +82,7 @@ export class WorkoutFlowService {
         setOrder: state.currentSetIndex + 1,
         target: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: updated.exercises[input.exerciseIndex].targetReps },
         actual: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: record.actualReps ?? 0 },
+        remainingReps: toRemainingReps(record.rir),
         completionStatus: record.status,
         completedAt: record.status === 'COMPLETED' ? this.clock.nowUtc() : undefined,
         expectedSessionVersion: previous.lastServerVersion + pendingBefore,
@@ -209,4 +211,10 @@ export class WorkoutFlowService {
     await this.drafts.save(toWorkoutDraft(state, previous, this.clock.nowUtc()))
     return state
   }
+}
+
+function toRemainingReps(rir: WorkoutRir): number | undefined {
+  if (rir === 'UNKNOWN') return undefined
+  if (rir === '3_PLUS') return 3
+  return Number(rir)
 }

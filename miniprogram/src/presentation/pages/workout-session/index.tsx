@@ -1,7 +1,7 @@
 import { Button, Input, Text, View } from '@tarojs/components'
 import { useState } from 'react'
 
-import type { WorkoutFlowState } from '../../../application/workoutFlow'
+import type { WorkoutFlowState, WorkoutRir } from '../../../application/workoutFlow'
 import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecycle'
@@ -9,11 +9,19 @@ import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecy
 import './index.scss'
 
 const application = getWeappApplication()
+const rirOptions: ReadonlyArray<{ value: WorkoutRir; label: string }> = [
+  { value: '0', label: '已到极限' },
+  { value: '1', label: '还能 1 次' },
+  { value: '2', label: '还能 2 次' },
+  { value: '3_PLUS', label: '还能 3 次以上' },
+  { value: 'UNKNOWN', label: '不确定或跳过' },
+]
 
 export default function WorkoutSessionPage() {
   const [state, setState] = useState<WorkoutFlowState | null>(null)
   const [weight, setWeight] = useState('')
   const [reps, setReps] = useState('')
+  const [rir, setRir] = useState<WorkoutRir>('UNKNOWN')
   const [remaining, setRemaining] = useState(0)
   const [message, setMessage] = useState('正在恢复训练草稿…')
   const [replacements, setReplacements] = useState<readonly ExerciseReplacementCandidate[]>([])
@@ -59,9 +67,11 @@ export default function WorkoutSessionPage() {
       status,
       actualWeightKg: status === 'SKIPPED' ? undefined : parsedWeight,
       actualReps: status === 'SKIPPED' ? undefined : parsedReps,
+      rir: status === 'COMPLETED' ? rir : 'UNKNOWN',
       discomfort,
     })
     setState(updated)
+    setRir('UNKNOWN')
     application.telemetry.track('workout_set_completed', { status: status.toLowerCase() as 'completed' | 'failed' | 'skipped' })
     if (status === 'SKIPPED') application.telemetry.track('exercise_skipped', { reason: 'user' })
     const resumed = await application.workouts.resume(updated)
@@ -127,7 +137,20 @@ export default function WorkoutSessionPage() {
       <Input className='metric-input' type='digit' value={weight} placeholder='例如 12.5' onInput={(event) => setWeight(event.detail.value)} /></View>
       <View className='field-group'><Text className='field-label'>实际次数</Text>
       <Input className='metric-input' type='number' value={reps || String(exercise.targetReps)} onInput={(event) => setReps(event.detail.value)} /></View>
-      <Text className='subtitle'>“还能做几次”可暂不填写，系统会保持 UNKNOWN，不会替你猜测。</Text>
+      <View className='field-group'>
+        <Text className='field-label'>本组还能再做几次（可选）</Text>
+        <Text className='field-helper'>这叫 RIR（剩余次数）。不确定就跳过，系统不会替你猜。</Text>
+        <View className='rir-options'>
+          {rirOptions.map((option) => (
+            <Button
+              key={option.value}
+              size='mini'
+              className={rir === option.value ? 'rir-option rir-option--selected' : 'rir-option'}
+              onClick={() => setRir(option.value)}
+            >{option.label}</Button>
+          ))}
+        </View>
+      </View>
       <Button className='secondary-action' onClick={() => void showReplacements()}>需要替换动作</Button>
       {replacements.map((candidate) => <Button key={candidate.id} className='secondary-action' onClick={() => void replace(candidate)}>{candidate.name}</Button>)}
       <View className='action-row action-row--sticky workout-actions'>

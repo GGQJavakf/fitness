@@ -37,4 +37,13 @@ describe('P0 page usability contract', () => {
       expect(source(`src/presentation/pages/${page}/index.tsx`)).toContain('MainNavigation')
     }
   })
+
+  it('offers every optional RIR choice in plain language and submits the selection', () => {
+    const workout = source('src/presentation/pages/workout-session/index.tsx')
+    for (const label of ['本组还能再做几次（可选）', '已到极限', '还能 1 次', '还能 2 次', '还能 3 次以上', '不确定或跳过']) {
+      expect(workout).toContain(label)
+    }
+    expect(workout).toContain('RIR（剩余次数）')
+    expect(workout).toMatch(/rir:\s*status === 'COMPLETED'/)
+  })
 })

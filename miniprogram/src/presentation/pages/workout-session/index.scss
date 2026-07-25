@@ -1,5 +1,8 @@
 .workout-entry { padding-bottom: 0; }
 .metric-input { min-height: 92px; padding: 0 22px; border: 2px solid #cbd8d2; border-radius: 18px; background: #f8faf9; font-size: 34px; font-weight: 650; }
+.rir-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rir-option { width: 100%; min-height: 72px; margin: 0; border: 2px solid #cbd8d2; border-radius: 16px; background: #fff; color: #31433d; font-size: 26px; }
+.rir-option--selected { border-color: #176b58; background: #e8f4f0; color: #105343; font-weight: 650; }
 .timer { font-size: 64px; font-weight: 750; color: #176b58; text-align: center; }
 .workout-actions { margin: 6px -28px 0; }
 .workout-actions .primary-action { flex-basis: 100%; }

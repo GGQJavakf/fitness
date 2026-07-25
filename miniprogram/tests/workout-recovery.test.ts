@@ -76,16 +76,17 @@ describe('workout recovery', () => {
 
     const updated = await service.recordSet(state, {
       clientSetKey: 'set-server-0001', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
-      actualWeightKg: 30, actualReps: 8,
+      actualWeightKg: 30, actualReps: 8, rir: '3_PLUS',
     })
 
     expect(updated.syncStatus).toBe('OFFLINE_PENDING')
     expect(stored!.setRecords).toHaveLength(1)
+    expect(stored!.setRecords[0]).toMatchObject({ rir: '3_PLUS' })
     expect(stored!.queue.operations).toHaveLength(1)
     expect(stored!.queue.operations[0]).toMatchObject({
       idempotencyKey: 'set-server-0001',
       type: 'UPSERT_SET',
-      payload: { completionStatus: 'COMPLETED', expectedSessionVersion: 1 },
+      payload: { completionStatus: 'COMPLETED', expectedSessionVersion: 1, remainingReps: 3 },
     })
 
     const synced = await service.flush(updated)
