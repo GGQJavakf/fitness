@@ -46,4 +46,13 @@ describe('P0 page usability contract', () => {
     expect(workout).toContain('RIR（剩余次数）')
     expect(workout).toMatch(/rir:\s*status === 'COMPLETED'/)
   })
+
+  it('lets users choose any active-plan training day before starting', () => {
+    const prepare = source('src/presentation/pages/workout-prepare/index.tsx')
+    expect(prepare).toContain('选择今天训练哪一天')
+    expect(prepare).toMatch(/plan\.activeVersion\.plan\.days\.map/)
+    expect(prepare).toContain('setSelectedDayCode')
+    expect(prepare).toMatch(/days\.find\(\(item\) => item\.code === selectedDayCode\)/)
+    expect(prepare).toContain('planDayId: day.code')
+  })
 })

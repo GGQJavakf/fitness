@@ -11,18 +11,20 @@ const application = getWeappApplication()
 
 export default function WorkoutPreparePage() {
   const [plan, setPlan] = useState<ActivePlanData | null>(null)
+  const [selectedDayCode, setSelectedDayCode] = useState('')
   const [message, setMessage] = useState('正在读取活动计划…')
   const [clientSessionKey] = useState(() => `weapp-session-${Date.now()}`)
 
   useEffect(() => {
     void application.loadActivePlan().then((value) => {
       setPlan(value)
+      setSelectedDayCode(value?.activeVersion.plan.days[0]?.code ?? '')
       setMessage(value ? '训练开始后将固定保存本次快照。' : '没有可用的活动计划。')
     }).catch(() => setMessage('活动计划读取失败，请检查网络后重试。'))
   }, [])
 
   async function start(): Promise<void> {
-    const day = plan?.activeVersion.plan.days[0]
+    const day = plan?.activeVersion.plan.days.find((item) => item.code === selectedDayCode)
     if (!plan || !day) return
     setMessage('正在原子保存训练草稿…')
     try {
@@ -53,13 +55,29 @@ export default function WorkoutPreparePage() {
     }
   }
 
-  const day = plan?.activeVersion.plan.days[0]
+  const day = plan?.activeVersion.plan.days.find((item) => item.code === selectedDayCode)
   return <View className='screen'>
     <View className='card'>
       <Text className='title'>{day?.name ?? '训练准备'}</Text>
       <Text className='subtitle'>{message}</Text>
       <View className='warning-box'>先完成通用热身和动作递增热身。热身组不会计入训练容量或重量进阶。</View>
     </View>
+    {plan && <View className='card'>
+      <Text className='section-title'>选择今天训练哪一天</Text>
+      <Text className='subtitle'>这里只选择本次训练快照，不会改动你的计划版本。</Text>
+      <View className='day-options'>
+        {plan.activeVersion.plan.days.map((option) => (
+          <Button
+            key={option.code}
+            className={option.code === selectedDayCode ? 'day-option day-option--selected' : 'day-option'}
+            onClick={() => setSelectedDayCode(option.code)}
+          >
+            <Text>{option.name}</Text>
+            <Text className='code-label'>{option.exercises.length} 个动作</Text>
+          </Button>
+        ))}
+      </View>
+    </View>}
     <View className='card workout-list'>
       {day?.exercises.map((exercise) => <View className='workout-item' key={exercise.exerciseCode}>
         <View><Text>{exerciseDisplayName(exercise.exerciseCode)}</Text><Text className='code-label'>{exercise.exerciseCode}</Text></View>
