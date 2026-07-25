@@ -114,6 +114,7 @@ export class WorkoutFlowService {
     remainingSeconds: number
     warmupRemainingSeconds: number
     clockRollbackDetected: boolean
+    syncFailed: boolean
   }> {
     const nowUtc = this.clock.nowUtc()
     const rest = state.restTimer ? resumeRestTimer(state.restTimer, nowUtc) : null
@@ -123,11 +124,19 @@ export class WorkoutFlowService {
       restTimer: rest?.timer ?? state.restTimer,
       warmup: { ...state.warmup, generalTimer: general?.timer ?? state.warmup.generalTimer },
     })
+    let recovered = updated
+    let syncFailed = false
+    try {
+      recovered = await this.flush(updated)
+    } catch {
+      syncFailed = true
+    }
     return {
-      state: updated,
+      state: recovered,
       remainingSeconds: rest?.remainingSeconds ?? 0,
       warmupRemainingSeconds: general?.remainingSeconds ?? 0,
       clockRollbackDetected: Boolean(rest?.clockRollbackDetected || general?.clockRollbackDetected),
+      syncFailed,
     }
   }
 

@@ -34,7 +34,13 @@ export default function WorkoutSessionPage() {
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
       setWarmupRemaining(resumed.warmupRemainingSeconds)
-      setMessage(resumed.clockRollbackDetected ? '检测到设备时间回拨，计时已按最近可信时间校准。' : '草稿已恢复。')
+      setMessage(resumed.clockRollbackDetected
+        ? '检测到设备时间回拨，计时已按最近可信时间校准。'
+        : resumed.syncFailed
+          ? '草稿已恢复；当前网络不可用，未同步记录仍安全保留。'
+          : resumed.state.syncStatus === 'CONFLICT'
+            ? '草稿已恢复；发现同步冲突，请保留两份证据后处理。'
+            : '草稿已恢复，待同步记录已自动补传。')
       application.telemetry.track('workout_resumed', { source: 'foreground' })
     }).catch(() => setMessage('训练草稿损坏或读取失败，未伪造任何完成记录。'))
   })

@@ -120,6 +120,64 @@ describe('workout recovery', () => {
     expect(stored!.lastServerVersion).toBe(2)
   })
 
+  it('retries pending operations when the workout returns to the foreground', async () => {
+    let stored: WorkoutDraft | null = null
+    const synchronizedSequences: number[][] = []
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      {
+        syncWorkoutOperations: async (operations) => {
+          synchronizedSequences.push(operations.map((operation) => operation.clientOperationSeq))
+          return operations.map((operation) => ({ clientOperationSeq: operation.clientOperationSeq, status: 'APPLIED' as const }))
+        },
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'foreground-sync-session', planVersionId: 'plan-version',
+      serverSessionId: 'session-id', serverVersion: 4,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'foreground-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const recovered = await service.resume(state)
+
+    expect(synchronizedSequences).toEqual([[1]])
+    expect(recovered.state.syncStatus).toBe('SYNCED')
+    expect(recovered.syncFailed).toBe(false)
+    expect(stored!.queue.operations).toHaveLength(0)
+    expect(stored!.lastServerVersion).toBe(5)
+  })
+
+  it('keeps the restored draft usable when foreground synchronization is offline', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      { syncWorkoutOperations: async () => { throw new Error('offline') } },
+    )
+    let state = await service.start({
+      clientSessionKey: 'offline-resume-session', planVersionId: 'plan-version',
+      serverSessionId: 'session-id', serverVersion: 2,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'offline-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const recovered = await service.resume(state)
+
+    expect(recovered.state.syncStatus).toBe('OFFLINE_PENDING')
+    expect(recovered.syncFailed).toBe(true)
+    expect(stored!.queue.operations).toHaveLength(1)
+  })
+
   it('queues successive ramp warmup sets with their own order and no work-set rest timer', async () => {
     let stored: WorkoutDraft | null = null
     const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft } }
