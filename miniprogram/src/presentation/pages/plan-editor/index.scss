@@ -30,6 +30,8 @@
   margin: 0;
 }
 
+.editor-day-heading { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #e1e8e5; }
+
 .editor-field {
   display: grid;
   grid-template-columns: minmax(130px, 1fr) 150px 150px;

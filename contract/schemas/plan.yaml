@@ -116,6 +116,34 @@ components:
       properties:
         data: {$ref: '#/components/schemas/PlanExerciseOptionListData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    PlanDayOption:
+      type: object
+      additionalProperties: false
+      required: [code, name, exercises]
+      properties:
+        code: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Z0-9_]+$'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        exercises:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: {$ref: '#/components/schemas/PlanExerciseOption'}
+    PlanDayOptionListData:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 6
+          items: {$ref: '#/components/schemas/PlanDayOption'}
+    PlanDayOptionListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanDayOptionListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     PlanCandidateRequest:
       type: object
       additionalProperties: false

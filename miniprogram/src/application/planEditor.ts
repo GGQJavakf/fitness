@@ -3,6 +3,7 @@ import type {
   LockCommandStatus,
   LockStatus,
   PlanDraft,
+  PlanDayOption,
   PlanExercise,
   PlanExerciseOption,
   PlanValidationData,
@@ -134,6 +135,57 @@ export function addPlanExercise(
   const { name: _name, ...exercise } = option
   validatePrescribedExercise(exercise)
   day.exercises.push({ ...exercise })
+  return afterStructuralEdit(state, workingCopy, state.lockCommands)
+}
+
+export function addPlanDay(state: PlanEditorState, option: PlanDayOption): PlanEditorState {
+  const workingCopy = clonePlan(state.workingCopy)
+  if (workingCopy.days.some((day) => day.code === option.code)) {
+    throw new Error('训练日已在当前计划中')
+  }
+  if (workingCopy.days.length >= 6) throw new Error('每周最多包含 6 个训练日')
+  if (!option.code || option.code.includes('/') || !option.name.trim() || option.exercises.length === 0) {
+    throw new Error('服务端训练日处方无效')
+  }
+  const exercises = option.exercises.map(({ name: _name, ...exercise }) => {
+    validatePrescribedExercise(exercise)
+    return { ...exercise }
+  })
+  workingCopy.days.push({ code: option.code, name: option.name, exercises })
+  return afterStructuralEdit(state, workingCopy, state.lockCommands)
+}
+
+export function removePlanDay(state: PlanEditorState, dayCode: string): PlanEditorState {
+  if (state.workingCopy.days.length === 1) throw new Error('计划至少保留一个训练日')
+  const workingCopy = clonePlan(state.workingCopy)
+  const index = workingCopy.days.findIndex((day) => day.code === dayCode)
+  if (index < 0) throw new Error('训练日不存在')
+  const prefix = `/days/${dayCode}/`
+  if (Object.entries(state.baseLocks).some(([path, status]) => path.startsWith(prefix) && status === 'RULE_LOCKED')) {
+    throw new Error('规则锁定训练日不能删除')
+  }
+  const lockCommands = Object.fromEntries(
+    Object.entries(state.lockCommands).filter(([path]) => !path.startsWith(prefix)),
+  ) as Record<string, LockCommandStatus>
+  Object.entries(state.baseLocks).forEach(([path, status]) => {
+    if (path.startsWith(prefix) && status === 'USER_LOCKED') lockCommands[path] = 'UNLOCKED'
+  })
+  workingCopy.days.splice(index, 1)
+  return afterStructuralEdit(state, workingCopy, lockCommands)
+}
+
+export function movePlanDay(
+  state: PlanEditorState,
+  dayCode: string,
+  direction: -1 | 1,
+): PlanEditorState {
+  const workingCopy = clonePlan(state.workingCopy)
+  const index = workingCopy.days.findIndex((day) => day.code === dayCode)
+  if (index < 0) throw new Error('训练日不存在')
+  const target = index + direction
+  if (target < 0 || target >= workingCopy.days.length) return state
+  const [day] = workingCopy.days.splice(index, 1)
+  workingCopy.days.splice(target, 0, day)
   return afterStructuralEdit(state, workingCopy, state.lockCommands)
 }
 

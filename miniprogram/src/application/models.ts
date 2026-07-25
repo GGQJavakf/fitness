@@ -59,6 +59,12 @@ export interface PlanExerciseOption extends PlanExercise {
   name: string
 }
 
+export interface PlanDayOption {
+  code: string
+  name: string
+  exercises: PlanExerciseOption[]
+}
+
 export interface PlanDay {
   code: string
   name: string

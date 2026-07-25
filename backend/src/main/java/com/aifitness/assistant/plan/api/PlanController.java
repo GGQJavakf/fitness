@@ -78,6 +78,13 @@ public final class PlanController {
         return response(new ExerciseOptionListData(exerciseOptions.list(user, planId, dayCode)));
     }
 
+    @GetMapping("/{planId}/day-options")
+    public ApiResponse<DayOptionListData> dayOptions(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId) {
+        return response(new DayOptionListData(exerciseOptions.listDays(user, planId)));
+    }
+
     @PostMapping("/{planId}/versions")
     public ResponseEntity<ApiResponse<VersionResultData>> createVersion(
             AuthenticatedUserId user,
@@ -125,6 +132,12 @@ public final class PlanController {
 
     public record ExerciseOptionListData(List<PlanExerciseOptionService.Option> items) {
         public ExerciseOptionListData {
+            items = List.copyOf(items);
+        }
+    }
+
+    public record DayOptionListData(List<PlanExerciseOptionService.DayOption> items) {
+        public DayOptionListData {
             items = List.copyOf(items);
         }
     }

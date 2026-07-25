@@ -208,6 +208,21 @@ paths:
               schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanExerciseOptionListResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/day-options:
+    get:
+      tags: [Plans]
+      operationId: listPlanDayOptions
+      description: 返回当前活动计划所属模板的完整训练日处方；客户端按当前工作副本过滤已使用项，关键数字来自已验证模板。
+      parameters:
+        - {name: planId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: 可用于恢复或添加到当前自定义计划中的模板训练日
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanDayOptionListResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/validate:
     post:
       tags: [Plans]

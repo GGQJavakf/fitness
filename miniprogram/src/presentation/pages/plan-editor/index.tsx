@@ -1,7 +1,7 @@
 import { Button, Input, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
-import type { PlanExerciseOption } from '../../../application/models'
+import type { PlanDayOption, PlanExerciseOption } from '../../../application/models'
 import { numericFieldPath, type EditableNumericField, type PlanEditorState } from '../../../application/planEditor'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { exerciseDisplayName, planFieldDisplayName, planIssueDisplayMessage } from '../../copy'
@@ -24,6 +24,8 @@ export default function PlanEditorPage() {
   const [error, setError] = useState('')
   const [optionPicker, setOptionPicker] = useState<{ dayCode: string; replacing?: string } | null>(null)
   const [exerciseOptions, setExerciseOptions] = useState<readonly PlanExerciseOption[]>([])
+  const [dayOptions, setDayOptions] = useState<readonly PlanDayOption[]>([])
+  const [showDayOptions, setShowDayOptions] = useState(false)
   const [pendingRemove, setPendingRemove] = useState('')
 
   useEffect(() => {
@@ -90,12 +92,29 @@ export default function PlanEditorPage() {
     }
   }
 
+  async function openDayOptions(): Promise<void> {
+    setBusy(true)
+    setError('')
+    try {
+      const options = await application.listPlanDayOptions()
+      setDayOptions(options)
+      setShowDayOptions(true)
+      if (options.length === 0) setError('当前模板没有可恢复的训练日；可先调整现有训练日和动作')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '训练日候选加载失败')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function applyStructureEdit(action: () => PlanEditorState): void {
     try {
       setEditor(action())
       application.telemetry.track('plan_edited', { fieldKind: 'structure' })
       setOptionPicker(null)
       setExerciseOptions([])
+      setShowDayOptions(false)
+      setDayOptions([])
       setPendingRemove('')
       setError('')
     } catch (reason) {
@@ -123,7 +142,25 @@ export default function PlanEditorPage() {
 
       {editor.workingCopy.days.map((day, dayIndex) => (
         <View key={day.code} className='card'>
-          <Text className='section-title'>{day.name}</Text>
+          <View className='editor-exercise__heading editor-day-heading'>
+            <View>
+              <Text className='section-title'>{day.name}</Text>
+              <Text className='code-label'>{day.exercises.length} 个动作</Text>
+            </View>
+            <View className='editor-structure-actions'>
+              <Button size='mini' disabled={dayIndex === 0} onClick={() => applyStructureEdit(() => application.movePlanDay(day.code, -1))}>上移日</Button>
+              <Button size='mini' disabled={dayIndex === editor.workingCopy.days.length - 1} onClick={() => applyStructureEdit(() => application.movePlanDay(day.code, 1))}>下移日</Button>
+              <Button
+                size='mini'
+                className={pendingRemove === `day:${day.code}` ? 'danger-action' : ''}
+                onClick={() => {
+                  const key = `day:${day.code}`
+                  if (pendingRemove !== key) return setPendingRemove(key)
+                  applyStructureEdit(() => application.removePlanDay(day.code))
+                }}
+              >{pendingRemove === `day:${day.code}` ? '确认删除日' : '删除日'}</Button>
+            </View>
+          </View>
           {day.exercises.map((exercise, exerciseIndex) => (
             <View key={exercise.exerciseCode} className='editor-exercise'>
               <View className='editor-exercise__heading'>
@@ -199,6 +236,24 @@ export default function PlanEditorPage() {
           )}
         </View>
       ))}
+
+      <View className='card'>
+        <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openDayOptions()}>＋ 恢复模板训练日</Button>
+        {showDayOptions && (
+          <View className='exercise-option-panel'>
+            <View className='editor-exercise__heading'>
+              <Text className='section-title'>选择训练日</Text>
+              <Button size='mini' onClick={() => setShowDayOptions(false)}>取消</Button>
+            </View>
+            {dayOptions.map((option) => (
+              <Button key={option.code} className='exercise-option' onClick={() => applyStructureEdit(() => application.addPlanDay(option))}>
+                <Text>{option.name}</Text>
+                <Text className='code-label'>{option.exercises.length} 个模板动作</Text>
+              </Button>
+            ))}
+          </View>
+        )}
+      </View>
 
       {editor.validationResult.validationIssues.map((issue) => (
         <View key={`${issue.fieldPath}-${issue.reasonCode}`} className={issue.severity === 'ERROR' ? 'error-box' : 'warning-box'}>

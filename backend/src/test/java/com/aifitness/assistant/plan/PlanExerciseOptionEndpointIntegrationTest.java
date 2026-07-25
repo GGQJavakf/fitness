@@ -64,6 +64,19 @@ class PlanExerciseOptionEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+
+        mvc.perform(get("/api/v1/plans/{planId}/day-options", planId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items[0].code").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].name").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].exercises[0].workSets").isNumber());
+
+        mvc.perform(get("/api/v1/plans/{planId}/day-options", planId)
+                        .header("Authorization", "Bearer " + otherUser))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
     }
 
     private JsonNode generateCandidate(String token) throws Exception {

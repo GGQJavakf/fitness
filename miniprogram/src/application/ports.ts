@@ -4,6 +4,7 @@ import type {
   PlanValidationData,
   PlanValidationDraft,
   PlanExerciseOption,
+  PlanDayOption,
   PlanVersionResultData,
   RuleReference,
 } from './models'
@@ -18,4 +19,5 @@ export interface PlanPersistencePort {
     request: Omit<CreatePlanVersionRequest, 'warningConfirmationToken'>,
   ): Promise<PlanVersionResultData>
   listExerciseOptions?(planId: string, dayCode: string): Promise<readonly PlanExerciseOption[]>
+  listDayOptions?(planId: string): Promise<readonly PlanDayOption[]>
 }

@@ -4,8 +4,10 @@ import type {
   PlanCandidateGenerationData,
   PlanValidationDraft,
   PlanExerciseOption,
+  PlanDayOption,
 } from './models'
 import {
+  addPlanDay as addDay,
   addPlanExercise as addExercise,
   applyRebalancePreview,
   applyPreSaveValidation,
@@ -17,7 +19,9 @@ import {
   createPlanEditorState,
   markVersionConflict,
   movePlanExercise as moveExercise,
+  movePlanDay as moveDay,
   removePlanExercise as removeExercise,
+  removePlanDay as removeDay,
   replacePlanExercise as replaceExercise,
   setFieldLock,
   type EditableNumericField,
@@ -60,6 +64,10 @@ export interface FitnessApplication {
   removePlanExercise(dayCode: string, exerciseCode: string): PlanEditorState
   replacePlanExercise(dayCode: string, exerciseCode: string, option: PlanExerciseOption): PlanEditorState
   movePlanExercise(dayCode: string, exerciseCode: string, direction: -1 | 1): PlanEditorState
+  listPlanDayOptions(): Promise<readonly PlanDayOption[]>
+  addPlanDay(option: PlanDayOption): PlanEditorState
+  removePlanDay(dayCode: string): PlanEditorState
+  movePlanDay(dayCode: string, direction: -1 | 1): PlanEditorState
 }
 
 export function createFitnessApplication(
@@ -295,6 +303,31 @@ export function createFitnessApplication(
 
     movePlanExercise(dayCode, exerciseCode, direction) {
       editor = moveExercise(requireEditor(), dayCode, exerciseCode, direction)
+      return editor
+    },
+
+    async listPlanDayOptions() {
+      const state = requireEditor()
+      if (!state.planId || !planPort.listDayOptions) {
+        throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再调整训练日结构')
+      }
+      const currentCodes = new Set(state.workingCopy.days.map((day) => day.code))
+      return (await planPort.listDayOptions(state.planId))
+        .filter((option) => !currentCodes.has(option.code))
+    },
+
+    addPlanDay(option) {
+      editor = addDay(requireEditor(), option)
+      return editor
+    },
+
+    removePlanDay(dayCode) {
+      editor = removeDay(requireEditor(), dayCode)
+      return editor
+    },
+
+    movePlanDay(dayCode, direction) {
+      editor = moveDay(requireEditor(), dayCode, direction)
       return editor
     },
   }

@@ -6,6 +6,7 @@ import type {
   PlanValidationData,
   PlanValidationDraft,
   PlanExerciseOption,
+  PlanDayOption,
   PlanVersionResultData,
   RuleReference,
   UpdateEquipmentRequest,
@@ -69,6 +70,7 @@ type ValidationResponse = components['schemas']['PlanValidationResponse']
 type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
 type PlanExerciseOptionListResponse = components['schemas']['PlanExerciseOptionListResponse']
+type PlanDayOptionListResponse = components['schemas']['PlanDayOptionListResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
 type ReauthenticationProofResponse = components['schemas']['ReauthenticationProofResponse']
@@ -272,6 +274,14 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
   async listSyncConflicts(): Promise<SyncConflictData[]> {
     const response = await this.request<SyncConflictListResponse>('/api/v1/sync/conflicts', 'GET')
     return response.data.items
+  }
+
+  async listDayOptions(planId: string): Promise<readonly PlanDayOption[]> {
+    const response = await this.request<PlanDayOptionListResponse>(
+      `/api/v1/plans/${encodeURIComponent(planId)}/day-options`,
+      'GET',
+    )
+    return requireData(response.data).items
   }
 
   async listHistory(cursor?: string, limit = 20): Promise<WorkoutHistoryPage> {

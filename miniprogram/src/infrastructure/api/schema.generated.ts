@@ -199,6 +199,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/{planId}/day-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回当前活动计划所属模板的完整训练日处方；客户端按当前工作副本过滤已使用项，关键数字来自已验证模板。 */
+        get: operations["listPlanDayOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans/validate": {
         parameters: {
             query?: never;
@@ -983,6 +1000,18 @@ export interface components {
         };
         PlanExerciseOptionListResponse: {
             data: components["schemas"]["PlanExerciseOptionListData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanDayOption: {
+            code: string;
+            name: string;
+            exercises: components["schemas"]["PlanExerciseOption"][];
+        };
+        PlanDayOptionListData: {
+            items: components["schemas"]["PlanDayOption"][];
+        };
+        PlanDayOptionListResponse: {
+            data: components["schemas"]["PlanDayOptionListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         PlanValidationDraft: {
@@ -1934,6 +1963,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanExerciseOptionListResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listPlanDayOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 可用于恢复或添加到当前自定义计划中的模板训练日 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanDayOptionListResponse"];
                 };
             };
             404: components["responses"]["NotFound"];

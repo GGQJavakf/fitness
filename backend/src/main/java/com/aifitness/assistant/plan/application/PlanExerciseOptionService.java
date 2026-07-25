@@ -77,6 +77,33 @@ public final class PlanExerciseOptionService {
                 .toList();
     }
 
+    public List<DayOption> listDays(AuthenticatedUserId user, UUID planId) {
+        Objects.requireNonNull(user, "authenticated user must not be null");
+        Objects.requireNonNull(planId, "planId must not be null");
+        TrainingPlan active = plans.getActive(user);
+        if (!active.id().equals(planId)) throw new PlanVersionService.PlanNotFoundException();
+        PlanDraft draft = active.activeVersion().plan();
+        PlanTemplateCatalog.Template template = templates.list(user, Optional.empty()).stream()
+                .filter(value -> value.code().equals(draft.templateCode()))
+                .findFirst()
+                .orElse(null);
+        if (template == null) return List.of();
+
+        Set<UUID> excluded = profiles.excludedExerciseIds(user);
+        Map<String, ExerciseCatalog.Exercise> eligible = exercises
+                .list(user, ExerciseQueryService.Filter.none()).stream()
+                .filter(exercise -> !excluded.contains(exercise.stableId()))
+                .collect(Collectors.toUnmodifiableMap(ExerciseCatalog.Exercise::code, Function.identity()));
+        return template.days().stream()
+                .filter(day -> day.exercises().stream().allMatch(slot -> eligible.containsKey(slot.exerciseCode())))
+                .map(day -> new DayOption(
+                        day.code(), day.name(), day.exercises().stream()
+                                .sorted(java.util.Comparator.comparingInt(PlanTemplateCatalog.ExerciseSlot::order))
+                                .map(slot -> toOption(slot, eligible.get(slot.exerciseCode())))
+                                .toList()))
+                .toList();
+    }
+
     private static Option toOption(
             PlanTemplateCatalog.ExerciseSlot slot,
             ExerciseCatalog.Exercise exercise) {
@@ -93,4 +120,10 @@ public final class PlanExerciseOptionService {
             int repMax,
             int restSeconds,
             PlanDraft.WeightStatus weightStatus) {}
+
+    public record DayOption(String code, String name, List<Option> exercises) {
+        public DayOption {
+            exercises = List.copyOf(exercises);
+        }
+    }
 }
