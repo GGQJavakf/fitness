@@ -123,6 +123,7 @@ export default function HistoryPage() {
       <View className='history-row'><Text className='section-title'>{item.title}</Text>
         <Text className={item.incomplete ? 'history-status history-status--incomplete' : 'history-status'}>{item.statusLabel}</Text></View>
       <Text>{item.factsLabel}</Text><Text className='subtitle'>{item.timeLabel}</Text>
+      <Button className='secondary-action' onClick={() => void application.navigation.open('WORKOUT_SUMMARY', { sessionId: item.id })}>查看或重试 AI 总结</Button>
     </View>)}
     {!loading && items.length === 0 && !message.includes('无法加载') && <View className='card empty-state'><Text className='section-title'>还没有训练记录</Text><Text className='subtitle'>完成第一次训练后，这里会显示组数、容量和进阶建议。</Text><Button className='primary-action' onClick={() => void application.navigation.replace('PLAN')}>去看计划</Button></View>}
     {cursor && <Button className='secondary-action' disabled={loading} onClick={() => void load(cursor)}>{loading ? '加载中…' : '加载更多'}</Button>}

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const taro = vi.hoisted(() => ({
   getStorage: vi.fn(),
   setStorage: vi.fn(),
+  removeStorage: vi.fn(),
 }))
 
 vi.mock('@tarojs/taro', () => ({ default: taro }))
@@ -96,12 +97,50 @@ describe('WeChat workout draft atomic storage', () => {
     expect(migrated.queue.nextClientOperationSeq).toBe(2)
   })
 
+  it('clears only the expected completed draft and its active pointer', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => { values.set(key, data) })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => { values.delete(key) })
+    const store = createWechatWorkoutDraftStore()
+    await store.save(draft(5))
+
+    await store.clearActive('another-draft')
+    expect(await store.loadActive()).toMatchObject({ draftId: 'draft-0001' })
+
+    await store.clearActive('draft-0001')
+    await expect(store.loadActive()).resolves.toBeNull()
+    expect([...values.keys()].filter((key) => key.startsWith('fitness.workout.draft.'))).toEqual([])
+  })
+
+  it('does not revive a completed draft when obsolete-record cleanup fails', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => { values.set(key, data) })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (key.startsWith('fitness.workout.draft.record.')) throw new Error('cleanup failed')
+      values.delete(key)
+    })
+    const store = createWechatWorkoutDraftStore()
+    await store.save(draft(6))
+
+    await expect(store.clearActive('draft-0001')).resolves.toBeUndefined()
+    await expect(store.loadActive()).resolves.toBeNull()
+  })
+
   it('does not expose a locally recorded operation until the atomic save finishes', async () => {
     let releaseSave!: () => void
     const saveGate = new Promise<void>((resolve) => { releaseSave = resolve })
     const store: WorkoutDraftStore = {
       loadActive: vi.fn(),
       save: vi.fn(() => saveGate),
+      clearActive: vi.fn(),
     }
     const service = new WorkoutSyncService(store, () => '2026-07-24T08:00:00Z')
     let resolved = false

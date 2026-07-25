@@ -1,7 +1,7 @@
 export type WorkoutCompletionType = 'FULL' | 'EARLY_END'
 
 export interface WorkoutCompletionResult {
-  readonly session: { readonly status: 'COMPLETED' | 'ABORTED'; readonly version: number }
+  readonly session: { readonly id: string; readonly status: 'COMPLETED' | 'ABORTED'; readonly version: number }
   readonly completedWorkSets: number
   readonly complete: boolean
   readonly automaticProgressionEligible: boolean

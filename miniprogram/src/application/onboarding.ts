@@ -92,7 +92,7 @@ export interface Session {
   expiresAt: string
 }
 
-export type AppDestination = 'LOGIN' | 'ONBOARDING' | 'PLAN' | 'HOME'
+export type AppDestination = 'LOGIN' | 'ONBOARDING' | 'PLAN' | 'HOME' | 'WORKOUT_SESSION'
 
 export interface StartupPorts {
   sessionStore: {
@@ -102,6 +102,7 @@ export interface StartupPorts {
   }
   wechatLogin: { getCode(): Promise<string> }
   auth: { login(code: string): Promise<Session> }
+  workout: { hasActive(): Promise<boolean> }
   profile: { exists(): Promise<boolean> }
   plan: { hasActivePlan(): Promise<boolean> }
   navigation: { replace(destination: AppDestination): Promise<void> | void }
@@ -265,6 +266,9 @@ export function buildCandidateViewModel(
 
 export function createStartupUseCases(ports: StartupPorts) {
   async function resolveDestination(): Promise<AppDestination> {
+    if (await ports.workout.hasActive()) {
+      return 'WORKOUT_SESSION'
+    }
     if (!await ports.profile.exists()) {
       return 'ONBOARDING'
     }

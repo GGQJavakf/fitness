@@ -27,10 +27,12 @@ const api = new FitnessApiClient(
   () => navigationPort.replaceApp('LOGIN'),
 )
 const fitness = createFitnessApplication(api, api)
+const workoutDrafts = createWechatWorkoutDraftStore()
 const startup = createStartupUseCases({
   sessionStore: sessions,
   wechatLogin: reauthentication,
   auth: { login: (code) => api.login(code) },
+  workout: { hasActive: async () => (await workoutDrafts.loadActive()) !== null },
   profile: { exists: () => api.profileExists() },
   plan: { hasActivePlan: async () => (await api.getActivePlan()) !== null },
   navigation: {
@@ -43,7 +45,6 @@ const navigation = createNavigationUseCases(navigationPort)
 const privacy = createVerifiedPrivacyUseCases(api, {
   getProof: async () => api.issueReauthenticationProof(await reauthentication.getCode()),
 })
-const workoutDrafts = createWechatWorkoutDraftStore()
 const clock = { nowUtc: () => new Date().toISOString() }
 const workoutSync = new WorkoutSyncService(workoutDrafts, () => clock.nowUtc())
 const workouts = new WorkoutFlowService(workoutDrafts, clock, api, api, api)
@@ -72,10 +73,8 @@ export function getWeappApplication() {
     dismissProgressionRecommendation: (id: string) => api.dismissRecommendation(id),
     getExerciseTrend: (exerciseCode: string) => api.getExerciseTrend(exerciseCode),
     requestPlanExplanation: (candidateId: string) => api.requestPlanExplanation(candidateId),
-    requestWorkoutSummary: async () => {
-      const draft = await workoutDrafts.loadActive()
-      return draft?.sessionId ? api.requestWorkoutSummary(draft.sessionId) : null
-    },
+    hasActiveWorkout: async () => (await workoutDrafts.loadActive()) !== null,
+    requestWorkoutSummary: (sessionId: string) => api.requestWorkoutSummary(sessionId),
     routeParameter: (name: string) => currentWeappRouteParameter(name),
   }
 }

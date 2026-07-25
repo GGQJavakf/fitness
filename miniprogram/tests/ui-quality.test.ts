@@ -55,4 +55,15 @@ describe('P0 page usability contract', () => {
     expect(prepare).toMatch(/days\.find\(\(item\) => item\.code === selectedDayCode\)/)
     expect(prepare).toContain('planDayId: day.code')
   })
+
+  it('restores interrupted workouts and lets history retry an AI summary by session id', () => {
+    const home = source('src/presentation/pages/home/index.tsx')
+    const history = source('src/presentation/pages/history/index.tsx')
+    const summary = source('src/presentation/pages/workout-summary/index.tsx')
+    expect(home).toContain('hasActiveWorkout')
+    expect(home).toContain('继续本次训练')
+    expect(history).toContain("{ sessionId: item.id }")
+    expect(summary).toContain("routeParameter('sessionId')")
+    expect(summary).toContain('重新生成 AI 总结')
+  })
 })

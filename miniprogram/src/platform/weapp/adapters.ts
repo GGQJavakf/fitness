@@ -97,6 +97,8 @@ export function createWeappNavigation(): PageNavigationPort & {
         ? 'ONBOARDING'
         : destination === 'PLAN'
           ? 'PLAN'
+          : destination === 'WORKOUT_SESSION'
+            ? 'WORKOUT_SESSION'
           : 'HOME'
       await Taro.redirectTo({ url: pageRoutes[page] })
     },

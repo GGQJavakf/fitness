@@ -210,7 +210,7 @@ export class WorkoutFlowService {
       { expectedVersion: draft.lastServerVersion, completionType },
       `${state.clientSessionKey}-complete-${completionType}`,
     )
-    await this.drafts.save({ ...draft, lastServerVersion: result.session.version })
+    await this.drafts.clearActive(draft.draftId)
     return result
   }
 

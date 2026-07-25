@@ -10,11 +10,13 @@ export default function HomePage() {
   const application = getWeappApplication()
   const [destination, setDestination] = useState<AppDestination | 'LOADING'>('LOADING')
   const [message, setMessage] = useState('正在恢复本地会话…')
+  const [hasActiveWorkout, setHasActiveWorkout] = useState(false)
 
   useEffect(() => {
     void application.startup.start()
       .then((next) => {
         setDestination(next)
+        if (next === 'HOME') void application.hasActiveWorkout().then(setHasActiveWorkout).catch(() => setHasActiveWorkout(false))
         setMessage(next === 'LOGIN'
           ? '使用微信登录后开始 3 分钟建档'
           : '档案已就绪，可以继续生成或查看计划')
@@ -50,6 +52,7 @@ export default function HomePage() {
         )}
         {destination === 'HOME' && (
           <View className='action-row'>
+            {hasActiveWorkout && <Button className='primary-action' onClick={() => void application.navigation.open('WORKOUT_SESSION')}>继续本次训练</Button>}
             <Button className='primary-action' onClick={() => void application.navigation.open('PLAN')}>进入我的计划</Button>
             <Button className='secondary-action' onClick={() => void application.navigation.open('ONBOARDING')}>重新设置档案</Button>
           </View>

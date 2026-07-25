@@ -296,6 +296,7 @@ describe('P0 startup and WeChat session', () => {
       },
       wechatLogin: { getCode: vi.fn() },
       auth: { login: vi.fn() },
+      workout: { hasActive: vi.fn().mockResolvedValue(false) },
       profile: { exists: vi.fn().mockResolvedValue(false) },
       plan: { hasActivePlan: vi.fn() },
       navigation: { replace: navigate },
@@ -320,6 +321,7 @@ describe('P0 startup and WeChat session', () => {
       sessionStore: { load: vi.fn(), save, clear: vi.fn() },
       wechatLogin: { getCode },
       auth: { login },
+      workout: { hasActive: vi.fn().mockResolvedValue(false) },
       profile: { exists: vi.fn().mockResolvedValue(true) },
       plan: { hasActivePlan: vi.fn().mockResolvedValue(false) },
       navigation: { replace: vi.fn() },
@@ -330,6 +332,34 @@ describe('P0 startup and WeChat session', () => {
     expect(login).toHaveBeenCalledWith('temporary-wechat-code')
     expect(save).toHaveBeenCalledWith(session)
     expect(save).not.toHaveBeenCalledWith(expect.stringContaining('temporary-wechat-code'))
+  })
+
+  it('resumes an active local workout before requesting remote profile or plan state', async () => {
+    const profileExists = vi.fn()
+    const hasActivePlan = vi.fn()
+    const navigate = vi.fn()
+    const ports: StartupPorts = {
+      sessionStore: {
+        load: vi.fn().mockResolvedValue({
+          accessToken: 'access-redacted',
+          refreshToken: 'refresh-redacted',
+          expiresAt: '2026-07-25T00:00:00Z',
+        }),
+        save: vi.fn(),
+        clear: vi.fn(),
+      },
+      wechatLogin: { getCode: vi.fn() },
+      auth: { login: vi.fn() },
+      workout: { hasActive: vi.fn().mockResolvedValue(true) },
+      profile: { exists: profileExists },
+      plan: { hasActivePlan },
+      navigation: { replace: navigate },
+    }
+
+    await expect(createStartupUseCases(ports).start()).resolves.toBe('WORKOUT_SESSION')
+    expect(navigate).toHaveBeenCalledWith('WORKOUT_SESSION')
+    expect(profileExists).not.toHaveBeenCalled()
+    expect(hasActivePlan).not.toHaveBeenCalled()
   })
 
   it('clears expired sessions, returns to login, and never exposes the server message', async () => {

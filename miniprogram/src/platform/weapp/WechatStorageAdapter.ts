@@ -52,6 +52,20 @@ export function createWechatWorkoutDraftStore(): WorkoutDraftStore {
         throw error
       }
     },
+
+    async clearActive(expectedDraftId: string): Promise<void> {
+      const pointer = await readOptional(activePointerKey)
+      if (pointer === null) return
+      if (!isPointer(pointer)) throw new WorkoutDraftCorruptedError('workout draft active pointer is invalid')
+      const draft = decodeEnvelope(await readRequired(pointer.recordKey))
+      if (draft.draftId !== expectedDraftId) return
+      await removeOptional(activePointerKey)
+      try {
+        await removeOptional(pointer.recordKey)
+      } catch {
+        // The active pointer is the source of truth. An orphaned revision is safer than reviving a completed workout.
+      }
+    },
   }
 }
 
@@ -148,6 +162,14 @@ async function readRequired(key: string): Promise<unknown> {
   const value = await readOptional(key)
   if (value === null) throw new WorkoutDraftCorruptedError('workout draft record is missing')
   return value
+}
+
+async function removeOptional(key: string): Promise<void> {
+  try {
+    await Taro.removeStorage({ key })
+  } catch (error) {
+    if (!isMissingStorage(error)) throw error
+  }
 }
 
 function isMissingStorage(value: unknown): boolean {

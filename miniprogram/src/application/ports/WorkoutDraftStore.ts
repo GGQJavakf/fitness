@@ -21,6 +21,7 @@ export interface WorkoutDraft {
 export interface WorkoutDraftStore {
   loadActive(): Promise<WorkoutDraft | null>
   save(draft: WorkoutDraft): Promise<void>
+  clearActive(expectedDraftId: string): Promise<void>
 }
 
 export class WorkoutDraftCorruptedError extends Error {

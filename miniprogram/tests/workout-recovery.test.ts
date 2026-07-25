@@ -50,7 +50,7 @@ describe('workout recovery', () => {
   it('restores a timestamp-based general warmup timer after process loss', async () => {
     let stored: WorkoutDraft | null = null
     const service = new WorkoutFlowService(
-      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
       { nowUtc: () => '2026-07-24T09:00:00.000Z' },
     )
     const started = await service.start({
@@ -76,6 +76,7 @@ describe('workout recovery', () => {
     const store: WorkoutDraftStore = {
       loadActive: async () => stored,
       save: async (draft) => { stored = draft },
+      clearActive: async () => { stored = null },
     }
     const service = new WorkoutFlowService(
       store,
@@ -124,7 +125,7 @@ describe('workout recovery', () => {
     let stored: WorkoutDraft | null = null
     const synchronizedSequences: number[][] = []
     const service = new WorkoutFlowService(
-      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
       { nowUtc: () => '2026-07-24T09:00:30.000Z' },
       {
         syncWorkoutOperations: async (operations) => {
@@ -156,7 +157,7 @@ describe('workout recovery', () => {
   it('keeps the restored draft usable when foreground synchronization is offline', async () => {
     let stored: WorkoutDraft | null = null
     const service = new WorkoutFlowService(
-      { loadActive: async () => stored, save: async (draft) => { stored = draft } },
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
       { nowUtc: () => '2026-07-24T09:00:30.000Z' },
       { syncWorkoutOperations: async () => { throw new Error('offline') } },
     )
@@ -180,7 +181,7 @@ describe('workout recovery', () => {
 
   it('queues successive ramp warmup sets with their own order and no work-set rest timer', async () => {
     let stored: WorkoutDraft | null = null
-    const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft } }
+    const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } }
     const service = new WorkoutFlowService(store, { nowUtc: () => '2026-07-24T09:00:00.000Z' })
     let state = await service.start({
       clientSessionKey: 'ramp-server-session', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 0,
@@ -200,9 +201,13 @@ describe('workout recovery', () => {
 
   it('synchronizes pending facts before idempotent early completion', async () => {
     let stored: WorkoutDraft | null = null
+    let archived: WorkoutDraft | null = null
     const store: WorkoutDraftStore = {
       loadActive: async () => stored,
       save: async (draft) => { stored = draft },
+      clearActive: async (draftId) => {
+        if (stored?.draftId === draftId) { archived = stored; stored = null }
+      },
     }
     const completionRequests: unknown[] = []
     const service = new WorkoutFlowService(
@@ -211,7 +216,7 @@ describe('workout recovery', () => {
       { syncWorkoutOperations: async (operations) => operations.map((operation) => ({ clientOperationSeq: operation.clientOperationSeq, status: 'APPLIED' as const })) },
       { completeWorkout: async (sessionId, request, key) => {
         completionRequests.push({ sessionId, request, key })
-        return { session: { status: 'ABORTED', version: 4 }, completedWorkSets: 1, complete: false, automaticProgressionEligible: false }
+        return { session: { id: sessionId, status: 'ABORTED', version: 4 }, completedWorkSets: 1, complete: false, automaticProgressionEligible: false }
       } },
     )
     const started = await service.start({
@@ -227,13 +232,37 @@ describe('workout recovery', () => {
 
     expect(completionRequests).toEqual([{ sessionId: 'session-id', request: { expectedVersion: 2, completionType: 'EARLY_END' }, key: 'server-session-key-complete-EARLY_END' }])
     expect(result.automaticProgressionEligible).toBe(false)
-    expect(stored!.lastServerVersion).toBe(4)
-    expect(stored!.queue.operations).toHaveLength(0)
+    expect(stored).toBeNull()
+    expect(archived!.lastServerVersion).toBe(2)
+    expect(archived!.queue.operations).toHaveLength(0)
+  })
+
+  it('keeps the active draft when server completion fails', async () => {
+    let stored: WorkoutDraft | null = null
+    const store: WorkoutDraftStore = {
+      loadActive: async () => stored,
+      save: async (draft) => { stored = draft },
+      clearActive: async () => { stored = null },
+    }
+    const service = new WorkoutFlowService(
+      store,
+      { nowUtc: () => '2026-07-24T09:00:00.000Z' },
+      undefined,
+      { completeWorkout: async () => { throw new Error('offline') } },
+    )
+    const state = await service.start({
+      clientSessionKey: 'failed-completion', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 1,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+
+    await expect(service.complete(state, 'EARLY_END')).rejects.toThrow('offline')
+
+    expect(stored).toMatchObject({ clientSessionKey: 'failed-completion', sessionId: 'session-id' })
   })
 
   it('persists a server-approved replacement only in the current workout draft', async () => {
     let stored: WorkoutDraft | null = null
-    const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft } }
+    const store: WorkoutDraftStore = { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } }
     const service = new WorkoutFlowService(
       store, { nowUtc: () => '2026-07-24T09:00:00.000Z' }, undefined, undefined,
       {
