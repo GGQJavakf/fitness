@@ -2,6 +2,7 @@ import { createNavigationUseCases } from '../../application/navigation'
 import { createStartupUseCases } from '../../application/onboarding'
 import { createFitnessApplication } from '../../application/useCases'
 import { createVerifiedPrivacyUseCases } from '../../application/privacy'
+import { createValidatedAiContentGenerator } from '../../application/cloudbaseAi'
 import { WorkoutSyncService } from '../../application/use-cases/WorkoutSyncService'
 import { WorkoutFlowService } from '../../application/use-cases/WorkoutFlowService'
 import { FitnessApiClient } from '../../infrastructure/api/client'
@@ -14,8 +15,14 @@ import {
   currentWeappRouteParameter,
 } from './adapters'
 import { createWechatWorkoutDraftStore } from './WechatStorageAdapter'
+import {
+  createWeappCloudBaseAiTextProvider,
+  initializeWeappCloudBase,
+} from './CloudBaseAiAdapter'
 
 declare const __FITNESS_API_BASE_URL__: string
+declare const __FITNESS_CLOUDBASE_ENV_ID__: string
+declare const __FITNESS_CLOUDBASE_AI_MODEL__: string
 
 const sessions = createWeappSessionStore()
 const navigationPort = createWeappNavigation()
@@ -27,6 +34,10 @@ const api = new FitnessApiClient(
   () => navigationPort.replaceApp('LOGIN'),
 )
 const fitness = createFitnessApplication(api, api)
+initializeWeappCloudBase(__FITNESS_CLOUDBASE_ENV_ID__)
+const aiContent = createValidatedAiContentGenerator(
+  createWeappCloudBaseAiTextProvider(__FITNESS_CLOUDBASE_AI_MODEL__),
+)
 const workoutDrafts = createWechatWorkoutDraftStore()
 const startup = createStartupUseCases({
   sessionStore: sessions,
@@ -72,9 +83,40 @@ export function getWeappApplication() {
     ) => api.applyRecommendation(id, expectedVersion, acceptedWeightKg, idempotencyKey),
     dismissProgressionRecommendation: (id: string) => api.dismissRecommendation(id),
     getExerciseTrend: (exerciseCode: string) => api.getExerciseTrend(exerciseCode),
-    requestPlanExplanation: (candidateId: string) => api.requestPlanExplanation(candidateId),
+    requestPlanExplanation: (candidateId: string) => {
+      const candidate = fitness.getCandidate()
+      if (!candidate || candidate.candidateId !== candidateId) {
+        return api.requestPlanExplanation(candidateId)
+      }
+      return aiContent.generate(
+        'PLAN_EXPLANATION',
+        {
+          trainingDayCount: candidate.days.length,
+          days: candidate.days,
+        },
+        () => api.requestPlanExplanation(candidateId),
+      )
+    },
     hasActiveWorkout: async () => (await workoutDrafts.loadActive()) !== null,
-    requestWorkoutSummary: (sessionId: string) => api.requestWorkoutSummary(sessionId),
+    requestWorkoutSummary: async (sessionId: string) => {
+      const fallback = () => api.requestWorkoutSummary(sessionId)
+      try {
+        const history = await api.listHistory(undefined, 100)
+        const workout = history.items.find((item) => item.sessionId === sessionId)
+        return workout
+          ? aiContent.generate('WORKOUT_SUMMARY', {
+            workout: {
+              trainingDayCode: workout.trainingDayCode,
+              status: workout.status,
+              completedWorkSets: workout.completedWorkSets,
+              completedVolumeKg: workout.completedVolumeKg,
+            },
+          }, fallback)
+          : fallback()
+      } catch {
+        return fallback()
+      }
+    },
     routeParameter: (name: string) => currentWeappRouteParameter(name),
   }
 }

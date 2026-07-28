@@ -1,6 +1,14 @@
 import { defineConfig, type UserConfigExport } from '@tarojs/cli'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 
 const apiBaseUrl = process.env.TARO_APP_API_BASE_URL?.trim() || 'http://127.0.0.1:8080'
+const localCloudBase = readLocalCloudBaseConfig()
+const cloudBaseEnvironmentId = process.env.TARO_APP_CLOUDBASE_ENV_ID?.trim()
+  || localCloudBase.environmentId
+const cloudBaseAiModel = process.env.TARO_APP_CLOUDBASE_AI_MODEL?.trim()
+  || localCloudBase.model
+  || 'hy3'
 
 const config: UserConfigExport<'webpack5'> = {
   projectName: 'ai-fitness-miniprogram',
@@ -14,7 +22,9 @@ const config: UserConfigExport<'webpack5'> = {
     enable: false
   },
   defineConstants: {
-    __FITNESS_API_BASE_URL__: JSON.stringify(apiBaseUrl)
+    __FITNESS_API_BASE_URL__: JSON.stringify(apiBaseUrl),
+    __FITNESS_CLOUDBASE_ENV_ID__: JSON.stringify(cloudBaseEnvironmentId),
+    __FITNESS_CLOUDBASE_AI_MODEL__: JSON.stringify(cloudBaseAiModel)
   },
   mini: {
     postcss: {
@@ -34,3 +44,26 @@ const config: UserConfigExport<'webpack5'> = {
 }
 
 export default defineConfig<'webpack5'>(config)
+
+interface LocalCloudBaseConfig {
+  environmentId: string
+  model?: string
+}
+
+function readLocalCloudBaseConfig(): LocalCloudBaseConfig {
+  const path = resolve(process.cwd(), 'config', 'cloudbase.json.local')
+  if (!existsSync(path)) return { environmentId: '' }
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return { environmentId: '' }
+    }
+    const value = parsed as Record<string, unknown>
+    return {
+      environmentId: typeof value.environmentId === 'string' ? value.environmentId.trim() : '',
+      model: typeof value.model === 'string' ? value.model.trim() : undefined,
+    }
+  } catch {
+    return { environmentId: '' }
+  }
+}

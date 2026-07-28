@@ -20,6 +20,21 @@ Set-Location miniprogram
 npm run dev:weapp
 ```
 
+### CloudBase AI
+
+小程序成长计划通过微信基础库提供的 `wx.cloud.extend.AI` 调用 CloudBase，不把 API Key 放入小程序。微信基础库需为 3.15.1 或更高版本，并在对应云开发环境中开启配置的生文模型。
+
+本机可创建不会进入 Git 的 `miniprogram/config/cloudbase.json.local`：
+
+```json
+{
+  "environmentId": "<CloudBase 环境 ID>",
+  "model": "hy3"
+}
+```
+
+也可以在构建前设置 `TARO_APP_CLOUDBASE_ENV_ID` 和 `TARO_APP_CLOUDBASE_AI_MODEL`。AI 返回内容只用于解释和总结，必须通过客户端结构、数字和安全校验；失败时自动使用后端规则模板。关键数字和进阶结论始终来自确定性规则引擎。
+
 微信真机局域网调试必须使用真实微信 code 换取身份，不能开放本地假身份实现。完整步骤见 [微信真机局域网调试手册](docs/device-debug-runbook.md)。
 
 ## 验证
