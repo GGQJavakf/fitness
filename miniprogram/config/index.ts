@@ -9,6 +9,9 @@ const cloudBaseEnvironmentId = process.env.TARO_APP_CLOUDBASE_ENV_ID?.trim()
 const cloudBaseAiModel = process.env.TARO_APP_CLOUDBASE_AI_MODEL?.trim()
   || localCloudBase.model
   || 'hy3'
+const cloudBaseServiceName = process.env.TARO_APP_CLOUDBASE_SERVICE_NAME?.trim()
+  || localCloudBase.serviceName
+  || ''
 
 const config: UserConfigExport<'webpack5'> = {
   projectName: 'ai-fitness-miniprogram',
@@ -24,7 +27,8 @@ const config: UserConfigExport<'webpack5'> = {
   defineConstants: {
     __FITNESS_API_BASE_URL__: JSON.stringify(apiBaseUrl),
     __FITNESS_CLOUDBASE_ENV_ID__: JSON.stringify(cloudBaseEnvironmentId),
-    __FITNESS_CLOUDBASE_AI_MODEL__: JSON.stringify(cloudBaseAiModel)
+    __FITNESS_CLOUDBASE_AI_MODEL__: JSON.stringify(cloudBaseAiModel),
+    __FITNESS_CLOUDBASE_SERVICE_NAME__: JSON.stringify(cloudBaseServiceName)
   },
   mini: {
     postcss: {
@@ -48,6 +52,7 @@ export default defineConfig<'webpack5'>(config)
 interface LocalCloudBaseConfig {
   environmentId: string
   model?: string
+  serviceName?: string
 }
 
 function readLocalCloudBaseConfig(): LocalCloudBaseConfig {
@@ -62,6 +67,7 @@ function readLocalCloudBaseConfig(): LocalCloudBaseConfig {
     return {
       environmentId: typeof value.environmentId === 'string' ? value.environmentId.trim() : '',
       model: typeof value.model === 'string' ? value.model.trim() : undefined,
+      serviceName: typeof value.serviceName === 'string' ? value.serviceName.trim() : undefined,
     }
   } catch {
     return { environmentId: '' }

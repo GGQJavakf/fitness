@@ -1,7 +1,11 @@
 import { Button, Input, Text, View } from '@tarojs/components'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { privacyActionErrorMessage } from '../../../application/privacy'
+import {
+  privacyActionErrorMessage,
+  privacyCategoryLabel,
+  type PrivacyExportResource,
+} from '../../../application/privacy'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import MainNavigation from '../../components/main-navigation'
 
@@ -15,12 +19,26 @@ export default function MyPage() {
   const [requestId, setRequestId] = useState('')
   const [busy, setBusy] = useState(false)
   const [showDeletion, setShowDeletion] = useState(false)
+  const [exportedResources, setExportedResources] = useState<readonly PrivacyExportResource[]>([])
+  const [exportExpiresAt, setExportExpiresAt] = useState('')
+
+  useEffect(() => {
+    if (!exportExpiresAt) return undefined
+    const delay = Math.max(0, Date.parse(exportExpiresAt) - Date.now())
+    const timer = setTimeout(() => {
+      setExportedResources([])
+      setExportExpiresAt('')
+    }, delay)
+    return () => clearTimeout(timer)
+  }, [exportExpiresAt])
 
   async function exportData(): Promise<void> {
     setBusy(true)
     setMessage('')
     try {
       const result = await application.privacy.exportData()
+      setExportedResources(result.resources)
+      setExportExpiresAt(result.expiresAt)
       setMessage(`数据副本已准备好：${result.resourceSummary || '暂无训练记录'}。${result.retentionNotice}`)
     } catch (error: unknown) {
       setMessage(privacyActionErrorMessage(error, '数据导出失败，请稍后重试'))
@@ -98,6 +116,7 @@ export default function MyPage() {
           <View className='settings-row__copy'><Text className='settings-row__title'>频率与训练时长</Text><Text className='settings-row__description'>控制每周安排和单次训练量</Text></View>
         </View>
         <Button className='secondary-action settings-edit' onClick={() => void application.navigation.open('ONBOARDING')}>重新设置训练档案</Button>
+        <Button className='secondary-action settings-edit' onClick={() => void application.navigation.open('EXERCISE_PREFERENCES')}>设置不推荐动作</Button>
       </View>
 
       <View className='section-heading'>
@@ -115,6 +134,21 @@ export default function MyPage() {
           </View>
         </View>
         <Button className='secondary-action' loading={busy} disabled={busy} onClick={() => void exportData()}>生成数据副本</Button>
+        {exportedResources.length > 0 && (
+          <View className='privacy-export'>
+            {exportedResources.map((resource) => (
+              <View className='privacy-export__group' key={resource.category}>
+                <Text className='privacy-export__category'>{privacyCategoryLabel(resource.category)} · {resource.recordCount} 项</Text>
+                {resource.records.map((record) => (
+                  <View className='privacy-export__record' key={record.id}>
+                    <Text>{record.summary}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+            <Text className='privacy-export__expiry'>数据仅在本页临时展示，到期或离开页面后请重新验证身份生成。</Text>
+          </View>
+        )}
       </View>
 
       <View className='profile-boundary'>

@@ -431,6 +431,12 @@ export default function WorkoutSessionPage() {
             </View>
           </View>
 
+          <Button
+            className='session-guide-action'
+            onClick={() => void application.navigation.open('EXERCISE_DETAIL', { exerciseCode: exercise.exerciseCode })}
+          >
+            查看动作步骤与安全提示
+          </Button>
           <Button className='session-replace-action' onClick={() => void showReplacements()}>这个动作今天不合适？更换动作</Button>
           {replacements.length > 0 && (
             <View className='session-replacements'>

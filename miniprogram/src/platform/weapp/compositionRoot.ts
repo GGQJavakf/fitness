@@ -23,13 +23,17 @@ import {
 declare const __FITNESS_API_BASE_URL__: string
 declare const __FITNESS_CLOUDBASE_ENV_ID__: string
 declare const __FITNESS_CLOUDBASE_AI_MODEL__: string
+declare const __FITNESS_CLOUDBASE_SERVICE_NAME__: string
 
 const sessions = createWeappSessionStore()
 const navigationPort = createWeappNavigation()
 const reauthentication = createWeappLogin()
 const api = new FitnessApiClient(
   __FITNESS_API_BASE_URL__,
-  createWeappTransport(),
+  createWeappTransport({
+    environmentId: __FITNESS_CLOUDBASE_ENV_ID__,
+    serviceName: __FITNESS_CLOUDBASE_SERVICE_NAME__,
+  }),
   sessions,
   () => navigationPort.replaceApp('LOGIN'),
 )
@@ -83,6 +87,12 @@ export function getWeappApplication() {
     ) => api.applyRecommendation(id, expectedVersion, acceptedWeightKg, idempotencyKey),
     dismissProgressionRecommendation: (id: string) => api.dismissRecommendation(id),
     getExerciseTrend: (exerciseCode: string) => api.getExerciseTrend(exerciseCode),
+    listExercises: () => api.listExercises(),
+    getExercise: (idOrCode: string) => api.getExercise(idOrCode),
+    getExercisePreferences: () => api.getPreferences(),
+    saveExercisePreferences: (
+      request: Parameters<typeof api.savePreferences>[0],
+    ) => api.savePreferences(request),
     requestPlanExplanation: (candidateId: string) => {
       const candidate = fitness.getCandidate()
       if (!candidate || candidate.candidateId !== candidateId) {

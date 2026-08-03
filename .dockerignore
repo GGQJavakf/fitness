@@ -1,0 +1,6 @@
+.git
+.idea
+backend/target
+miniprogram
+docs
+*.log

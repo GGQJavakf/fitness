@@ -10,6 +10,8 @@ export type PageDestination =
   | 'SYNC_CONFLICTS'
   | 'HISTORY'
   | 'EXERCISE_TREND'
+  | 'EXERCISE_DETAIL'
+  | 'EXERCISE_PREFERENCES'
 
 export type NavigationParameters = Readonly<Record<string, string>>
 

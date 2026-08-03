@@ -14,7 +14,9 @@ const configuredEnvironment = {
   WECHAT_APP_SECRET: 'hidden-secret',
   FITNESS_DB_URL: 'hidden-database-url',
   FITNESS_DB_USERNAME: 'hidden-user',
-  FITNESS_DB_PASSWORD: 'hidden-password'
+  FITNESS_DB_PASSWORD: 'hidden-password',
+  TARO_APP_CLOUDBASE_ENV_ID: 'hidden-environment',
+  TARO_APP_CLOUDBASE_SERVICE_NAME: 'hidden-service'
 }
 
 function content(kind, status, environments) {
@@ -61,6 +63,20 @@ describe('release preflight', () => {
     expect(mismatch?.level).toBe('BLOCKED')
     expect(mismatch?.message).not.toContain('wx1234567890abcdef')
     expect(mismatch?.message).not.toContain('wxfedcba0987654321')
+  })
+
+  it('blocks AppID drift between the repository and Taro project configurations', () => {
+    const findings = inspectProjectConfiguration({
+      appid: 'wx1234567890abcdef',
+      miniprogramRoot: 'miniprogram/dist/'
+    }, {}, {
+      appid: 'touristappid'
+    })
+
+    expect(findings).toContainEqual(expect.objectContaining({
+      code: 'SOURCE_PROJECT_APP_ID_MISMATCH',
+      level: 'BLOCKED'
+    }))
   })
 
   it('allows AI validated content in staging but not in public', () => {

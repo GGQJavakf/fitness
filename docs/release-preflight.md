@@ -10,7 +10,12 @@
 npm run preflight:staging
 ```
 
-体验环境允许使用 `AI_VALIDATED` 内容，但要求内容已启用 `staging-experience`，前后端 AppID 一致，并且微信身份及数据库环境变量键齐全。动作占位资源会作为警告显示，不阻止内部体验验证。
+体验环境允许使用 `AI_VALIDATED` 内容，但要求内容已启用 `staging-experience`，前后端 AppID 一致，微信身份及数据库环境变量键齐全，并配置：
+
+- `TARO_APP_CLOUDBASE_ENV_ID`：已绑定小程序的云环境 ID；
+- `TARO_APP_CLOUDBASE_SERVICE_NAME`：CloudBase Run 服务名。
+
+配置服务名后，小程序通过 `wx.cloud.callContainer` 私有链路访问后端；未配置服务名时保留本机 HTTP 调试方式。动作占位资源会作为警告显示，不阻止内部体验验证。
 
 ## 公开发布
 

@@ -12,6 +12,20 @@ import type {
 const sessionStorageKey = 'fitness.session.v1'
 export const WEAPP_REQUEST_TIMEOUT_MS = 20_000
 
+interface CloudContainerRuntime {
+  cloud?: {
+    callContainer?<T>(request: {
+      config: { env: string }
+      path: string
+      method: string
+      header: Record<string, string>
+      data?: unknown
+    }): Promise<{ statusCode?: number; data: T }>
+  }
+}
+
+declare const wx: CloudContainerRuntime | undefined
+
 const pageRoutes: Record<PageDestination, string> = {
   HOME: '/presentation/pages/home/index',
   ONBOARDING: '/presentation/pages/onboarding/index',
@@ -24,11 +38,45 @@ const pageRoutes: Record<PageDestination, string> = {
   SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
   HISTORY: '/presentation/pages/history/index',
   EXERCISE_TREND: '/presentation/pages/exercise-trend/index',
+  EXERCISE_DETAIL: '/presentation/pages/exercise-detail/index',
+  EXERCISE_PREFERENCES: '/presentation/pages/exercise-preferences/index',
 }
 
-export function createWeappTransport(): TransportPort {
+export function createWeappTransport(options: {
+  environmentId?: string
+  serviceName?: string
+} = {}): TransportPort {
+  const environmentId = options.environmentId?.trim() ?? ''
+  const serviceName = options.serviceName?.trim() ?? ''
   return {
     async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
+      if (serviceName) {
+        if (!environmentId) throw new Error('CloudBase environment is required for container calls')
+        const cloud = cloudRuntime()?.cloud
+        if (!cloud?.callContainer) throw new Error('CloudBase container transport is not available')
+        const response = await cloud.callContainer<T>({
+          config: { env: environmentId },
+          path: containerPath(request.url),
+          method: request.method,
+          header: {
+            ...request.headers,
+            'X-WX-SERVICE': serviceName,
+          },
+          ...(request.body === undefined ? {} : { data: request.body }),
+        })
+        if (
+          !Number.isInteger(response.statusCode)
+          || response.statusCode === undefined
+          || response.statusCode < 100
+          || response.statusCode > 599
+        ) {
+          throw new Error('CloudBase container returned an invalid HTTP status code')
+        }
+        return {
+          statusCode: response.statusCode,
+          data: response.data,
+        }
+      }
       const response = await Taro.request<T>({
         url: request.url,
         method: request.method,
@@ -42,6 +90,16 @@ export function createWeappTransport(): TransportPort {
       }
     },
   }
+}
+
+function cloudRuntime(): CloudContainerRuntime | undefined {
+  return typeof wx === 'undefined' ? undefined : wx
+}
+
+function containerPath(url: string): string {
+  const schemeSeparator = url.indexOf('://')
+  const pathStart = schemeSeparator < 0 ? url.indexOf('/') : url.indexOf('/', schemeSeparator + 3)
+  return pathStart < 0 ? '/' : url.slice(pathStart)
 }
 
 export function createWeappSessionStore(): SessionAccessPort {

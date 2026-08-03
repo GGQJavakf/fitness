@@ -37,6 +37,7 @@ import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionT
 import type { ExerciseReplacementCandidate, ReplacedWorkoutSession, WorkoutReplacementPort } from '../../application/ports/WorkoutReplacementPort'
 import type { components } from './schema.generated'
 import type { AiGeneratedContent } from '../../application/ai'
+import type { ExerciseContent, ExercisePreferenceProfile } from '../../application/content'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT'
 
@@ -89,6 +90,8 @@ type ExerciseTrendResponse = components['schemas']['ExerciseTrendResponse']
 type AiGeneratedContentResponse = components['schemas']['AiGeneratedContentResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
+type ExerciseListResponse = components['schemas']['ExerciseListResponse']
+type ExerciseDetailResponse = components['schemas']['ExerciseDetailResponse']
 
 export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort {
   private readonly baseUrl: string
@@ -125,6 +128,14 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return this.getVersionOrNull<PreferenceProfileResponse>('/api/v1/profile/preferences')
   }
 
+  async getPreferences(): Promise<ExercisePreferenceProfile> {
+    const response = await this.request<PreferenceProfileResponse>(
+      '/api/v1/profile/preferences',
+      'GET',
+    )
+    return requireData(response.data)
+  }
+
   async profileExists(): Promise<boolean> {
     return (await this.getProfileVersion()) !== null
   }
@@ -154,6 +165,19 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       request satisfies components['schemas']['UpdatePreferencesRequest'],
     )
     return { version: requireData(response.data).version }
+  }
+
+  async listExercises(): Promise<readonly ExerciseContent[]> {
+    const response = await this.request<ExerciseListResponse>('/api/v1/exercises', 'GET')
+    return requireData(response.data).items
+  }
+
+  async getExercise(idOrCode: string): Promise<ExerciseContent> {
+    const response = await this.request<ExerciseDetailResponse>(
+      `/api/v1/exercises/${encodeURIComponent(idOrCode)}`,
+      'GET',
+    )
+    return requireData(response.data)
   }
 
   async generateCandidate(

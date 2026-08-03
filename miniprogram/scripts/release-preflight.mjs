@@ -12,6 +12,11 @@ export const REQUIRED_BACKEND_ENVIRONMENT = [
   'FITNESS_DB_PASSWORD'
 ]
 
+export const REQUIRED_MINIPROGRAM_CLOUD_ENVIRONMENT = [
+  'TARO_APP_CLOUDBASE_ENV_ID',
+  'TARO_APP_CLOUDBASE_SERVICE_NAME'
+]
+
 const CONTENT_DOCUMENTS = [
   ['动作内容', 'exercises-v1.json'],
   ['计划模板', 'plan-templates-v1.json'],
@@ -40,7 +45,11 @@ export function parseReleaseTarget(argumentsList) {
   return target
 }
 
-export function inspectProjectConfiguration(projectConfiguration, environment) {
+export function inspectProjectConfiguration(
+  projectConfiguration,
+  environment,
+  sourceProjectConfiguration
+) {
   const findings = []
   const appId = projectConfiguration?.appid
   if (typeof appId !== 'string' || !/^wx[0-9a-zA-Z]{16}$/.test(appId)) {
@@ -58,6 +67,23 @@ export function inspectProjectConfiguration(projectConfiguration, environment) {
     ))
   } else if (environmentAppId) {
     findings.push(result('PASS', 'APP_ID_MATCH', '前后端小程序 AppID 一致（值已隐藏）'))
+  }
+
+  if (sourceProjectConfiguration) {
+    const sourceAppId = sourceProjectConfiguration.appid
+    if (typeof sourceAppId !== 'string' || sourceAppId !== appId) {
+      findings.push(result(
+        'BLOCKED',
+        'SOURCE_PROJECT_APP_ID_MISMATCH',
+        'Taro project.config.json 与仓库根小程序 AppID 不一致（值已隐藏）'
+      ))
+    } else {
+      findings.push(result(
+        'PASS',
+        'SOURCE_PROJECT_APP_ID_MATCH',
+        'Taro 与仓库根小程序 AppID 一致（值已隐藏）'
+      ))
+    }
   }
 
   if (projectConfiguration?.miniprogramRoot !== 'miniprogram/dist/') {
@@ -85,6 +111,22 @@ export function inspectBackendEnvironment(environment) {
     'PASS',
     'BACKEND_ENVIRONMENT',
     '微信身份和数据库环境变量键均已配置（值已隐藏）'
+  )]
+}
+
+export function inspectMiniProgramCloudEnvironment(environment) {
+  const missing = REQUIRED_MINIPROGRAM_CLOUD_ENVIRONMENT.filter((key) => !environment[key]?.trim())
+  if (missing.length > 0) {
+    return [result(
+      'BLOCKED',
+      'MINIPROGRAM_CLOUD_ENVIRONMENT',
+      `缺少小程序云托管环境变量键：${missing.join(', ')}（值不会输出）`
+    )]
+  }
+  return [result(
+    'PASS',
+    'MINIPROGRAM_CLOUD_ENVIRONMENT',
+    '小程序云环境和云托管服务名均已配置（值已隐藏）'
   )]
 }
 
@@ -164,13 +206,15 @@ export function inspectExerciseAssets(exerciseDocument, target) {
 export function inspectReleaseReadiness({
   target,
   projectConfiguration,
+  sourceProjectConfiguration,
   environment,
   contentDocuments
 }) {
   if (!RELEASE_TARGETS.includes(target)) throw new Error(`Unsupported target: ${target}`)
   const findings = [
-    ...inspectProjectConfiguration(projectConfiguration, environment),
-    ...inspectBackendEnvironment(environment)
+    ...inspectProjectConfiguration(projectConfiguration, environment, sourceProjectConfiguration),
+    ...inspectBackendEnvironment(environment),
+    ...inspectMiniProgramCloudEnvironment(environment)
   ]
   for (const [label, document] of contentDocuments) {
     findings.push(...inspectContentDocument(label, document, target))
@@ -192,6 +236,7 @@ function loadWorkspaceInputs() {
   const contentRoot = resolve(repositoryRoot, 'rule-config', 'validated')
   return {
     projectConfiguration: readJson(resolve(repositoryRoot, 'project.config.json')),
+    sourceProjectConfiguration: readJson(resolve(repositoryRoot, 'miniprogram', 'project.config.json')),
     contentDocuments: CONTENT_DOCUMENTS.map(([label, file]) => [
       label,
       readJson(resolve(contentRoot, file))

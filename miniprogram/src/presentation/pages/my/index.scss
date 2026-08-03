@@ -211,3 +211,37 @@
     align-items: flex-start;
   }
 }
+.privacy-export {
+  display: flex;
+  padding-top: 18px;
+  gap: 18px;
+  flex-direction: column;
+  border-top: 1px solid #e2eae6;
+}
+
+.privacy-export__group {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}
+
+.privacy-export__category {
+  color: #0b2f28;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.privacy-export__record {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #f3f7f4;
+  color: #56655d;
+  font-size: 19px;
+  line-height: 1.45;
+}
+
+.privacy-export__expiry {
+  color: #78847e;
+  font-size: 18px;
+  line-height: 1.45;
+}

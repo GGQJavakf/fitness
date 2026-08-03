@@ -178,6 +178,12 @@ export default function WorkoutPreparePage() {
                   <Text className='prepare-exercise__prescription'>
                     {exercise.workSets} 组 × {exercise.repMin}～{exercise.repMax} 次
                   </Text>
+                  <Button
+                    className='prepare-exercise__guide'
+                    onClick={() => void application.navigation.open('EXERCISE_DETAIL', { exerciseCode: exercise.exerciseCode })}
+                  >
+                    查看动作说明
+                  </Button>
                 </View>
                 <Text className='prepare-exercise__rest'>休 {exercise.restSeconds} 秒</Text>
               </View>

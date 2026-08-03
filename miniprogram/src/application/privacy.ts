@@ -79,6 +79,10 @@ const categoryLabels: Record<PrivacyDataCategory | RetentionCategory, string> = 
   LEGAL_HOLD: '法定保留',
 }
 
+export function privacyCategoryLabel(category: PrivacyDataCategory | RetentionCategory): string {
+  return categoryLabels[category]
+}
+
 const statusLabels: Record<DeletionStatus, string> = {
   REQUESTED: '已受理',
   ACCESS_REVOKED: '访问已撤销',
