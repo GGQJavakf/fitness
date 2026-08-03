@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
@@ -64,7 +65,7 @@ class CompletedWorkoutProgressionObserverTest {
     }
 
     @Test
-    void lockedWeightIsSuggestionOnlyAndNeverBecomesAnApplicableIncrease() {
+    void lockedWeightDoesNotCreateAUserConfirmationTask() {
         RecommendationService recommendations = mock(RecommendationService.class);
         CompletedWorkoutProgressionObserver observer = new CompletedWorkoutProgressionObserver(
                 recommendations, (user, types) -> List.of(new BigDecimal("2.5")),
@@ -73,11 +74,7 @@ class CompletedWorkoutProgressionObserverTest {
 
         observer.onCompleted(new AuthenticatedUserId(USER_ID), session(), List.of(set(1), set(2), set(3)));
 
-        ArgumentCaptor<ProgressionDecision> decision = ArgumentCaptor.forClass(ProgressionDecision.class);
-        verify(recommendations).save(any(), any(), anyString(), any(), decision.capture(), anyString());
-        assertThat(decision.getValue().decision()).isEqualTo(ProgressionDecision.Decision.KEEP);
-        assertThat(decision.getValue().reasonCode()).isEqualTo(ProgressionDecision.ReasonCode.WEIGHT_USER_LOCKED);
-        assertThat(decision.getValue().application()).isEqualTo(ProgressionDecision.Application.SUGGEST_ONLY);
+        verifyNoInteractions(recommendations);
     }
 
     @Test
@@ -108,6 +105,65 @@ class CompletedWorkoutProgressionObserverTest {
                 .isEqualTo(ProgressionDecision.ReasonCode.CONSECUTIVE_BELOW_MIN);
     }
 
+    @Test
+    void bodyweightCompletionDoesNotCreateAUserConfirmationTask() {
+        RecommendationService recommendations = mock(RecommendationService.class);
+        CompletedWorkoutProgressionObserver observer = observer(recommendations, List.of());
+
+        observer.onCompleted(new AuthenticatedUserId(USER_ID), bodyweightSession(),
+                List.of(bodyweightSet(1, 10), bodyweightSet(2, 10), bodyweightSet(3, 10)));
+
+        verifyNoInteractions(recommendations);
+    }
+
+    @Test
+    void firstBodyweightSessionAtTheUpperRepLimitDoesNotCreateAConfirmationTask() {
+        RecommendationService recommendations = mock(RecommendationService.class);
+        CompletedWorkoutProgressionObserver observer = observer(recommendations, List.of());
+
+        observer.onCompleted(new AuthenticatedUserId(USER_ID), bodyweightSession(),
+                List.of(bodyweightSet(1, 12), bodyweightSet(2, 12), bodyweightSet(3, 12)));
+
+        verifyNoInteractions(recommendations);
+    }
+
+    @Test
+    void repeatedBodyweightSessionsAtTheUpperRepLimitCreateOneProgressionReview() {
+        RecommendationService recommendations = mock(RecommendationService.class);
+        CompletedWorkoutProgressionObserver.HistoricalFactProvider history = (user, exercise, current) -> {
+            List<EffectiveSetSelector.RawSetFact> previous = current.stream().map(value ->
+                    new EffectiveSetSelector.RawSetFact(
+                            UUID.randomUUID(), new UUID(0, 20), value.userId(), value.exerciseId(),
+                            value.variantKey(), value.unit(), value.kind(), value.setOrder(), value.sessionOutcome(),
+                            value.status(), value.weight(), value.reps(), value.remainingReps(), value.anomalous(),
+                            value.currentRevision(), value.completedAt().minusSeconds(86400), value.serverRevision(),
+                            value.payloadDigest())).toList();
+            return java.util.stream.Stream.concat(previous.stream(), current.stream()).toList();
+        };
+        CompletedWorkoutProgressionObserver observer = new CompletedWorkoutProgressionObserver(
+                recommendations, (user, types) -> List.of(), history,
+                new ObjectMapper().findAndRegisterModules(), Clock.fixed(COMPLETED_AT, ZoneOffset.UTC));
+
+        observer.onCompleted(new AuthenticatedUserId(USER_ID), bodyweightSession(),
+                List.of(bodyweightSet(1, 12), bodyweightSet(2, 12), bodyweightSet(3, 12)));
+
+        ArgumentCaptor<ProgressionDecision> decision = ArgumentCaptor.forClass(ProgressionDecision.class);
+        verify(recommendations).save(any(), any(), anyString(), any(), decision.capture(), anyString());
+        assertThat(decision.getValue().reasonCode())
+                .isEqualTo(ProgressionDecision.ReasonCode.BODYWEIGHT_REQUIRES_CONFIRMATION);
+    }
+
+    @Test
+    void unchangedWeightedPrescriptionDoesNotCreateAUserConfirmationTask() {
+        RecommendationService recommendations = mock(RecommendationService.class);
+        CompletedWorkoutProgressionObserver observer = observer(recommendations, List.of(new BigDecimal("2.5")));
+
+        observer.onCompleted(new AuthenticatedUserId(USER_ID), session(),
+                List.of(set(1, 10, 2), set(2, 10, 2), set(3, 10, 2)));
+
+        verifyNoInteractions(recommendations);
+    }
+
     private static CompletedWorkoutProgressionObserver observer(
             RecommendationService recommendations, List<BigDecimal> increments) {
         ObjectMapper json = new ObjectMapper().findAndRegisterModules();
@@ -127,6 +183,18 @@ class CompletedWorkoutProgressionObserverTest {
                 Optional.of(COMPLETED_AT), 5, List.of(exercise));
     }
 
+    private static WorkoutSession bodyweightSession() {
+        WorkoutExerciseSnapshot exercise = new WorkoutExerciseSnapshot(
+                SESSION_EXERCISE_ID, SESSION_ID, PLAN_EXERCISE_ID, 1, "BODYWEIGHT_SQUAT", "自重深蹲",
+                "content-v1", Set.of(), new WorkoutExerciseSnapshot.Prescription(
+                        3, 8, 12, 90, "BODYWEIGHT", Optional.empty(), "KG"),
+                WorkoutExerciseSnapshot.Status.COMPLETED);
+        return new WorkoutSession(
+                SESSION_ID, USER_ID, new UUID(0, 5), new UUID(0, 6), 1, new UUID(0, 7), "BODYWEIGHT_A",
+                "session-key-0001", WorkoutStatus.COMPLETED, COMPLETED_AT.minusSeconds(1800),
+                Optional.of(COMPLETED_AT), 5, List.of(exercise));
+    }
+
     private static WorkoutSet set(int order) {
         return set(order, 12, 2);
     }
@@ -138,5 +206,14 @@ class CompletedWorkoutProgressionObserverTest {
                 WorkoutSet.SetType.WORK, order, performance, performance, rir,
                 WorkoutSet.CompletionStatus.COMPLETED, Optional.of(COMPLETED_AT.minusSeconds(4 - order)), order,
                 Optional.empty(), "a".repeat(64));
+    }
+
+    private static WorkoutSet bodyweightSet(int order, int reps) {
+        WorkoutSet.Performance performance = new WorkoutSet.Performance(BigDecimal.ZERO, "KG", reps);
+        return new WorkoutSet(
+                new UUID(0, 200 + order), SESSION_ID, SESSION_EXERCISE_ID, "bodyweight-set-" + order, order,
+                WorkoutSet.SetType.WORK, order, performance, performance, 2,
+                WorkoutSet.CompletionStatus.COMPLETED, Optional.of(COMPLETED_AT.minusSeconds(4 - order)), order,
+                Optional.empty(), "b".repeat(64));
     }
 }

@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 
 @SpringBootTest(classes = FitnessAssistantApplication.class)
 @AutoConfigureMockMvc
@@ -39,7 +40,7 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("equipmentType", "dumbbell"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.1.0"))
                 .andExpect(jsonPath("$.data.items.length()").value(9))
                 .andExpect(jsonPath("$.data.items[0].plainLanguage").isNotEmpty())
                 .andExpect(jsonPath("$.data.items[0].difficulty").value("BEGINNER"))
@@ -51,7 +52,7 @@ class ContentEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").isNotEmpty())
                 .andExpect(jsonPath("$.data.code").value("GOBLET_SQUAT"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"));
+                .andExpect(jsonPath("$.data.contentVersion").value("1.1.0"));
 
         mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT/replacements")
                         .header("Authorization", "Bearer " + token))
@@ -70,9 +71,11 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("weeklyFrequency", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.templateVersion").value("1.0.0"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.0.0"))
-                .andExpect(jsonPath("$.data.items[0].code").value("FULL_BODY_3_DAY_V1"));
+                .andExpect(jsonPath("$.data.templateVersion").value("1.2.0"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.1.0"))
+                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.items[*].code")
+                        .value(containsInAnyOrder("BODYWEIGHT_3_DAY_V1", "FULL_BODY_3_DAY_V1")));
     }
 
     @Test

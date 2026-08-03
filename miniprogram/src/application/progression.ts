@@ -69,7 +69,7 @@ const reasonTemplates: Record<string, string> = {
   LONG_TRAINING_GAP: '距离上次训练较久，建议先恢复训练节奏。',
   VARIANT_CHANGED: '动作变式发生变化，旧记录不会直接用于进阶。',
   UNIT_CHANGED: '重量单位不一致，P0 不做隐式换算。',
-  BODYWEIGHT_REQUIRES_CONFIRMATION: '自重动作需要用户确认，系统不会自动改重量。',
+  BODYWEIGHT_REQUIRES_CONFIRMATION: '连续两次达到次数上限。可以尝试更难的动作变式、放慢节奏或增加外部负重，当前计划不会自动改变。',
   CONSECUTIVE_BELOW_MIN: '连续训练未达到目标次数下限，规则建议降低一个可用档位。',
   MULTIPLE_FAILED_SETS: '本次存在多个失败正式组，规则建议降低一个可用档位。',
   ALL_SETS_AT_MAX_WITH_ACCEPTABLE_RIR: '所有有效正式组达到次数上限，且强度反馈处于合理区间。',
@@ -82,10 +82,11 @@ const reasonTemplates: Record<string, string> = {
 
 export function toProgressionCard(value: ProgressionRecommendationData): ProgressionCardView {
   const locked = value.reasonCode === 'WEIGHT_USER_LOCKED'
+  const isBodyweightProgression = value.reasonCode === 'BODYWEIGHT_REQUIRES_CONFIRMATION'
   return {
     id: value.id,
     exerciseCode: value.exerciseCode,
-    title: decisionTitles[value.decision],
+    title: isBodyweightProgression ? '可以尝试动作进阶' : decisionTitles[value.decision],
     reason: reasonTemplates[value.reasonCode] ?? `规则原因：${value.reasonCode}`,
     weightLabel: weightLabel(value),
     algorithmLabel: `规则 ${value.algorithmVersion}`,
@@ -133,6 +134,9 @@ export function toExerciseTrendRows(points: readonly ExerciseTrendPoint[]): Exer
 }
 
 function weightLabel(value: ProgressionRecommendationData): string {
+  if (value.reasonCode === 'BODYWEIGHT_REQUIRES_CONFIRMATION') {
+    return '次数已达到当前上限'
+  }
   const current = formatNumber(value.currentWeightKg)
   if (value.decision === 'INCREASE' || value.decision === 'REDUCE') {
     return `${current} KG → ${formatNumber(value.recommendedWeightKg)} KG`

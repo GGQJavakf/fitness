@@ -1,5 +1,6 @@
 package com.aifitness.assistant.plan;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -87,6 +88,30 @@ class PlanVersionEndpointIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("VERSION_CONFLICT"))
                 .andExpect(jsonPath("$.error.details.currentVersion").value(2));
+    }
+
+    @Test
+    void replaysTheSameInitialPlanWhenTheCreateResponseMustBeRetried() throws Exception {
+        String token = loginAndConfigure();
+        String candidateId = generateCandidate(token).path("candidateId").asText();
+        String requestBody = "{\"candidateId\":\"" + candidateId + "\"}";
+
+        JsonNode first = json(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        JsonNode replay = json(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(replay.at("/data/planId").asText()).isEqualTo(first.at("/data/planId").asText());
+        assertThat(replay.at("/data/activeVersion/id").asText())
+                .isEqualTo(first.at("/data/activeVersion/id").asText());
     }
 
     private JsonNode generateCandidate(String token) throws Exception {

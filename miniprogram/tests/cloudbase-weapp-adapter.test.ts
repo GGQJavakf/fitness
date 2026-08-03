@@ -38,7 +38,7 @@ describe('WeChat CloudBase AI adapter', () => {
     })
 
     expect(init).toHaveBeenCalledTimes(1)
-    expect(init).toHaveBeenCalledWith({ env: 'fitness-env' })
+    expect(init).toHaveBeenCalledWith({ env: 'fitness-env', traceUser: true })
     expect(generateText).toHaveBeenCalledWith({
       model: 'hy3',
       messages: [

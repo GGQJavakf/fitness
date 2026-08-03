@@ -16,6 +16,8 @@ import com.aifitness.assistant.content.infrastructure.ClasspathContentCatalogRep
 import com.aifitness.assistant.content.infrastructure.JdbcContentCatalogPublisher;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.domain.TrainingPlan;
+import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.profile.application.ProfileService;
@@ -65,6 +67,9 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.flywaydb.core.Flyway;
@@ -419,6 +424,63 @@ class MigrationTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
                 + binary(created.id().toString()))).isEqualTo("2");
+    }
+
+    @Test
+    void jdbcPlanCreationReplaysTheSameInitialPlanAndRejectsADifferentPlan() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID userId = UUID.fromString(createUser());
+        ObjectMapper objectMapper = new ObjectMapper();
+        ClasspathContentCatalogRepository catalogs =
+                new ClasspathContentCatalogRepository(objectMapper);
+        new JdbcContentCatalogPublisher(dataSource, objectMapper)
+                .publish(catalogs.exercises(), catalogs.templates());
+        UUID exerciseId = UUID.nameUUIDFromBytes(
+                "ai-fitness-exercise:GOBLET_SQUAT".getBytes(StandardCharsets.UTF_8));
+        JdbcPlanRepository repository = new JdbcPlanRepository(
+                dataSource, objectMapper, ignored -> exerciseId);
+        UUID planId = UUID.randomUUID();
+        TrainingPlanVersion firstVersion = new TrainingPlanVersion(
+                UUID.randomUUID(), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
+                planDraft("GOBLET_SQUAT", 90),
+                new RuleReference("rule-v1", "template-v1", "content-v1"),
+                java.util.Set.of(), java.time.Instant.now());
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+
+        try {
+            var firstCreate = executor.submit(() -> {
+                start.await();
+                return repository.create(userId, firstVersion);
+            });
+            var repeatedCreate = executor.submit(() -> {
+                start.await();
+                return repository.create(userId, firstVersion);
+            });
+            start.countDown();
+            TrainingPlan first = firstCreate.get(10, TimeUnit.SECONDS);
+            TrainingPlan replay = repeatedCreate.get(10, TimeUnit.SECONDS);
+
+            assertThat(replay.id()).isEqualTo(first.id());
+            assertThat(replay.activeVersion().id()).isEqualTo(first.activeVersion().id());
+            assertThat(queryOne("SELECT COUNT(*) FROM training_plan WHERE user_id = "
+                    + binary(userId.toString()) + " AND status = 'ACTIVE'")).isEqualTo("1");
+            assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
+                    + binary(planId.toString()))).isEqualTo("1");
+        } finally {
+            executor.shutdownNow();
+        }
+
+        UUID differentPlanId = UUID.randomUUID();
+        TrainingPlanVersion differentFirstVersion = new TrainingPlanVersion(
+                UUID.randomUUID(), differentPlanId, 1, TrainingPlanVersion.SourceType.INITIAL,
+                planDraft("GOBLET_SQUAT", 90),
+                new RuleReference("rule-v1", "template-v1", "content-v1"),
+                java.util.Set.of(), java.time.Instant.now());
+        assertThatThrownBy(() -> repository.create(userId, differentFirstVersion))
+                .isInstanceOf(PlanVersionService.ActivePlanAlreadyExistsException.class);
+        assertThat(queryOne("SELECT COUNT(*) FROM training_plan WHERE user_id = "
+                + binary(userId.toString()) + " AND status = 'ACTIVE'")).isEqualTo("1");
     }
 
     @Test

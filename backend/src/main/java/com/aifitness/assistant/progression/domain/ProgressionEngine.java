@@ -29,7 +29,9 @@ public final class ProgressionEngine {
             return review(current, policy, ProgressionDecision.ReasonCode.UNIT_CHANGED);
         }
         if (input.bodyweightRequiresConfirmation()) {
-            return review(current, policy, ProgressionDecision.ReasonCode.BODYWEIGHT_REQUIRES_CONFIRMATION);
+            return input.allSetsAtMax() && input.consecutiveAllAtMax() >= 2
+                    ? review(current, policy, ProgressionDecision.ReasonCode.BODYWEIGHT_REQUIRES_CONFIRMATION)
+                    : keep(current, policy, ProgressionDecision.ReasonCode.WITHIN_TARGET_RANGE);
         }
         if (input.consecutiveBelowMin() >= 2) {
             return reduce(current, policy, equipment, ProgressionDecision.ReasonCode.CONSECUTIVE_BELOW_MIN);

@@ -13,9 +13,10 @@ describe('Taro weapp toolchain', () => {
 
   it('registers the P0 onboarding and plan pages without App release targets', () => {
     const config = readFileSync(resolve(projectRoot, 'src/app.config.ts'), 'utf8')
-    for (const page of ['home', 'onboarding', 'plan-candidates', 'plan-editor', 'plan']) {
+    for (const page of ['home', 'onboarding', 'plan-candidates', 'plan']) {
       expect(config).toContain(`presentation/pages/${page}/index`)
     }
+    expect(config).not.toContain('presentation/pages/plan-editor/index')
     expect(config).not.toMatch(/android|ios|app-release/i)
   })
 
@@ -41,6 +42,16 @@ describe('Taro weapp toolchain', () => {
     expect(taroConfig).toContain('defineConstants')
     expect(compositionRoot).toContain('__FITNESS_API_BASE_URL__')
     expect(compositionRoot).not.toMatch(/\bprocess\s*\./)
+  })
+
+  it('uses an explicit mobile API timeout instead of the 60 second platform default', () => {
+    const adapter = readFileSync(
+      resolve(projectRoot, 'src/platform/weapp/adapters.ts'),
+      'utf8',
+    )
+
+    expect(adapter).toContain('WEAPP_REQUEST_TIMEOUT_MS = 20_000')
+    expect(adapter).toContain('timeout: WEAPP_REQUEST_TIMEOUT_MS')
   })
 
   it('keeps the Taro glob chain on the patched expansion implementation', () => {

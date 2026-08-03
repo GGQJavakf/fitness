@@ -1,5 +1,4 @@
-import { Button, Input, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { Button, Text, View } from '@tarojs/components'
 
 import type { ProgressionCardView } from '../../../application/progression'
 import { exerciseDisplayName } from '../../copy'
@@ -17,48 +16,40 @@ interface ProgressionCardProps {
 export default function ProgressionCard({
   card, busy, onApply, onDismiss, onOpenTrend,
 }: ProgressionCardProps) {
-  const [weight, setWeight] = useState(String(card.recommendedWeightKg))
-  const acceptedWeight = Number(weight)
-  const validWeight = Number.isFinite(acceptedWeight) && acceptedWeight >= 0
-
-  useEffect(() => setWeight(String(card.recommendedWeightKg)), [card.id, card.recommendedWeightKg])
-
-  return <View className='card progression-card'>
-    <View className='progression-card__heading'>
-      <View className='progression-card__titles'>
-        <View><Text className='section-title'>{exerciseDisplayName(card.exerciseCode)}</Text><Text className='code-label'>{card.exerciseCode}</Text></View>
-        <Text className='progression-card__decision'>{card.title}</Text>
+  return (
+    <View className='surface-card progression-card'>
+      <View className='progression-card__heading'>
+        <View className='progression-card__index'>
+          <View className='progression-card__index-line' />
+          <View className='progression-card__index-line progression-card__index-line--short' />
+        </View>
+        <View className='progression-card__titles'>
+          <Text className='progression-card__exercise'>{exerciseDisplayName(card.exerciseCode)}</Text>
+          <Text className='progression-card__decision'>{card.title}</Text>
+        </View>
       </View>
-      <Text className='progression-card__weight'>{card.weightLabel}</Text>
+
+      <Text className='progression-card__weight data-number'>{card.weightLabel}</Text>
+      <Text className={card.locked ? 'progression-card__reason progression-card__reason--locked' : 'progression-card__reason'}>{card.reason}</Text>
+      <View className='progression-card__basis'>
+        <View className='progression-card__basis-dot' />
+        <Text>基于连续训练记录与身体反馈计算</Text>
+      </View>
+
+      <View className='progression-card__actions'>
+        {card.actionable && (
+          <Button
+            className='primary-action progression-card__apply'
+            loading={busy}
+            disabled={busy}
+            onClick={() => void onApply(card.recommendedWeightKg)}
+          >
+            {busy ? '正在更新计划' : '采用建议'}
+          </Button>
+        )}
+        <Button className='secondary-action' disabled={busy} onClick={() => void onOpenTrend()}>查看训练变化</Button>
+        <Button className='progression-card__dismiss' disabled={busy} onClick={() => void onDismiss()}>保持当前安排</Button>
+      </View>
     </View>
-    <Text className={card.locked ? 'warning-box' : 'subtitle'}>{card.reason}</Text>
-    <Text className='progression-card__algorithm'>{card.algorithmLabel} · 重量由服务端规则计算</Text>
-    {card.actionable && <View className='progression-card__editor'>
-      <Text>采纳重量（KG）</Text>
-      <Input
-        className='progression-card__input'
-        type='digit'
-        value={weight}
-        disabled={busy}
-        onInput={(event) => setWeight(event.detail.value)}
-      />
-    </View>}
-    <View className='action-row'>
-      {card.actionable && <Button
-        className='primary-action progression-card__action'
-        disabled={busy || !validWeight}
-        onClick={() => void onApply(acceptedWeight)}
-      >{busy ? '处理中…' : '确认采纳'}</Button>}
-      <Button
-        className='secondary-action progression-card__action'
-        disabled={busy}
-        onClick={() => void onDismiss()}
-      >忽略建议</Button>
-      <Button
-        className='secondary-action progression-card__action'
-        disabled={busy}
-        onClick={() => void onOpenTrend()}
-      >查看趋势</Button>
-    </View>
-  </View>
+  )
 }

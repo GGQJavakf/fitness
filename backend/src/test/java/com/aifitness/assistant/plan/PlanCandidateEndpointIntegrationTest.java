@@ -90,6 +90,95 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void generatesBodyweightCandidateForEveryP0WeeklyFrequencyWithoutEquipment() {
+        IntStream.rangeClosed(2, 6).forEach(frequency -> {
+            try {
+                String token = login();
+                configureProfile(token, frequency);
+
+                String response = mvc.perform(post("/api/v1/plans/candidates")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                        .andExpect(jsonPath("$.data.candidate.plan.templateCode")
+                                .value(org.hamcrest.Matchers.containsString("BODYWEIGHT")))
+                        .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(frequency))
+                        .andReturn().getResponse().getContentAsString();
+
+                JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+                JsonNode exercises = candidate
+                        .at("/plan/days").findValues("exercises").stream()
+                        .reduce(objectMapper.createArrayNode(),
+                                (all, dayExercises) -> {
+                                    dayExercises.forEach(all::add);
+                                    return all;
+                                },
+                                 (left, right) -> left.addAll(right));
+                org.assertj.core.api.Assertions.assertThat(exercises)
+                        .allMatch(exercise -> "BODYWEIGHT".equals(exercise.path("weightStatus").asText()));
+                org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
+                        .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT".equals(issue.path("reasonCode").asText()));
+            } catch (Exception exception) {
+                throw new AssertionError(
+                        "bodyweight candidate generation failed for weekly frequency " + frequency, exception);
+            }
+        });
+    }
+
+    @Test
+    void everyTemplateDrivingCombinationGeneratesAValidCandidateAndAcceptsAllOtherOptionValues()
+            throws Exception {
+        String[] goals = {"GENERAL_FITNESS", "STRENGTH", "HYPERTROPHY"};
+        String[] experiences = {"BEGINNER", "INTERMEDIATE", "ADVANCED"};
+        String[] locations = {"HOME", "GYM", "OTHER"};
+        int[] sessionMinutes = {30, 45, 60, 75, 90};
+        int combinationIndex = 0;
+
+        for (int frequency = 2; frequency <= 6; frequency++) {
+            for (int minutes : sessionMinutes) {
+                for (boolean gymEquipment : new boolean[] {false, true}) {
+                    String token = login();
+                    configureProfile(
+                            token,
+                            frequency,
+                            minutes,
+                            goals[combinationIndex % goals.length],
+                            experiences[combinationIndex % experiences.length],
+                            locations[combinationIndex % locations.length]);
+                    if (gymEquipment) {
+                        configureEquipment(token);
+                    }
+
+                    String response = mvc.perform(post("/api/v1/plans/candidates")
+                                    .header("Authorization", "Bearer " + token)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                            .andExpect(status().isOk())
+                            .andReturn().getResponse().getContentAsString();
+                    JsonNode data = objectMapper.readTree(response).path("data");
+                    String combination = "frequency=" + frequency
+                            + ", minutes=" + minutes
+                            + ", equipment=" + (gymEquipment ? "GYM" : "BODYWEIGHT");
+
+                    org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                            .as(combination)
+                            .isEqualTo("CANDIDATE_READY");
+                    org.assertj.core.api.Assertions.assertThat(data.at("/candidate/validationIssues"))
+                            .as(combination)
+                            .noneMatch(issue -> "ERROR".equals(issue.path("severity").asText()));
+                    org.assertj.core.api.Assertions.assertThat(
+                                    data.at("/candidate/plan/templateCode").asText().contains("BODYWEIGHT"))
+                            .as(combination)
+                            .isEqualTo(!gymEquipment);
+                    combinationIndex++;
+                }
+            }
+        }
+    }
+
+    @Test
     void candidateLockSurvivesInitialVersionAndRebalancePreview() throws Exception {
         String token = login();
         configureProfile(token);
@@ -225,7 +314,11 @@ class PlanCandidateEndpointIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.status").value("NO_CANDIDATE"));
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andExpect(jsonPath("$.data.candidate.plan.templateCode")
+                        .value(org.hamcrest.Matchers.containsString("BODYWEIGHT")))
+                .andExpect(jsonPath("$.data.candidate.plan.days[*].exercises[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("GOBLET_SQUAT"))));
         mvc.perform(post("/api/v1/plans/validate")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -241,14 +334,25 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     private void configureProfile(String token, int weeklyFrequency) throws Exception {
+        configureProfile(token, weeklyFrequency, 60, "GENERAL_FITNESS", "BEGINNER", "GYM");
+    }
+
+    private void configureProfile(
+            String token,
+            int weeklyFrequency,
+            int sessionMinutes,
+            String goal,
+            String experience,
+            String location) throws Exception {
         mvc.perform(put("/api/v1/profile")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"experience":"BEGINNER","goal":"GENERAL_FITNESS",
-                                 "weeklyFrequency":%d,"sessionMinutes":60,"location":"GYM",
+                                {"experience":"%s","goal":"%s",
+                                 "weeklyFrequency":%d,"sessionMinutes":%d,"location":"%s",
                                  "expectedVersion":0}
-                                """.formatted(weeklyFrequency)))
+                                """.formatted(
+                                        experience, goal, weeklyFrequency, sessionMinutes, location)))
                 .andExpect(status().isOk());
     }
 

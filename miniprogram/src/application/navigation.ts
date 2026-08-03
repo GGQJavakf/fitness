@@ -2,7 +2,6 @@ export type PageDestination =
   | 'HOME'
   | 'ONBOARDING'
   | 'PLAN_CANDIDATES'
-  | 'PLAN_EDITOR'
   | 'PLAN'
   | 'MY'
   | 'WORKOUT_PREPARE'

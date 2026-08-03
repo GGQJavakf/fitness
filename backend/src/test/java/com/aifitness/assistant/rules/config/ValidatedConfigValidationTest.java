@@ -18,6 +18,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -84,7 +85,7 @@ class ValidatedConfigValidationTest {
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
         assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.1.0");
-        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.0.0");
+        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.1.0");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());
             template.path("days").forEach(day -> day.path("exercises").forEach(slot ->
@@ -102,6 +103,60 @@ class ValidatedConfigValidationTest {
     }
 
     @Test
+    void everyP0FrequencyAndEquipmentRangeHasATemplateThatFitsTheMinimumSessionDuration()
+            throws IOException {
+        JsonNode templates = readValidated("plan-templates-v1.json").path("templates");
+        JsonNode rules = readValidated("rule-config-v1.json");
+        int secondsPerWorkSet = rules.at("/parameters/duration/secondsPerWorkSet").asInt();
+        int secondsPerTransition = rules.at("/parameters/duration/secondsPerExerciseTransition").asInt();
+        int minimumSelectableMinutes = 30;
+
+        for (int frequency = 2; frequency <= 6; frequency++) {
+            for (boolean bodyweight : new boolean[] {false, true}) {
+                int expectedFrequency = frequency;
+                boolean expectedBodyweight = bodyweight;
+                assertThat(StreamSupport.stream(templates.spliterator(), false)
+                                .filter(template -> template.path("sessionsPerWeek").asInt() == expectedFrequency)
+                                .filter(template -> template.path("code").asText().contains("BODYWEIGHT")
+                                        == expectedBodyweight)
+                                .anyMatch(template -> StreamSupport.stream(
+                                                template.path("days").spliterator(), false)
+                                        .allMatch(day -> estimatedSeconds(
+                                                day, secondsPerWorkSet, secondsPerTransition)
+                                                <= minimumSelectableMinutes * 60)))
+                        .as("frequency=%s, equipment=%s", frequency, bodyweight ? "BODYWEIGHT" : "GYM")
+                        .isTrue();
+            }
+        }
+    }
+
+    @Test
+    void bodyweightTemplateCatalogCoversEveryP0FrequencyWithoutExternalEquipment() throws IOException {
+        JsonNode exercisesDocument = readValidated("exercises-v1.json");
+        Set<String> bodyweightExerciseCodes = new HashSet<>();
+        exercisesDocument.path("exercises").forEach(exercise -> {
+            if (StreamSupport.stream(exercise.path("equipment").spliterator(), false)
+                    .map(JsonNode::asText)
+                    .anyMatch("BODYWEIGHT"::equals)) {
+                bodyweightExerciseCodes.add(exercise.path("code").asText());
+            }
+        });
+
+        Set<Integer> frequencies = new HashSet<>();
+        readValidated("plan-templates-v1.json").path("templates").forEach(template -> {
+            if (template.path("code").asText().contains("BODYWEIGHT")) {
+                frequencies.add(template.path("sessionsPerWeek").asInt());
+                template.path("days").forEach(day -> day.path("exercises").forEach(slot -> {
+                    assertThat(bodyweightExerciseCodes).contains(slot.path("exerciseCode").asText());
+                    assertThat(slot.path("initialWeightState").asText()).isEqualTo("BODYWEIGHT");
+                }));
+            }
+        });
+
+        assertThat(frequencies).containsExactlyInAnyOrder(2, 3, 4, 5, 6);
+    }
+
+    @Test
     void ruleConfigForbidsDemographicWeightGuessingAndKeepsWarmupsOutOfVolume() throws IOException {
         JsonNode rules = readValidated("rule-config-v1.json");
 
@@ -111,6 +166,14 @@ class ValidatedConfigValidationTest {
         assertThat(rules.at("/parameters/initialWeight/unknownResult").asText()).isEqualTo("NEEDS_CALIBRATION");
         assertThat(rules.at("/parameters/initialWeight/demographicEstimationAllowed").asBoolean()).isFalse();
         assertThat(rules.at("/parameters/warmup/countsTowardTrainingVolume").asBoolean()).isFalse();
+    }
+
+    private static int estimatedSeconds(JsonNode day, int secondsPerWorkSet, int secondsPerTransition) {
+        return StreamSupport.stream(day.path("exercises").spliterator(), false)
+                .mapToInt(slot -> slot.path("workSets").asInt()
+                        * (secondsPerWorkSet + slot.path("restSeconds").asInt())
+                        + secondsPerTransition)
+                .sum();
     }
 
     @Test

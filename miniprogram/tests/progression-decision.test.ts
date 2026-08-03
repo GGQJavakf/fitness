@@ -47,6 +47,15 @@ describe('progression recommendation presentation', () => {
     expect(card.reason).toContain('已锁定')
   })
 
+  it('explains bodyweight progression without asking users to understand weight rules', () => {
+    const card = toProgressionCard(recommendation('REVIEW', 'BODYWEIGHT_REQUIRES_CONFIRMATION', 0))
+
+    expect(card.title).toBe('可以尝试动作进阶')
+    expect(card.weightLabel).toBe('次数已达到当前上限')
+    expect(card.reason).toContain('更难的动作变式')
+    expect(card.actionable).toBe(false)
+  })
+
   it('blocks repeated apply or dismiss clicks until the first action settles', () => {
     const gate = createRecommendationActionGate()
 

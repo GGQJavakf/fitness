@@ -173,7 +173,9 @@ class WorkoutSessionEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].sessionId").value(sessionId))
                 .andExpect(jsonPath("$.data.items[0].status").value("ABORTED"))
-                .andExpect(jsonPath("$.data.items[0].completedWorkSets").value(1));
+                .andExpect(jsonPath("$.data.items[0].completedWorkSets").value(1))
+                .andExpect(jsonPath("$.data.items[0].completedReps").value(9))
+                .andExpect(jsonPath("$.data.items[0].usesExternalLoad").value(true));
 
         String otherToken = login();
         mvc.perform(get("/api/v1/workout-sessions/{id}", sessionId)

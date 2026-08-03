@@ -92,6 +92,7 @@ type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 
 export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort {
   private readonly baseUrl: string
+  private refreshInFlight: Promise<Session> | null = null
 
   constructor(
     baseUrl: string,
@@ -394,7 +395,17 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       true,
       { 'Idempotency-Key': request.clientSessionKey },
     )
-    return response.data
+    const session = response.data
+    if (session.status === 'IN_PROGRESS') return session
+    if (session.status !== 'CREATED') {
+      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    }
+    const activated = await this.request<WorkoutSessionResponse>(
+      `/api/v1/workout-sessions/${encodeURIComponent(session.id)}/status`,
+      'PUT',
+      { status: 'IN_PROGRESS', expectedVersion: session.version },
+    )
+    return activated.data
   }
 
   async syncWorkoutOperations(operations: readonly SyncWorkoutOperation[]): Promise<readonly SyncWorkoutOperationResult[]> {
@@ -443,8 +454,9 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       'Content-Type': 'application/json',
       ...extraHeaders,
     }
+    let session: Session | null = null
     if (authenticated) {
-      const session = await this.sessions.load()
+      session = await this.sessions.load()
       if (!session) {
         throw new ApplicationError(
           'AUTHENTICATION_REQUIRED',
@@ -468,10 +480,60 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       })
     }
 
+    if (authenticated && response.statusCode === 401 && session) {
+      const refreshed = await this.refreshSession(session)
+      headers.Authorization = `Bearer ${refreshed.accessToken}`
+      try {
+        response = await this.transport.request({
+          url: `${this.baseUrl}${path}`,
+          method,
+          headers,
+          ...(body === undefined ? {} : { body }),
+        })
+      } catch {
+        throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
+          retryable: true,
+        })
+      }
+    }
+
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return response.data as Response
     }
     throw await this.mapError(response.statusCode, response.data)
+  }
+
+  private async refreshSession(session: Session): Promise<Session> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.performRefresh(session)
+        .finally(() => { this.refreshInFlight = null })
+    }
+    return this.refreshInFlight
+  }
+
+  private async performRefresh(session: Session): Promise<Session> {
+    let response: TransportResponse<unknown>
+    try {
+      response = await this.transport.request({
+        url: `${this.baseUrl}/api/v1/auth/refresh`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: { refreshToken: session.refreshToken },
+      })
+    } catch {
+      throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
+        retryable: true,
+      })
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw await this.mapError(response.statusCode, response.data)
+    }
+    const refreshed = isSessionResponse(response.data)
+    if (!refreshed) {
+      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    }
+    await this.sessions.save(refreshed)
+    return refreshed
   }
 
   private async mapError(statusCode: number, payload: unknown): Promise<ApplicationError> {
@@ -526,6 +588,18 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
     && value !== null
     && 'error' in value
     && typeof (value as { error?: unknown }).error === 'object'
+}
+
+function isSessionResponse(value: unknown): Session | null {
+  if (typeof value !== 'object' || value === null || !('data' in value)) return null
+  const data = (value as { data?: unknown }).data
+  if (typeof data !== 'object' || data === null) return null
+  const session = data as Partial<Session>
+  return typeof session.accessToken === 'string'
+    && typeof session.refreshToken === 'string'
+    && typeof session.expiresAt === 'string'
+    ? session as Session
+    : null
 }
 
 function mapErrorCode(

@@ -14,13 +14,14 @@ export default function MyPage() {
   const [message, setMessage] = useState('')
   const [requestId, setRequestId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [showDeletion, setShowDeletion] = useState(false)
 
   async function exportData(): Promise<void> {
     setBusy(true)
     setMessage('')
     try {
       const result = await application.privacy.exportData()
-      setMessage(`导出任务 ${result.id} 已就绪：${result.resourceSummary || '暂无记录'}。${result.retentionNotice}`)
+      setMessage(`数据副本已准备好：${result.resourceSummary || '暂无训练记录'}。${result.retentionNotice}`)
     } catch (error: unknown) {
       setMessage(privacyActionErrorMessage(error, '数据导出失败，请稍后重试'))
     } finally {
@@ -54,41 +55,95 @@ export default function MyPage() {
 
   return (
     <View className='screen screen--with-nav my-page'>
-      <View className='card'>
-        <Text className='title'>我的</Text>
-        <Text className='subtitle'>P0 仅面向已满 18 周岁的成年人，单位固定为 KG。</Text>
+      <View className='page-hero profile-hero'>
+        <Text className='page-hero__eyebrow'>YOUR TRAINING PROFILE</Text>
+        <Text className='page-hero__title'>我的训练档案</Text>
+        <Text className='page-hero__description'>目标、时间和训练条件共同决定你的科学计划。</Text>
+        <View className='profile-hero__status'>
+          <View className='profile-hero__status-dot' />
+          <Text>档案已建立</Text>
+        </View>
       </View>
 
-      <View className='card settings-list'>
-        <View className='settings-row'><Text>训练档案</Text><Text className='subtitle'>可在建档流程更新</Text></View>
-        <View className='settings-row'><Text>可用器械</Text><Text className='subtitle'>按场地配置</Text></View>
-        <View className='settings-row'><Text>重量单位</Text><Text className='subtitle'>KG</Text></View>
-        <View className='settings-row'><Text>休息设置</Text><Text className='subtitle'>随计划规则生成</Text></View>
+      <View className='surface-card profile-overview'>
+        <View className='profile-overview__item'>
+          <Text className='profile-overview__label'>适用人群</Text>
+          <Text className='profile-overview__value'>成年人</Text>
+        </View>
+        <View className='profile-overview__item'>
+          <Text className='profile-overview__label'>重量单位</Text>
+          <Text className='profile-overview__value data-number'>KG</Text>
+        </View>
+        <View className='profile-overview__item'>
+          <Text className='profile-overview__label'>计划方式</Text>
+          <Text className='profile-overview__value'>科学推荐</Text>
+        </View>
       </View>
 
-      <View className='card'>
-        <Text className='section-title'>隐私与数据</Text>
-        <Text className='subtitle'>导出和删除申请均会重新进行微信身份验证，并记录不含凭据的安全审计。</Text>
-        <Button className='secondary-action' disabled={busy} onClick={() => void exportData()}>生成数据导出</Button>
+      <View className='section-heading'>
+        <Text className='section-heading__title'>训练偏好</Text>
+        <Text className='section-heading__meta'>影响后续推荐</Text>
+      </View>
+      <View className='surface-card settings-list'>
+        <View className='settings-row'>
+          <View className='settings-row__mark data-number'>01</View>
+          <View className='settings-row__copy'><Text className='settings-row__title'>训练目标与经验</Text><Text className='settings-row__description'>用于选择适合的训练节奏</Text></View>
+        </View>
+        <View className='settings-row'>
+          <View className='settings-row__mark data-number'>02</View>
+          <View className='settings-row__copy'><Text className='settings-row__title'>场地与器械</Text><Text className='settings-row__description'>只推荐当前条件可完成的动作</Text></View>
+        </View>
+        <View className='settings-row'>
+          <View className='settings-row__mark data-number'>03</View>
+          <View className='settings-row__copy'><Text className='settings-row__title'>频率与训练时长</Text><Text className='settings-row__description'>控制每周安排和单次训练量</Text></View>
+        </View>
+        <Button className='secondary-action settings-edit' onClick={() => void application.navigation.open('ONBOARDING')}>重新设置训练档案</Button>
       </View>
 
-      <View className='card danger-zone'>
-        <Text className='section-title'>申请删除账户数据</Text>
-        <Text className='subtitle'>请输入 DELETE 二次确认。安全审计和依法必须保留的数据与普通业务数据分离，不会被静默丢弃。</Text>
-        <Input
-          className='confirmation-input'
-          value={confirmation}
-          maxlength={6}
-          placeholder='输入 DELETE'
-          onInput={(event) => setConfirmation(event.detail.value)}
-        />
-        <Button className='danger-action' disabled={busy || confirmation !== 'DELETE'} onClick={() => void requestDeletion()}>提交删除申请</Button>
-        {requestId && (
-          <Button className='secondary-action' onClick={() => void refreshStatus()}>刷新申请状态</Button>
-        )}
+      <View className='section-heading'>
+        <Text className='section-heading__title'>隐私与数据</Text>
+        <Text className='section-heading__meta'>由你掌控</Text>
+      </View>
+      <View className='surface-card privacy-card'>
+        <View className='privacy-card__heading'>
+          <View className='privacy-card__mark'>
+            <View className='privacy-card__mark-core' />
+          </View>
+          <View>
+            <Text className='privacy-card__title'>获取我的数据副本</Text>
+            <Text className='privacy-card__description'>导出训练档案、计划和训练记录。</Text>
+          </View>
+        </View>
+        <Button className='secondary-action' loading={busy} disabled={busy} onClick={() => void exportData()}>生成数据副本</Button>
       </View>
 
-      {message && <View className='info-box'><Text>{message}</Text></View>}
+      <View className='profile-boundary'>
+        <Text className='profile-boundary__title'>健康与服务边界</Text>
+        <Text className='profile-boundary__description'>提供一般健身训练建议，不替代医疗诊断、治疗或康复服务。</Text>
+      </View>
+
+      <Button className='deletion-disclosure' onClick={() => setShowDeletion((value) => !value)}>
+        <Text>{showDeletion ? '收起账户删除选项' : '账户与数据删除'}</Text>
+        <Text className='deletion-disclosure__indicator'>{showDeletion ? '−' : '+'}</Text>
+      </Button>
+
+      {showDeletion && (
+        <View className='surface-card danger-zone'>
+          <Text className='section-title'>申请删除账户数据</Text>
+          <Text className='subtitle'>这是不可逆操作。请输入 DELETE 确认，申请提交后可在这里查看处理状态。</Text>
+          <Input
+            className='confirmation-input'
+            value={confirmation}
+            maxlength={6}
+            placeholder='输入 DELETE'
+            onInput={(event) => setConfirmation(event.detail.value)}
+          />
+          <Button className='danger-action' disabled={busy || confirmation !== 'DELETE'} onClick={() => void requestDeletion()}>提交删除申请</Button>
+          {requestId && <Button className='secondary-action' onClick={() => void refreshStatus()}>查看申请状态</Button>}
+        </View>
+      )}
+
+      {message && <View className='profile-message'><Text>{message}</Text></View>}
       <MainNavigation current='MY' onNavigate={(destination) => void application.navigation.replace(destination)} />
     </View>
   )

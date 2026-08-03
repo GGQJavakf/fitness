@@ -130,8 +130,21 @@ public final class CompletedWorkoutProgressionObserver implements WorkoutComplet
         ProgressionDecision decision = engine.evaluate(input, current,
                 new ProgressionEngine.EnginePolicy(ALGORITHM_VERSION, REDUCTION_RATE), rounding);
 
+        if (!requiresUserAttention(decision)) return;
         recommendations.save(user, exercise.sourcePlanExerciseId(), exercise.exerciseCode(), session.id(), decision,
                 snapshot(selected, input, increments));
+    }
+
+    private static boolean requiresUserAttention(ProgressionDecision decision) {
+        if (decision.application() == ProgressionDecision.Application.RECOMMENDATION_PENDING) return true;
+        if (decision.application() != ProgressionDecision.Application.REVIEW_REQUIRED) return false;
+        return switch (decision.reasonCode()) {
+            case PAIN_OR_SAFETY_FLAG, ANOMALOUS_INPUT, CONFLICTING_INPUT, LONG_TRAINING_GAP,
+                    VARIANT_CHANGED, UNIT_CHANGED, BODYWEIGHT_REQUIRES_CONFIRMATION -> true;
+            case INSUFFICIENT_HISTORY, CONSECUTIVE_BELOW_MIN, MULTIPLE_FAILED_SETS,
+                    ALL_SETS_AT_MAX_WITH_ACCEPTABLE_RIR, ALL_SETS_AT_MAX_TWICE_WITHOUT_RIR,
+                    RIR_ZERO_AT_MAX, WITHIN_TARGET_RANGE, PARTIAL_AT_MAX, WEIGHT_USER_LOCKED -> false;
+        };
     }
 
     private EffectiveSetSelector.RawSetFact rawFact(

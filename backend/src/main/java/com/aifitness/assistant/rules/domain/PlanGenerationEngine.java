@@ -29,6 +29,9 @@ public final class PlanGenerationEngine {
         }
         Optional<Template> eligible = frequencyMatches.stream()
                 .filter(template -> input.eligibleExercises().keySet().containsAll(template.exerciseCodes()))
+                .sorted(Comparator.comparingInt(Template::equipmentCalibrationSlots)
+                        .reversed()
+                        .thenComparing(Template::code))
                 .findFirst();
         if (eligible.isEmpty()) {
             return unavailable("NO_ELIGIBLE_TEMPLATE", "/equipment", input.lockedNumbers());
@@ -153,6 +156,12 @@ public final class PlanGenerationEngine {
         Set<String> exerciseCodes() {
             return days.stream().flatMap(day -> day.exercises().stream())
                     .map(Exercise::exerciseCode).collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
+
+        int equipmentCalibrationSlots() {
+            return (int) days.stream().flatMap(day -> day.exercises().stream())
+                    .filter(exercise -> exercise.weightStatus() == WeightStatus.NEEDS_CALIBRATION)
+                    .count();
         }
     }
 

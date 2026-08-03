@@ -5,6 +5,7 @@ import {
   beginWorkSets,
   completeGeneralWarmup,
   completedRampSets,
+  isWorkoutPrescriptionFinished,
   recordWorkoutSet,
   replaceExerciseForSession,
   summarizeWorkout,
@@ -43,6 +44,17 @@ describe('workout execution state', () => {
     expect(beginWorkSets(ramp).warmup.phase).toBe('WORK')
   })
 
+  it('moves bodyweight exercises directly from general warmup to work sets', () => {
+    const general = createWorkoutFlow({
+      ...baseInput,
+      exercises: baseInput.exercises.map((exercise, index) => index === 0
+        ? { ...exercise, weightStatus: 'BODYWEIGHT' as const }
+        : exercise),
+    })
+
+    expect(completeGeneralWarmup(general).warmup.phase).toBe('WORK')
+  })
+
   it('rejects set records that bypass the warmup state machine', () => {
     const general = createWorkoutFlow(baseInput)
     expect(() => beginWorkSets(general)).toThrow(/general warmup/i)
@@ -67,7 +79,10 @@ describe('workout execution state', () => {
   })
 
   it('keeps missing RIR unknown and excludes warm-up, failed, and skipped sets from volume', () => {
-    let state = completeGeneralWarmup(createWorkoutFlow(baseInput))
+    let state = completeGeneralWarmup(createWorkoutFlow({
+      ...baseInput,
+      exercises: [{ ...baseInput.exercises[0], targetWorkSets: 3 }],
+    }))
     state = recordWorkoutSet(state, {
       clientSetKey: 'warmup-1', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
       actualWeightKg: 10, actualReps: 10,
@@ -89,9 +104,63 @@ describe('workout execution state', () => {
     expect(summarizeWorkout(state)).toMatchObject({
       completedWorkSets: 1,
       completedVolumeKg: 200,
+      completedReps: 10,
+      usesExternalLoad: true,
       failedSets: 1,
       skippedSets: 1,
       complete: false,
+    })
+  })
+
+  it('summarizes bodyweight work with repetitions instead of a zero-weight volume', () => {
+    let state = completeGeneralWarmup(createWorkoutFlow({
+      ...baseInput,
+      exercises: [{
+        ...baseInput.exercises[0],
+        weightStatus: 'BODYWEIGHT',
+        targetWorkSets: 1,
+      }],
+    }))
+    state = beginWorkSets(state)
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'bodyweight-work-1',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualWeightKg: 0,
+      actualReps: 12,
+    })
+
+    expect(summarizeWorkout(state)).toMatchObject({
+      completedWorkSets: 1,
+      completedVolumeKg: 0,
+      completedReps: 12,
+      usesExternalLoad: false,
+    })
+  })
+
+  it('uses repetitions while an external-load exercise is still awaiting weight calibration', () => {
+    let state = beginWorkSets(completeGeneralWarmup(createWorkoutFlow({
+      ...baseInput,
+      exercises: [{
+        ...baseInput.exercises[0],
+        weightStatus: 'NEEDS_CALIBRATION',
+        targetWorkSets: 1,
+      }],
+    })))
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'calibration-work-1',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualWeightKg: 0,
+      actualReps: 10,
+    })
+
+    expect(summarizeWorkout(state)).toMatchObject({
+      completedVolumeKg: 0,
+      completedReps: 10,
+      usesExternalLoad: false,
     })
   })
 
@@ -105,6 +174,36 @@ describe('workout execution state', () => {
 
     expect(twice).toBe(once)
     expect(twice.exercises[0].sets).toHaveLength(1)
+  })
+
+  it('detects when every prescribed work set has been recorded', () => {
+    const oneSet = recordWorkoutSet(createWorkFlow(), {
+      clientSetKey: 'work-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })
+    const finished = recordWorkoutSet(oneSet, {
+      clientSetKey: 'work-2', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })
+
+    expect(isWorkoutPrescriptionFinished(oneSet)).toBe(false)
+    expect(isWorkoutPrescriptionFinished(finished)).toBe(true)
+  })
+
+  it('rejects additional work facts after the prescription is complete', () => {
+    const first = recordWorkoutSet(createWorkFlow(), {
+      clientSetKey: 'work-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })
+    const finished = recordWorkoutSet(first, {
+      clientSetKey: 'work-2', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })
+
+    expect(() => recordWorkoutSet(finished, {
+      clientSetKey: 'work-3', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 20, actualReps: 10,
+    })).toThrow(/already complete/i)
   })
 
   it('replaces an exercise only inside the session snapshot', () => {

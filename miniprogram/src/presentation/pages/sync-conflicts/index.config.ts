@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '同步冲突' })
+export default definePageConfig({ navigationBarTitleText: '记录同步' })

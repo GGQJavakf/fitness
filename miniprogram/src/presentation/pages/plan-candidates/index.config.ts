@@ -1,3 +1,3 @@
 export default definePageConfig({
-  navigationBarTitleText: '候选计划'
+  navigationBarTitleText: '科学训练方案'
 })

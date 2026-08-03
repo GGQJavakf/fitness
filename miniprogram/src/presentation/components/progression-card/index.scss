@@ -1,8 +1,130 @@
-.progression-card__heading { display: flex; flex-direction: column; gap: 12px; }
-.progression-card__titles { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
-.progression-card__decision { color: #176b5b; font-weight: 650; }
-.progression-card__weight { font-size: 34px; font-weight: 700; }
-.progression-card__algorithm { color: #778494; font-size: 22px; }
-.progression-card__editor { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.progression-card__input { min-width: 160px; min-height: 72px; padding: 0 18px; border: 2px solid #dbe4df; border-radius: 14px; background: #f8faf9; text-align: right; }
-.progression-card__action { flex: 1 0 180px; }
+.progression-card {
+  border-color: #cfe0d7;
+}
+
+.progression-card__heading {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.progression-card__index {
+  display: flex;
+  width: 54px;
+  height: 54px;
+  padding: 13px;
+  box-sizing: border-box;
+  flex: 0 0 54px;
+  flex-direction: column;
+  gap: 7px;
+  justify-content: center;
+  border-radius: 18px;
+  background: #0b2f28;
+}
+
+.progression-card__index-line {
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: #46c794;
+}
+
+.progression-card__index-line--short {
+  width: 65%;
+}
+
+.progression-card__titles {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.progression-card__exercise {
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progression-card__decision {
+  flex: 0 0 auto;
+  padding: 8px 13px;
+  border-radius: 999px;
+  background: #def4e9;
+  color: #0f6b57;
+  font-size: 20px;
+  font-weight: 650;
+}
+
+.progression-card__weight {
+  color: #0b2f28;
+  font-size: 38px;
+  font-weight: 750;
+}
+
+.progression-card__reason {
+  color: #526159;
+  font-size: 23px;
+  line-height: 1.6;
+}
+
+.progression-card__reason--locked {
+  padding: 18px;
+  border-radius: 18px;
+  background: #fff5d9;
+  color: #735612;
+}
+
+.progression-card__basis {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #728078;
+  font-size: 20px;
+}
+
+.progression-card__basis-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #46c794;
+}
+
+.progression-card__actions {
+  display: grid;
+  margin-top: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.progression-card__apply {
+  grid-column: 1 / -1;
+}
+
+.progression-card__dismiss {
+  min-height: 74px;
+  padding: 0 10px;
+  background: transparent;
+  color: #6e7973;
+  font-size: 22px;
+}
+
+@media (max-width: 360px) {
+  .progression-card__titles {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .progression-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .progression-card__apply {
+    grid-column: auto;
+  }
+}

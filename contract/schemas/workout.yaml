@@ -292,7 +292,7 @@ components:
     WorkoutHistoryItem:
       type: object
       additionalProperties: false
-      required: [sessionId, trainingDayCode, status, startedAt, completedAt, completedWorkSets, completedVolumeKg]
+      required: [sessionId, trainingDayCode, status, startedAt, completedAt, completedWorkSets, completedVolumeKg, completedReps, usesExternalLoad]
       properties:
         sessionId: {type: string, format: uuid}
         trainingDayCode: {type: string, minLength: 1}
@@ -301,6 +301,8 @@ components:
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         completedWorkSets: {type: integer, minimum: 0}
         completedVolumeKg: {type: number, minimum: 0}
+        completedReps: {type: integer, minimum: 0}
+        usesExternalLoad: {type: boolean}
     WorkoutHistoryData:
       type: object
       additionalProperties: false

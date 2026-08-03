@@ -85,10 +85,14 @@ public final class JdbcPlanRepository implements PlanRepository {
                 if (owners.isEmpty()) {
                     throw new PlanVersionService.PlanNotFoundException();
                 }
-                Integer activePlans = jdbc.queryForObject(
-                        "SELECT COUNT(*) FROM training_plan WHERE user_id = ? AND status = 'ACTIVE'",
-                        Integer.class, bytes(userId));
-                if (activePlans != null && activePlans > 0) {
+                List<UUID> activePlanIds = jdbc.query(
+                        "SELECT id FROM training_plan WHERE user_id = ? AND status = 'ACTIVE'",
+                        (row, ignored) -> uuid(row.getBytes(1)), bytes(userId));
+                if (!activePlanIds.isEmpty()) {
+                    if (activePlanIds.getFirst().equals(firstVersion.planId())) {
+                        return findByIdAndUser(firstVersion.planId(), userId)
+                                .orElseThrow(PlanVersionService.PlanNotFoundException::new);
+                    }
                     throw new PlanVersionService.ActivePlanAlreadyExistsException();
                 }
                 jdbc.update("""
@@ -103,8 +107,8 @@ public final class JdbcPlanRepository implements PlanRepository {
                 if (activated != 1) {
                     throw new PlanVersionService.VersionConflictException(0);
                 }
-            return new TrainingPlan(firstVersion.planId(), userId, List.of(firstVersion), 1);
-        });
+                return new TrainingPlan(firstVersion.planId(), userId, List.of(firstVersion), 1);
+            });
     }
 
     @Override

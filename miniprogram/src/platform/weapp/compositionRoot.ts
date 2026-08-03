@@ -110,6 +110,8 @@ export function getWeappApplication() {
               status: workout.status,
               completedWorkSets: workout.completedWorkSets,
               completedVolumeKg: workout.completedVolumeKg,
+              completedReps: workout.completedReps,
+              usesExternalLoad: workout.usesExternalLoad,
             },
           }, fallback)
           : fallback()

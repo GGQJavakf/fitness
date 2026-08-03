@@ -7,7 +7,12 @@ import type {
   Session,
   StartupPorts,
 } from '../src/application/onboarding'
-import { FitnessApiClient } from '../src/infrastructure/api/client'
+import {
+  FitnessApiClient,
+  type TransportPort,
+  type TransportRequest,
+  type TransportResponse,
+} from '../src/infrastructure/api/client'
 import { createFitnessApplication } from '../src/application/useCases'
 import {
   ONBOARDING_STEPS,
@@ -15,6 +20,7 @@ import {
   buildCandidateViewModel,
   createOnboardingState,
   createStartupUseCases,
+  goToOnboardingStep,
   saveProfileAndGenerateCandidate,
   updateOnboardingDraft,
 } from '../src/application/onboarding'
@@ -58,14 +64,12 @@ describe('P0 onboarding flow', () => {
     }
   })
 
-  it('keeps the three-minute path explicit and advances only when required fields are valid', () => {
+  it('keeps the onboarding path to four focused steps and advances only when required fields are valid', () => {
     expect(ONBOARDING_STEPS).toEqual([
       'SAFETY',
       'GOAL_AND_EXPERIENCE',
       'SCHEDULE',
-      'EQUIPMENT',
-      'PREFERENCES',
-      'REVIEW',
+      'LOCATION_AND_EQUIPMENT',
     ])
 
     const initial = createOnboardingState()
@@ -105,8 +109,26 @@ describe('P0 onboarding flow', () => {
       '单次训练时长只能选择 30/45/60/75/90 分钟',
     ])
 
-    state = { ...state, stepIndex: 3, step: 'EQUIPMENT' }
+    state = { ...state, stepIndex: 3, step: 'LOCATION_AND_EQUIPMENT' }
     expect(advanceOnboarding(state).errors).toContain('P0 仅支持 KG，不支持 LB 或隐式换算')
+  })
+
+  it('returns from the final summary to the requested field without losing selections', () => {
+    const final = {
+      ...updateOnboardingDraft(createOnboardingState(), validDraft),
+      stepIndex: 3,
+      step: 'LOCATION_AND_EQUIPMENT' as const,
+    }
+
+    const schedule = goToOnboardingStep(final, 'SCHEDULE')
+
+    expect(schedule).toMatchObject({
+      stepIndex: 2,
+      step: 'SCHEDULE',
+      draft: validDraft,
+      errors: [],
+    })
+    expect(schedule.draft).toBe(final.draft)
   })
 
   it('creates missing profile resources from expectedVersion 0 before generating a candidate', async () => {
@@ -206,7 +228,7 @@ describe('P0 onboarding flow', () => {
       label: '返回调整器械与频率',
       route: 'ONBOARDING_EQUIPMENT',
     })
-    expect(noCandidate.reason).toContain('EQUIPMENT_UNAVAILABLE')
+    expect(noCandidate.reason).toBe('当前器械或动作排除设置无法组成安全计划，请调整后重试。')
   })
 
   it('resumes a NO_CANDIDATE adjustment at equipment without dropping the submitted draft', async () => {
@@ -236,7 +258,7 @@ describe('P0 onboarding flow', () => {
 
     expect(resumed).toMatchObject({
       stepIndex: 3,
-      step: 'EQUIPMENT',
+      step: 'LOCATION_AND_EQUIPMENT',
       draft: validDraft,
       errors: [],
     })
@@ -405,5 +427,59 @@ describe('P0 startup and WeChat session', () => {
     expect(error.message).not.toContain('secret-token')
     expect(clear).toHaveBeenCalledOnce()
     expect(authenticationExpired).toHaveBeenCalledOnce()
+  })
+
+  it('refreshes an expired access token once and retries the original request', async () => {
+    const currentSession: Session = {
+      accessToken: 'expired-access-redacted',
+      refreshToken: 'refresh-redacted',
+      expiresAt: '2026-07-25T00:00:00Z',
+    }
+    const refreshedSession: Session = {
+      accessToken: 'renewed-access-redacted',
+      refreshToken: 'renewed-refresh-redacted',
+      expiresAt: '2026-07-25T01:00:00Z',
+    }
+    const save = vi.fn(async (session: Session) => {
+      Object.assign(currentSession, session)
+    })
+    const clear = vi.fn()
+    const requests: Array<{ url: string; authorization?: string; body?: unknown }> = []
+    const transport: TransportPort = {
+      async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
+        requests.push({
+          url: request.url,
+          authorization: request.headers.Authorization,
+          body: request.body,
+        })
+        if (request.url.endsWith('/api/v1/auth/refresh')) {
+          return { statusCode: 200, data: { data: refreshedSession } as T }
+        }
+        if (request.headers.Authorization === `Bearer ${refreshedSession.accessToken}`) {
+          return { statusCode: 200, data: { data: { version: 4 } } as T }
+        }
+        return {
+          statusCode: 401,
+          data: { error: { code: 'AUTHENTICATION_REQUIRED', fieldErrors: [], retryable: false } } as T,
+        }
+      },
+    }
+    const client = new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      transport,
+      { load: async () => currentSession, save, clear },
+      vi.fn(),
+    )
+
+    await expect(client.getProfileVersion()).resolves.toBe(4)
+    expect(requests).toHaveLength(3)
+    expect(requests[1]).toMatchObject({
+      url: 'http://127.0.0.1:8080/api/v1/auth/refresh',
+      authorization: undefined,
+      body: { refreshToken: 'refresh-redacted' },
+    })
+    expect(requests[2].authorization).toBe('Bearer renewed-access-redacted')
+    expect(save).toHaveBeenCalledWith(refreshedSession)
+    expect(clear).not.toHaveBeenCalled()
   })
 })

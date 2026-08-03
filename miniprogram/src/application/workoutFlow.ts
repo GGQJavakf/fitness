@@ -103,7 +103,9 @@ export function completeGeneralWarmup(state: WorkoutFlowState): WorkoutFlowState
   const generalTimer = state.warmup.generalTimer?.timerStatus === 'RUNNING'
     ? { ...state.warmup.generalTimer, timerStatus: 'SKIPPED' as const }
     : state.warmup.generalTimer
-  return { ...state, warmup: { ...state.warmup, phase: 'RAMP', generalTimer } }
+  const rampExercise = state.exercises[state.warmup.rampExerciseIndex]
+  const nextPhase: WarmupPhase = rampExercise?.weightStatus === 'BODYWEIGHT' ? 'WORK' : 'RAMP'
+  return { ...state, warmup: { ...state.warmup, phase: nextPhase, generalTimer } }
 }
 
 export function beginWorkSets(state: WorkoutFlowState): WorkoutFlowState {
@@ -119,6 +121,12 @@ export function completedRampSets(state: WorkoutFlowState): number {
     .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED').length
 }
 
+export function isWorkoutPrescriptionFinished(state: WorkoutFlowState): boolean {
+  validateStateShape(state)
+  return state.exercises.every((exercise) =>
+    exercise.sets.filter((set) => set.setType === 'WORK').length >= exercise.targetWorkSets)
+}
+
 export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSetInput): WorkoutFlowState {
   validateStateShape(state)
   const exercise = state.exercises[input.exerciseIndex]
@@ -129,6 +137,10 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   if (existing) {
     if (JSON.stringify(existing) === JSON.stringify(record)) return state
     throw new Error('clientSetKey already identifies different workout facts')
+  }
+  if (record.setType === 'WORK'
+    && exercise.sets.filter((set) => set.setType === 'WORK').length >= exercise.targetWorkSets) {
+    throw new Error('prescribed work sets are already complete')
   }
   if (record.setType === 'WARMUP') {
     if (state.warmup.phase !== 'RAMP') throw new Error('ramp warmup sets can only be recorded during ramp warmup')
@@ -197,12 +209,14 @@ export function restoreWorkoutFlow(value: unknown): WorkoutFlowState {
   } catch {
     throw new Error('workout state is invalid')
   }
-  return state
+  return { ...state, ...derivePosition(state.exercises) }
 }
 
 export function summarizeWorkout(state: WorkoutFlowState): {
   completedWorkSets: number
   completedVolumeKg: number
+  completedReps: number
+  usesExternalLoad: boolean
   failedSets: number
   skippedSets: number
   complete: boolean
@@ -219,6 +233,8 @@ export function summarizeWorkout(state: WorkoutFlowState): {
       (sum, set) => sum + (set.actualWeightKg ?? 0) * (set.actualReps ?? 0),
       0,
     ),
+    completedReps: completed.reduce((sum, set) => sum + (set.actualReps ?? 0), 0),
+    usesExternalLoad: completed.some((set) => (set.actualWeightKg ?? 0) > 0),
     failedSets,
     skippedSets,
     complete: completed.length >= required && failedSets === 0 && skippedSets === 0,

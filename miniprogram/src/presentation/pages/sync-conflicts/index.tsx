@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import type { components } from '../../../infrastructure/api/schema.generated'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-import { evidenceRows } from '../../copy'
+import { evidenceFieldDisplayName, evidenceRows, evidenceValueDisplayName } from '../../copy'
 
 import './index.scss'
 
@@ -13,11 +13,23 @@ const application = getWeappApplication()
 
 export default function SyncConflictsPage() {
   const [items, setItems] = useState<Conflict[]>([])
-  const [message, setMessage] = useState('正在读取待处理冲突…')
+  const [message, setMessage] = useState('正在检查训练记录…')
   const [busyId, setBusyId] = useState('')
-  const reload = () => application.listSyncConflicts().then((value) => {
-    setItems(value); setMessage(value.length ? '请选择保留方式；系统不会静默覆盖。' : '当前没有待处理冲突。')
-  }).catch(() => setMessage('冲突列表暂时无法连接；本地证据仍保留。'))
+  const [loading, setLoading] = useState(false)
+
+  async function reload(): Promise<void> {
+    setLoading(true)
+    try {
+      const value = await application.listSyncConflicts()
+      setItems(value)
+      setMessage(value.length ? '发现不同版本的训练记录，请选择要保留的内容。' : '所有训练记录都已同步。')
+    } catch {
+      setMessage('暂时无法检查同步状态，设备中的训练记录仍会保留。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => { void reload() }, [])
 
   async function resolve(conflict: Conflict, resolution: Resolution): Promise<void> {
@@ -31,22 +43,84 @@ export default function SyncConflictsPage() {
       })
       await reload()
     } catch {
-      setMessage('处理失败，两份证据都已保留，请稍后重试。')
+      setMessage('这次选择暂未保存，两份记录都还在，请稍后重试。')
     } finally {
       setBusyId('')
     }
   }
 
-  return <View className='screen'><View className='card'><Text className='title'>同步冲突</Text><Text className='subtitle'>{message}</Text></View>
-    {items.map((item) => <View className='card' key={item.id}>
-      <Text className='section-title'>训练组 {item.entityKey}</Text>
-      <View className='evidence'><Text className='field-label'>本地记录</Text>{evidenceRows(item.localEvidence).map(([key, value]) => <View className='evidence__row' key={key}><Text>{key}</Text><Text>{value}</Text></View>)}</View>
-      <View className='evidence'><Text className='field-label'>服务端记录</Text>{evidenceRows(item.serverEvidence).map(([key, value]) => <View className='evidence__row' key={key}><Text>{key}</Text><Text>{value}</Text></View>)}</View>
-      <View className='action-row'>
-        <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_LOCAL')}>保留本地</Button>
-        <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_SERVER')}>保留服务端</Button>
-        <Button className='primary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_BOTH')}>两份都保留</Button>
+  return (
+    <View className='screen sync-conflicts-page'>
+      <View className='page-hero conflict-hero'>
+        <Text className='page-hero__eyebrow'>RECORD RECOVERY</Text>
+        <Text className='page-hero__title'>训练记录待确认</Text>
+        <Text className='page-hero__description'>{message}</Text>
+        {items.length > 0 && <Text className='conflict-hero__count data-number'>{items.length} 项待处理</Text>}
       </View>
-    </View>)}
-  </View>
+
+      {items.length === 0 && !loading && (
+        <View className='surface-card empty-state conflict-empty'>
+          <View className='conflict-empty__mark'>
+            <View className='conflict-empty__check' />
+          </View>
+          <Text className='section-title'>记录状态正常</Text>
+          <Text className='subtitle'>当前没有需要你确认的训练记录。</Text>
+          <Button className='primary-action' onClick={() => void application.navigation.back()}>返回训练</Button>
+        </View>
+      )}
+
+      {items.map((item, index) => (
+        <View className='surface-card conflict-card' key={item.id}>
+          <View className='conflict-card__heading'>
+            <View>
+              <Text className='conflict-card__eyebrow'>待确认记录 {String(index + 1).padStart(2, '0')}</Text>
+              <Text className='conflict-card__title'>同一训练组有两份记录</Text>
+            </View>
+            <View className='status-pill'>请选择</View>
+          </View>
+
+          <View className='conflict-compare'>
+            <View className='evidence evidence--device'>
+              <View className='evidence__heading'>
+                <View className='evidence__dot' />
+                <Text>设备中的记录</Text>
+              </View>
+              {evidenceRows(item.localEvidence).map(([key, value], rowIndex) => (
+                <View className='evidence__row' key={`${key}-${rowIndex}`}>
+                  <Text>{evidenceFieldDisplayName(key)}</Text>
+                  <Text>{evidenceValueDisplayName(value)}</Text>
+                </View>
+              ))}
+            </View>
+            <View className='evidence evidence--synced'>
+              <View className='evidence__heading'>
+                <View className='evidence__dot' />
+                <Text>已同步的记录</Text>
+              </View>
+              {evidenceRows(item.serverEvidence).map(([key, value], rowIndex) => (
+                <View className='evidence__row' key={`${key}-${rowIndex}`}>
+                  <Text>{evidenceFieldDisplayName(key)}</Text>
+                  <Text>{evidenceValueDisplayName(value)}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          <View className='conflict-recommendation'>
+            <View className='conflict-recommendation__line' />
+            <Text>如果不确定，建议两份都保留，之后再根据训练回顾判断。</Text>
+          </View>
+          <View className='conflict-actions'>
+            <Button className='primary-action' loading={busyId === item.id} disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_BOTH')}>两份都保留</Button>
+            <View className='conflict-actions__alternatives'>
+              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_LOCAL')}>使用设备记录</Button>
+              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_SERVER')}>使用已同步记录</Button>
+            </View>
+          </View>
+        </View>
+      ))}
+
+      {message.includes('无法检查') && <Button className='secondary-action conflict-retry' loading={loading} onClick={() => void reload()}>重新检查</Button>}
+    </View>
+  )
 }

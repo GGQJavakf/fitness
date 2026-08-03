@@ -66,7 +66,7 @@ public final class PlanCandidateService {
         }
         RuleReference reference = currentReference();
         List<PlanGenerationEngine.Template> eligibleTemplates = templates
-                .list(user, Optional.of(profile.details().weeklyFrequency())).stream()
+                .listForGeneration(Optional.of(profile.details().weeklyFrequency())).stream()
                 .map(PlanCandidateService::toDomain)
                 .toList();
         Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises = eligibleExercises(user);

@@ -46,18 +46,27 @@ public final class WorkoutHistoryQueryService {
                 .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
         List<WorkoutSet> facts = sets.findBySession(user.value(), sessionId);
         List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
-        BigDecimal volume = completed.stream().map(set -> set.actual().weight()
-                .multiply(BigDecimal.valueOf(set.actual().reps()))).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new Summary(session.id(), session.status(), completed.size(), volume.stripTrailingZeros());
+        Metrics metrics = metrics(completed);
+        return new Summary(session.id(), session.status(), completed.size(), metrics.volumeKg(),
+                metrics.completedReps(), metrics.usesExternalLoad());
     }
 
     private Item item(UUID userId, WorkoutSession session) {
         List<WorkoutSet> facts = sets.findBySession(userId, session.id());
         List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
+        Metrics metrics = metrics(completed);
+        return new Item(session.id(), session.trainingDayCode(), session.status(), session.startedAt(),
+                session.completedAt().orElseThrow(), completed.size(), metrics.volumeKg(),
+                metrics.completedReps(), metrics.usesExternalLoad());
+    }
+
+    private static Metrics metrics(List<WorkoutSet> completed) {
         BigDecimal volume = completed.stream().map(set -> set.actual().weight()
                 .multiply(BigDecimal.valueOf(set.actual().reps()))).reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new Item(session.id(), session.trainingDayCode(), session.status(), session.startedAt(),
-                session.completedAt().orElseThrow(), completed.size(), volume.stripTrailingZeros());
+        int completedReps = completed.stream().mapToInt(set -> set.actual().reps()).sum();
+        boolean usesExternalLoad = completed.stream()
+                .anyMatch(set -> set.actual().weight().compareTo(BigDecimal.ZERO) > 0);
+        return new Metrics(volume.stripTrailingZeros(), completedReps, usesExternalLoad);
     }
 
     private static String encode(Cursor cursor) {
@@ -77,10 +86,13 @@ public final class WorkoutHistoryQueryService {
     }
 
     private record Cursor(Instant startedAt, UUID id) {}
+    private record Metrics(BigDecimal volumeKg, int completedReps, boolean usesExternalLoad) {}
     public record Item(UUID sessionId, String trainingDayCode, WorkoutStatus status, Instant startedAt,
-                       Instant completedAt, int completedWorkSets, BigDecimal completedVolumeKg) {}
+                       Instant completedAt, int completedWorkSets, BigDecimal completedVolumeKg,
+                       int completedReps, boolean usesExternalLoad) {}
     public record Summary(
-            UUID sessionId, WorkoutStatus status, int completedWorkSets, BigDecimal completedVolumeKg) {}
+            UUID sessionId, WorkoutStatus status, int completedWorkSets, BigDecimal completedVolumeKg,
+            int completedReps, boolean usesExternalLoad) {}
     public record Page(List<Item> items, Optional<String> nextCursor, boolean hasMore) {
         public Page { items = List.copyOf(items); Objects.requireNonNull(nextCursor); }
     }

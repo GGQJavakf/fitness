@@ -38,6 +38,14 @@ public final class PlanVersionService {
         if (candidateId == null || candidateId.isBlank()) {
             throw new IllegalArgumentException("candidateId must not be blank");
         }
+        UUID planId = initialPlanId(user, candidateId);
+        Optional<TrainingPlan> active = plans.findActiveByUser(user.value());
+        if (active.isPresent()) {
+            if (active.get().id().equals(planId)) {
+                return active.get();
+            }
+            throw new ActivePlanAlreadyExistsException();
+        }
         CandidatePlan candidate = policy.candidate(user, candidateId);
         List<ValidationIssue> issues = policy.validate(user, candidate.plan(), candidate.ruleReference());
         if (hasSeverity(issues, Severity.ERROR)) {
@@ -47,9 +55,8 @@ public final class PlanVersionService {
                 .filter(issue -> issue.severity() == Severity.WARNING)
                 .map(ValidationIssue::reasonCode)
                 .collect(Collectors.toUnmodifiableSet());
-        UUID planId = UUID.randomUUID();
         TrainingPlanVersion first = new TrainingPlanVersion(
-                UUID.randomUUID(), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
+                initialVersionId(planId), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
                 candidate.plan(), candidate.ruleReference(), confirmedWarnings, clock.instant());
         return plans.create(user.value(), first);
     }
@@ -190,6 +197,16 @@ public final class PlanVersionService {
 
     private static boolean hasSeverity(List<ValidationIssue> issues, Severity severity) {
         return issues.stream().anyMatch(issue -> issue.severity() == severity);
+    }
+
+    private static UUID initialPlanId(AuthenticatedUserId user, String candidateId) {
+        String identity = user.value() + "|initial-plan|" + candidateId;
+        return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static UUID initialVersionId(UUID planId) {
+        return UUID.nameUUIDFromBytes(
+                (planId + "|version|1").getBytes(StandardCharsets.UTF_8));
     }
 
     private static void requireUser(AuthenticatedUserId user) {

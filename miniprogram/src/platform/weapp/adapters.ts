@@ -10,12 +10,12 @@ import type {
 } from '../../infrastructure/api/client'
 
 const sessionStorageKey = 'fitness.session.v1'
+export const WEAPP_REQUEST_TIMEOUT_MS = 20_000
 
 const pageRoutes: Record<PageDestination, string> = {
   HOME: '/presentation/pages/home/index',
   ONBOARDING: '/presentation/pages/onboarding/index',
   PLAN_CANDIDATES: '/presentation/pages/plan-candidates/index',
-  PLAN_EDITOR: '/presentation/pages/plan-editor/index',
   PLAN: '/presentation/pages/plan/index',
   MY: '/presentation/pages/my/index',
   WORKOUT_PREPARE: '/presentation/pages/workout-prepare/index',
@@ -33,6 +33,7 @@ export function createWeappTransport(): TransportPort {
         url: request.url,
         method: request.method,
         header: request.headers,
+        timeout: WEAPP_REQUEST_TIMEOUT_MS,
         ...(request.body === undefined ? {} : { data: request.body }),
       })
       return {

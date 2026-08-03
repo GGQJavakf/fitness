@@ -34,6 +34,8 @@ public final class AiInputRedactor {
             "workoutFacts",
             "completedWorkSets",
             "completedVolumeKg",
+            "completedReps",
+            "usesExternalLoad",
             "exerciseCode",
             "movementPattern",
             "difficulty",

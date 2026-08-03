@@ -58,6 +58,7 @@ public final class AiContentService {
         Set<BigDecimal> numbers = new LinkedHashSet<>();
         numbers.add(BigDecimal.valueOf(workout.completedWorkSets()));
         numbers.add(workout.completedVolumeKg());
+        numbers.add(BigDecimal.valueOf(workout.completedReps()));
         decisions.forEach(item -> {
             numbers.add(item.currentPrescription().weightKg());
             numbers.add(item.recommendedPrescription().weightKg());
@@ -71,11 +72,15 @@ public final class AiContentService {
         facts.put("status", workout.status().name());
         facts.put("completedWorkSets", workout.completedWorkSets());
         facts.put("completedVolumeKg", workout.completedVolumeKg());
+        facts.put("completedReps", workout.completedReps());
+        facts.put("usesExternalLoad", workout.usesExternalLoad());
         facts.put("reasonCodes", decisions.stream().map(ProgressionRecommendation::reasonCode).distinct().toList());
         facts.put("decision", decisionNames.stream().sorted().toList());
-        String template = template("WORKOUT_SUMMARY_DEFAULT")
+        String template = template(workout.usesExternalLoad()
+                ? "WORKOUT_SUMMARY_DEFAULT" : "WORKOUT_SUMMARY_BODYWEIGHT_DEFAULT")
                 .replace("{completedWorkSets}", Integer.toString(workout.completedWorkSets()))
-                .replace("{completedVolumeKg}", workout.completedVolumeKg().toPlainString());
+                .replace("{completedVolumeKg}", workout.completedVolumeKg().toPlainString())
+                .replace("{completedReps}", Integer.toString(workout.completedReps()));
         return validated(
                 AiProvider.Purpose.WORKOUT_SUMMARY,
                 Map.of("workoutFacts", facts),

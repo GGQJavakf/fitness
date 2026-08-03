@@ -25,7 +25,11 @@ public final class InMemoryPlanRepository implements PlanRepository {
 
     @Override
     public synchronized TrainingPlan create(UUID userId, TrainingPlanVersion firstVersion) {
-        if (activePlanByUser.containsKey(userId)) {
+        UUID activePlanId = activePlanByUser.get(userId);
+        if (activePlanId != null) {
+            if (activePlanId.equals(firstVersion.planId())) {
+                return plans.get(activePlanId);
+            }
             throw new PlanVersionService.ActivePlanAlreadyExistsException();
         }
         TrainingPlan plan = new TrainingPlan(

@@ -9,7 +9,7 @@ interface WechatCloudAiResponse {
 
 interface WechatCloudRuntime {
   cloud?: {
-    init(options: { env: string }): void
+    init(options: { env: string; traceUser: boolean }): void
     extend?: {
       AI?: {
         createModel(provider: 'cloudbase'): {
@@ -33,7 +33,7 @@ export function initializeWeappCloudBase(environmentId: string): void {
   const cloud = runtime()?.cloud
   if (!cloud) return
   try {
-    cloud.init({ env: normalized })
+    cloud.init({ env: normalized, traceUser: true })
     initializedEnvironment = normalized
   } catch {
     initializedEnvironment = ''

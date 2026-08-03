@@ -5,6 +5,7 @@ import {
   DEFAULT_GYM_EQUIPMENT,
   ONBOARDING_STEPS,
   advanceOnboarding,
+  goToOnboardingStep,
   previousOnboardingStep,
   updateOnboardingDraft,
   type OnboardingDraft,
@@ -15,9 +16,31 @@ import { experienceDisplayName, goalDisplayName, locationDisplayName } from '../
 import './index.scss'
 
 const application = getWeappApplication()
+const primaryFrequencies = [2, 3, 4] as const
+const moreFrequencies = [5, 6] as const
+const primaryDurations = [30, 45, 60] as const
+const moreDurations = [75, 90] as const
+
+function gymEquipment() {
+  return DEFAULT_GYM_EQUIPMENT.map((item) => ({
+    ...item,
+    minIncrement: { ...item.minIncrement },
+    availableLevels: item.availableLevels.map((level) => ({ ...level })),
+  }))
+}
 
 export default function OnboardingPage() {
   const [state, setState] = useState(() => application.resumeOnboarding())
+  const [showSafetyDetails, setShowSafetyDetails] = useState(false)
+  const [showMoreFrequency, setShowMoreFrequency] = useState(
+    () => (state.draft.weeklyFrequency ?? 0) >= 5,
+  )
+  const [showMoreDuration, setShowMoreDuration] = useState(
+    () => (state.draft.sessionMinutes ?? 0) >= 75,
+  )
+  const [otherEquipmentConfirmed, setOtherEquipmentConfirmed] = useState(
+    () => state.draft.location === 'OTHER',
+  )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
@@ -27,24 +50,42 @@ export default function OnboardingPage() {
 
   function patch(patchValue: Partial<OnboardingDraft>): void {
     setState((current) => updateOnboardingDraft(current, patchValue))
+    setSubmitError('')
   }
 
   function next(): void {
     setState((current) => advanceOnboarding(current))
   }
 
+  function selectLocation(location: 'HOME' | 'GYM' | 'OTHER'): void {
+    setOtherEquipmentConfirmed(location !== 'OTHER')
+    if (location === 'HOME') {
+      patch({ location, equipment: [] })
+      return
+    }
+    if (location === 'GYM') {
+      patch({ location, equipment: gymEquipment() })
+      return
+    }
+    patch({ location })
+  }
+
   async function submit(): Promise<void> {
     const checked = advanceOnboarding(state)
     setState(checked)
     if (checked.errors.length > 0) return
+    if (checked.draft.location === 'OTHER' && !otherEquipmentConfirmed) {
+      setSubmitError('请选择在其他场地可使用自重训练还是基础器械')
+      return
+    }
 
     setSubmitting(true)
     setSubmitError('')
     try {
-      const candidate = await application.completeOnboarding(state.draft)
+      const candidate = await application.completeOnboarding(checked.draft)
       application.telemetry.track('onboarding_completed', {
-        daysPerWeek: state.draft.weeklyFrequency!,
-        sessionMinutes: state.draft.sessionMinutes!,
+        daysPerWeek: checked.draft.weeklyFrequency!,
+        sessionMinutes: checked.draft.sessionMinutes!,
       })
       application.telemetry.track('plan_generated', {
         result: candidate.status === 'READY' ? 'ready' : 'needs_adjustment',
@@ -60,43 +101,66 @@ export default function OnboardingPage() {
   }
 
   const progress = `${Math.round(((state.stepIndex + 1) / ONBOARDING_STEPS.length) * 100)}%`
+  const safetyConfirmed = state.draft.adultConfirmed && state.draft.safetyAccepted
+  const equipmentSummary = state.draft.location === 'OTHER' && !otherEquipmentConfirmed
+    ? '待选择器械范围'
+    : state.draft.equipment.length > 0 ? '基础器械' : '仅自重'
 
   return (
     <View className='onboarding screen'>
-      <View className='card'>
+      <View className='card onboarding__header'>
         <Text className='eyebrow'>基础档案</Text>
-        <Text className='title'>3 分钟建立基础档案</Text>
+        <Text className='title'>用 4 步生成适合你的计划</Text>
         <Text className='subtitle'>第 {state.stepIndex + 1} / {ONBOARDING_STEPS.length} 步</Text>
         <View className='onboarding__progress-track'>
           <View className='onboarding__progress-value' style={{ width: progress }} />
         </View>
       </View>
 
-      <View className='card'>
+      <View className='card onboarding__content'>
         {state.step === 'SAFETY' && (
           <>
-            <Text className='section-title'>成年与安全说明</Text>
-            <Text className='subtitle'>本产品仅支持已满 18 周岁的成年人，且不提供医疗诊断、治疗建议或康复处方。如有疼痛或健康风险，请先咨询专业人士。</Text>
+            <Text className='section-title'>开始前确认</Text>
+            <Text className='subtitle'>遇到疼痛、眩晕或其他不适时，请停止训练并咨询专业人士。</Text>
             <Button
-              className={`choice ${state.draft.adultConfirmed ? 'choice--selected' : ''}`}
-              onClick={() => patch({ adultConfirmed: !state.draft.adultConfirmed })}
-            >我已满 18 周岁</Button>
+              className={`choice onboarding__wide-choice ${safetyConfirmed ? 'choice--selected' : ''}`}
+              onClick={() => patch({
+                adultConfirmed: !safetyConfirmed,
+                safetyAccepted: !safetyConfirmed,
+              })}
+            >我已满 18 周岁，并理解这不是医疗或康复服务</Button>
             <Button
-              className={`choice ${state.draft.safetyAccepted ? 'choice--selected' : ''}`}
-              onClick={() => patch({ safetyAccepted: !state.draft.safetyAccepted })}
-            >我理解非医疗/康复边界</Button>
+              className='onboarding__text-action'
+              onClick={() => setShowSafetyDetails((current) => !current)}
+            >{showSafetyDetails ? '收起安全说明' : '查看安全说明'}</Button>
+            {showSafetyDetails && (
+              <View className='info-box'>
+                本助手提供一般健身建议，不诊断疾病，也不提供治疗或康复处方。存在健康风险或正在接受治疗时，请先征询医生意见。
+              </View>
+            )}
           </>
         )}
 
         {state.step === 'GOAL_AND_EXPERIENCE' && (
           <>
-            <Text className='section-title'>目标与经验</Text>
-            <Text className='subtitle'>计划关键数字将由服务端规则引擎生成。</Text>
+            <Text className='section-title'>训练方向</Text>
+            <Text className='subtitle'>先告诉我们最重要的目标和当前经验，之后仍可修改。</Text>
             <View className='field-group'>
               <Text className='field-label'>你的目标</Text>
-              <View className='choice-row'>
-                {(['GENERAL_FITNESS', 'STRENGTH', 'HYPERTROPHY'] as const).map((value) => (
-                  <Button key={value} className={`choice ${state.draft.goal === value ? 'choice--selected' : ''}`} onClick={() => patch({ goal: value })}>{goalDisplayName(value)}</Button>
+              <View className='onboarding__option-list'>
+                {([
+                  ['GENERAL_FITNESS', '提升体能，建立稳定训练习惯'],
+                  ['STRENGTH', '优先提升主要动作的力量表现'],
+                  ['HYPERTROPHY', '以肌肉增长和训练容量为重点'],
+                ] as const).map(([value, description]) => (
+                  <Button
+                    key={value}
+                    className={`choice onboarding__option-card ${state.draft.goal === value ? 'choice--selected' : ''}`}
+                    onClick={() => patch({ goal: value })}
+                  >
+                    <Text className='onboarding__option-title'>{goalDisplayName(value)}</Text>
+                    <Text className='onboarding__option-description'>{description}</Text>
+                  </Button>
                 ))}
               </View>
             </View>
@@ -104,7 +168,11 @@ export default function OnboardingPage() {
               <Text className='field-label'>训练经验</Text>
               <View className='choice-row'>
                 {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as const).map((value) => (
-                  <Button key={value} className={`choice ${state.draft.experience === value ? 'choice--selected' : ''}`} onClick={() => patch({ experience: value })}>{experienceDisplayName(value)}</Button>
+                  <Button
+                    key={value}
+                    className={`choice ${state.draft.experience === value ? 'choice--selected' : ''}`}
+                    onClick={() => patch({ experience: value })}
+                  >{experienceDisplayName(value)}</Button>
                 ))}
               </View>
             </View>
@@ -113,73 +181,114 @@ export default function OnboardingPage() {
 
         {state.step === 'SCHEDULE' && (
           <>
-            <Text className='section-title'>时间、频率与场地</Text>
-            <Text className='subtitle'>每周 2～6 天；单次时长使用 P0 支持的固定选项。</Text>
+            <Text className='section-title'>训练安排</Text>
+            <Text className='subtitle'>选择真正能长期坚持的时间，不必一次选得很激进。</Text>
             <View className='field-group'>
               <Text className='field-label'>每周训练几天</Text>
               <View className='choice-row'>
-                {[2, 3, 4, 5, 6].map((value) => (
-                  <Button key={value} className={`choice ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`} onClick={() => patch({ weeklyFrequency: value })}>{value} 天</Button>
+                {[...primaryFrequencies, ...(showMoreFrequency ? moreFrequencies : [])].map((value) => (
+                  <Button
+                    key={value}
+                    className={`choice ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`}
+                    onClick={() => patch({ weeklyFrequency: value })}
+                  >{value} 天</Button>
                 ))}
               </View>
+              {!showMoreFrequency && (
+                <Button className='onboarding__more-action' onClick={() => setShowMoreFrequency(true)}>
+                  更多：5 天、6 天
+                </Button>
+              )}
             </View>
             <View className='field-group'>
               <Text className='field-label'>每次训练多久</Text>
               <View className='choice-row'>
-                {([30, 45, 60, 75, 90] as const).map((value) => (
-                  <Button key={value} className={`choice ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`} onClick={() => patch({ sessionMinutes: value })}>{value} 分钟</Button>
+                {[...primaryDurations, ...(showMoreDuration ? moreDurations : [])].map((value) => (
+                  <Button
+                    key={value}
+                    className={`choice ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`}
+                    onClick={() => patch({ sessionMinutes: value })}
+                  >{value} 分钟</Button>
                 ))}
               </View>
-            </View>
-            <View className='field-group'>
-              <Text className='field-label'>主要训练场地</Text>
-              <View className='choice-row'>
-                {(['HOME', 'GYM', 'OTHER'] as const).map((value) => (
-                  <Button key={value} className={`choice ${state.draft.location === value ? 'choice--selected' : ''}`} onClick={() => patch({ location: value })}>{locationDisplayName(value)}</Button>
-                ))}
-              </View>
+              {!showMoreDuration && (
+                <Button className='onboarding__more-action' onClick={() => setShowMoreDuration(true)}>
+                  更多：75 分钟、90 分钟
+                </Button>
+              )}
             </View>
           </>
         )}
 
-        {state.step === 'EQUIPMENT' && (
+        {state.step === 'LOCATION_AND_EQUIPMENT' && (
           <>
             <Text className='section-title'>场地与器械</Text>
-            <Text className='subtitle'>P0 仅使用 KG，不支持 LB 或隐式换算。近期重量不在这里发明处方；候选会标记是否需要首次训练校准。</Text>
-            <Button
-              className={`choice ${state.draft.equipment.length === 0 ? 'choice--selected' : ''}`}
-              onClick={() => patch({ equipment: [] })}
-            >仅自重</Button>
-            <Button
-              className={`choice ${state.draft.equipment.length > 0 ? 'choice--selected' : ''}`}
-              onClick={() => patch({
-                equipment: DEFAULT_GYM_EQUIPMENT.map((item) => ({
-                  ...item,
-                  minIncrement: { ...item.minIncrement },
-                  availableLevels: item.availableLevels.map((level) => ({ ...level })),
-                })),
-              })}
-            >健身房基础器械（哑铃/训练凳/绳索/器械）</Button>
-          </>
-        )}
+            <Text className='subtitle'>最后确认训练条件，我们会据此选择能完成的动作。</Text>
+            <View className='field-group'>
+              <Text className='field-label'>主要训练场地</Text>
+              <View className='onboarding__option-list'>
+                {([
+                  ['HOME', '居家', '以自重动作为主，不需要购买器械'],
+                  ['GYM', '健身房', '使用常见哑铃、训练凳、绳索和固定器械'],
+                  ['OTHER', '其他场地', '再选择你能使用的器械范围'],
+                ] as const).map(([value, label, description]) => (
+                  <Button
+                    key={value}
+                    className={`choice onboarding__option-card ${state.draft.location === value ? 'choice--selected' : ''}`}
+                    onClick={() => selectLocation(value)}
+                  >
+                    <Text className='onboarding__option-title'>{label}</Text>
+                    <Text className='onboarding__option-description'>{description}</Text>
+                  </Button>
+                ))}
+              </View>
+            </View>
 
-        {state.step === 'PREFERENCES' && (
-          <>
-            <Text className='section-title'>动作偏好与近期重量</Text>
-            <Text className='subtitle'>当前 P0 不要求填写动作偏好。近期重量将在候选中以 KNOWN / NEEDS_CALIBRATION / BODYWEIGHT 展示；没有独立 API 时不会在客户端写入虚构数据。</Text>
-            <View className='info-box'>可直接继续，后续可在档案能力扩展后维护动作偏好。</View>
-          </>
-        )}
+            {state.draft.location === 'OTHER' && (
+              <View className='field-group'>
+                <Text className='field-label'>可使用的器械</Text>
+                <View className='choice-row'>
+                  <Button
+                    className={`choice ${otherEquipmentConfirmed && state.draft.equipment.length === 0 ? 'choice--selected' : ''}`}
+                    onClick={() => {
+                      setOtherEquipmentConfirmed(true)
+                      patch({ equipment: [] })
+                    }}
+                  >仅自重</Button>
+                  <Button
+                    className={`choice ${otherEquipmentConfirmed && state.draft.equipment.length > 0 ? 'choice--selected' : ''}`}
+                    onClick={() => {
+                      setOtherEquipmentConfirmed(true)
+                      patch({ equipment: gymEquipment() })
+                    }}
+                  >有基础器械</Button>
+                </View>
+              </View>
+            )}
 
-        {state.step === 'REVIEW' && (
-          <>
-            <Text className='section-title'>确认档案并生成候选</Text>
             <View className='onboarding__summary'>
-              <Text>目标：{goalDisplayName(state.draft.goal)}</Text>
-              <Text>经验：{experienceDisplayName(state.draft.experience)}</Text>
-              <Text>安排：每周 {state.draft.weeklyFrequency} 天，每次 {state.draft.sessionMinutes} 分钟</Text>
+              <View className='onboarding__summary-row'>
+                <View className='onboarding__summary-copy'>
+                  <Text className='field-label'>训练方向</Text>
+                  <Text>{goalDisplayName(state.draft.goal)} · {experienceDisplayName(state.draft.experience)}</Text>
+                </View>
+                <Button
+                  className='onboarding__edit-action'
+                  onClick={() => setState((current) => goToOnboardingStep(current, 'GOAL_AND_EXPERIENCE'))}
+                >修改训练方向</Button>
+              </View>
+              <View className='onboarding__summary-row'>
+                <View className='onboarding__summary-copy'>
+                  <Text className='field-label'>训练安排</Text>
+                  <Text>每周 {state.draft.weeklyFrequency} 天 · 每次 {state.draft.sessionMinutes} 分钟</Text>
+                </View>
+                <Button
+                  className='onboarding__edit-action'
+                  onClick={() => setState((current) => goToOnboardingStep(current, 'SCHEDULE'))}
+                >修改训练安排</Button>
+              </View>
               <Text>场地：{locationDisplayName(state.draft.location)}</Text>
-              <Text>器械：{state.draft.equipment.length > 0 ? '健身房基础器械（KG）' : '仅自重'}</Text>
+              <Text>器械：{equipmentSummary}</Text>
             </View>
           </>
         )}
@@ -189,9 +298,14 @@ export default function OnboardingPage() {
       </View>
 
       <View className='action-row action-row--sticky'>
-        {state.stepIndex > 0 && <Button className='secondary-action' onClick={() => setState((current) => previousOnboardingStep(current))}>上一步</Button>}
-        {state.step === 'REVIEW'
-          ? <Button className='primary-action' loading={submitting} onClick={() => void submit()}>保存并生成候选</Button>
+        {state.stepIndex > 0 && (
+          <Button
+            className='secondary-action'
+            onClick={() => setState((current) => previousOnboardingStep(current))}
+          >上一步</Button>
+        )}
+        {state.step === 'LOCATION_AND_EQUIPMENT'
+          ? <Button className='primary-action' loading={submitting} onClick={() => void submit()}>生成我的计划</Button>
           : <Button className='primary-action' onClick={next}>继续</Button>}
       </View>
     </View>

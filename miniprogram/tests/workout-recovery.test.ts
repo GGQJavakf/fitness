@@ -5,6 +5,7 @@ import {
   beginWorkSets,
   completeGeneralWarmup,
   createWorkoutFlow,
+  isWorkoutPrescriptionFinished,
   markWorkoutSyncPending,
   recordWorkoutSet,
   restoreWorkoutFlow,
@@ -45,6 +46,36 @@ describe('workout recovery', () => {
     expect(restored.syncStatus).toBe('OFFLINE_PENDING')
     expect(restored.warmup.phase).toBe('WORK')
     expect(rest.remainingSeconds).toBe(30)
+  })
+
+  it('recomputes the current position from immutable set facts when a persisted cursor is stale', () => {
+    let state = createWorkoutFlow({
+      clientSessionKey: 'stale-position-session',
+      planVersionId: 'plan-version',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船',
+        targetWorkSets: 2, targetReps: 8, restSeconds: 60,
+      }],
+    })
+    state = beginWorkSets(completeGeneralWarmup(state))
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'stale-position-session-0-0',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualWeightKg: 25,
+      actualReps: 8,
+    })
+    const persisted = {
+      ...toWorkoutDraft(state, null, '2026-07-24T09:00:01.000Z'),
+      currentExerciseIndex: 0,
+      currentSetIndex: 0,
+    }
+
+    const restored = restoreFlowFromDraft(persisted)
+
+    expect(restored.currentExerciseIndex).toBe(0)
+    expect(restored.currentSetIndex).toBe(1)
   })
 
   it('restores a timestamp-based general warmup timer after process loss', async () => {
@@ -121,6 +152,51 @@ describe('workout recovery', () => {
     expect(stored!.lastServerVersion).toBe(2)
   })
 
+  it('retains a rejected operation until a later retry is accepted by the server', async () => {
+    let stored: WorkoutDraft | null = null
+    let attempts = 0
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:00.000Z' },
+      {
+        syncWorkoutOperations: async (operations) => {
+          attempts += 1
+          return operations.map((operation) => ({
+            clientOperationSeq: operation.clientOperationSeq,
+            status: attempts === 1 ? 'REJECTED' as const : 'APPLIED' as const,
+          }))
+        },
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'rejected-sync-session',
+      planVersionId: 'plan-version',
+      serverSessionId: 'session-id',
+      serverVersion: 1,
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船',
+        targetWorkSets: 2, targetReps: 8, restSeconds: 60,
+      }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'rejected-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const rejected = await service.flush(state)
+
+    expect(rejected.syncStatus).toBe('SYNC_REJECTED')
+    expect(stored!.queue.operations).toHaveLength(1)
+    expect(stored!.queue.operations[0].status).toBe('PENDING')
+
+    const recovered = await service.flush(rejected)
+
+    expect(recovered.syncStatus).toBe('SYNCED')
+    expect(stored!.queue.operations).toHaveLength(0)
+    expect(stored!.lastServerVersion).toBe(2)
+  })
+
   it('retries pending operations when the workout returns to the foreground', async () => {
     let stored: WorkoutDraft | null = null
     const synchronizedSequences: number[][] = []
@@ -152,6 +228,57 @@ describe('workout recovery', () => {
     expect(recovered.syncFailed).toBe(false)
     expect(stored!.queue.operations).toHaveLength(0)
     expect(stored!.lastServerVersion).toBe(5)
+  })
+
+  it('does not let a stale synchronization result overwrite newer workout facts', async () => {
+    let stored: WorkoutDraft | null = null
+    let releaseSynchronization!: () => void
+    let reportSynchronizationStarted!: () => void
+    const synchronizationGate = new Promise<void>((resolve) => { releaseSynchronization = resolve })
+    const synchronizationStarted = new Promise<void>((resolve) => { reportSynchronizationStarted = resolve })
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      {
+        syncWorkoutOperations: async (operations) => {
+          reportSynchronizationStarted()
+          await synchronizationGate
+          return operations.map((operation) => ({
+            clientOperationSeq: operation.clientOperationSeq,
+            status: 'APPLIED' as const,
+          }))
+        },
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'stale-flush-session',
+      planVersionId: 'plan-version',
+      serverSessionId: 'session-id',
+      serverVersion: 0,
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船',
+        targetWorkSets: 3, targetReps: 8, restSeconds: 60,
+      }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    const afterFirstSet = await service.recordSet(state, {
+      clientSetKey: 'stale-flush-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+    const staleFlush = service.flush(afterFirstSet)
+    await synchronizationStarted
+    await service.recordSet(afterFirstSet, {
+      clientSetKey: 'stale-flush-set-2', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    releaseSynchronization()
+    await staleFlush
+    const restored = await service.load()
+
+    expect(restored?.exercises[0].sets).toHaveLength(2)
+    expect(restored?.currentSetIndex).toBe(2)
+    expect((stored as WorkoutDraft | null)?.queue.operations).toHaveLength(1)
   })
 
   it('keeps the restored draft usable when foreground synchronization is offline', async () => {
@@ -197,6 +324,38 @@ describe('workout recovery', () => {
       { setType: 'WARMUP', setOrder: 1, target: { reps: 10 } },
       { setType: 'WARMUP', setOrder: 2, target: { reps: 8 } },
     ])
+  })
+
+  it('does not start a rest timer after the final prescribed work set', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:00.000Z' },
+    )
+    let state = await service.start({
+      clientSessionKey: 'final-set-session',
+      planVersionId: 'plan-version',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id',
+        exerciseCode: 'ROW',
+        name: '划船',
+        targetWorkSets: 1,
+        targetReps: 8,
+        restSeconds: 60,
+      }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'final-set',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualWeightKg: 25,
+      actualReps: 8,
+    })
+
+    expect(isWorkoutPrescriptionFinished(state)).toBe(true)
+    expect(state.restTimer).toBeNull()
   })
 
   it('synchronizes pending facts before idempotent early completion', async () => {

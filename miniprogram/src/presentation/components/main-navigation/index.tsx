@@ -4,7 +4,7 @@ import type { PageDestination } from '../../../application/navigation'
 
 import './index.scss'
 
-type MainDestination = Extract<PageDestination, 'PLAN' | 'HISTORY' | 'MY'>
+type MainDestination = Extract<PageDestination, 'HOME' | 'PLAN' | 'HISTORY' | 'MY'>
 
 interface MainNavigationProps {
   current: MainDestination
@@ -12,8 +12,9 @@ interface MainNavigationProps {
 }
 
 const items: ReadonlyArray<{ destination: MainDestination; label: string }> = [
+  { destination: 'HOME', label: '首页' },
   { destination: 'PLAN', label: '计划' },
-  { destination: 'HISTORY', label: '历史' },
+  { destination: 'HISTORY', label: '进展' },
   { destination: 'MY', label: '我的' },
 ]
 
@@ -26,7 +27,10 @@ export default function MainNavigation({ current, onNavigate }: MainNavigationPr
           className={`main-navigation__item ${current === item.destination ? 'main-navigation__item--active' : ''}`}
           disabled={current === item.destination}
           onClick={() => onNavigate(item.destination)}
-        >{item.label}</Button>
+        >
+          <View className='main-navigation__indicator' />
+          <View className='main-navigation__label'>{item.label}</View>
+        </Button>
       ))}
     </View>
   )

@@ -22,6 +22,21 @@ describe('P0 page usability contract', () => {
     for (const label of ['你的目标', '训练经验', '每周训练几天', '每次训练多久', '主要训练场地']) {
       expect(page).toContain(label)
     }
+    for (const label of [
+      '我已满 18 周岁，并理解这不是医疗或康复服务',
+      '更多：5 天、6 天',
+      '更多：75 分钟、90 分钟',
+      '修改训练方向',
+      '修改训练安排',
+      '待选择器械范围',
+      '生成我的计划',
+    ]) {
+      expect(page).toContain(label)
+    }
+    for (const internalCopy of ['KNOWN / NEEDS_CALIBRATION / BODYWEIGHT', '当前 P0', '规则引擎']) {
+      expect(page).not.toContain(internalCopy)
+    }
+    expect(page).toMatch(/location === 'OTHER' && !otherEquipmentConfirmed[\s\S]*待选择器械范围/)
     expect(page).toContain('action-row--sticky')
   })
 
@@ -32,24 +47,29 @@ describe('P0 page usability contract', () => {
     expect(editor).toContain("className='editor-exercise'")
   })
 
+  it('avoids an untyped pseudo selector rejected by the WXSS compiler', () => {
+    const styles = source('src/presentation/pages/plan-editor/index.scss')
+    expect(styles).not.toMatch(/>\s+:[\w-]+/)
+  })
+
   it('keeps plan, history, and privacy pages one tap apart', () => {
     for (const page of ['plan', 'history', 'my']) {
       expect(source(`src/presentation/pages/${page}/index.tsx`)).toContain('MainNavigation')
     }
   })
 
-  it('offers every optional RIR choice in plain language and submits the selection', () => {
+  it('offers every optional effort choice in plain language and submits the selection', () => {
     const workout = source('src/presentation/pages/workout-session/index.tsx')
-    for (const label of ['本组还能再做几次（可选）', '已到极限', '还能 1 次', '还能 2 次', '还能 3 次以上', '不确定或跳过']) {
+    for (const label of ['训练余力（可选）', '已到极限', '还能 1 次', '还能 2 次', '还能 3 次以上', '不确定或跳过']) {
       expect(workout).toContain(label)
     }
-    expect(workout).toContain('RIR（剩余次数）')
+    expect(workout).not.toContain('RIR（剩余次数）')
     expect(workout).toMatch(/rir:\s*status === 'COMPLETED'/)
   })
 
   it('lets users choose any active-plan training day before starting', () => {
     const prepare = source('src/presentation/pages/workout-prepare/index.tsx')
-    expect(prepare).toContain('选择今天训练哪一天')
+    expect(prepare).toContain('今天这样练')
     expect(prepare).toMatch(/plan\.activeVersion\.plan\.days\.map/)
     expect(prepare).toContain('setSelectedDayCode')
     expect(prepare).toMatch(/days\.find\(\(item\) => item\.code === selectedDayCode\)/)

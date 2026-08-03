@@ -1,1 +1,1 @@
-export default definePageConfig({ navigationBarTitleText: '动作趋势' })
+export default definePageConfig({ navigationBarTitleText: '训练趋势' })

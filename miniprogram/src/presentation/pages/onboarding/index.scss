@@ -15,20 +15,102 @@
 .onboarding__summary {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 20px;
+  background: #f3f7f6;
   font-size: 27px;
 }
 
-.onboarding .card:first-child {
+.onboarding__header {
   gap: 10px;
 }
 
-.onboarding .card:nth-child(2) {
+.onboarding__content {
   gap: 24px;
+}
+
+.onboarding__wide-choice {
+  min-height: 104px;
+  padding: 20px 24px;
+  line-height: 1.5;
+}
+
+.onboarding__text-action,
+.onboarding__more-action,
+.onboarding__edit-action {
+  min-height: 72px;
+  padding: 8px 12px;
+  border: 0;
+  color: #176b5b;
+  background: transparent;
+  font-size: 26px;
+}
+
+.onboarding__text-action {
+  align-self: flex-start;
+}
+
+.onboarding__more-action {
+  width: 100%;
+  border: 2px dashed #b9cec9;
+  border-radius: 16px;
+  background: #f8fbfa;
+}
+
+.onboarding__option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onboarding__option-card {
+  display: flex;
+  min-height: 112px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 20px 24px;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.onboarding__option-title {
+  font-weight: 700;
+}
+
+.onboarding__option-description {
+  margin-top: 6px;
+  color: #667085;
+  font-size: 24px;
+}
+
+.onboarding__summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.onboarding__summary-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.onboarding__edit-action {
+  flex: 0 0 auto;
 }
 
 @media (max-width: 360px) {
   .onboarding .choice-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onboarding__summary-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

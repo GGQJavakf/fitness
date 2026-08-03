@@ -9,7 +9,7 @@
       "The deterministic oracle owns numeric decisions and reason codes",
       "A user-locked weight is never silently overwritten"
     ],
-    "digestSha256": "ca98841b7d8619cd8da756ba3fd7fc1339ae7426ef1fdb3c85d050f50201aa4a"
+    "digestSha256": "fd834d19e6c7aa666600a45ce1b0ada09c73f0d45784af1e59748ff89d1df39b"
   },
   "inputDefaults": {
     "unit": "KG",
@@ -105,7 +105,7 @@
     },
     {
       "id": "PROGRESSION_BODYWEIGHT_CONFIRMATION",
-      "input": {"unit": "KG", "historySufficient": true, "bodyweightRequiresConfirmation": true, "allSetsAtMax": true, "rir": 2},
+      "input": {"unit": "KG", "historySufficient": true, "bodyweightRequiresConfirmation": true, "allSetsAtMax": true, "consecutiveAllAtMax": 2, "rir": 2},
       "expected": {"outcome": "REVIEW", "reasonCodes": ["BODYWEIGHT_REQUIRES_CONFIRMATION"], "application": "REVIEW_REQUIRED"}
     }
   ]

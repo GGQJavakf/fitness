@@ -65,6 +65,11 @@ export function exerciseDisplayName(value: string): string {
   return EXERCISE_NAMES[value] ?? readableCode(value)
 }
 
+export function trainingDayDisplayName(value: string): string {
+  const matched = /^DAY[_\s-]*(.+)$/i.exec(value)
+  return matched ? `训练日 ${matched[1]}` : readableCode(value)
+}
+
 export function planIssueDisplayMessage(reasonCode: string): string {
   return PLAN_ISSUE_MESSAGES[reasonCode] ?? `计划需要调整：${readableCode(reasonCode)}`
 }
@@ -85,4 +90,29 @@ export function planFieldDisplayName(fieldPath: string): string {
 
 export function evidenceRows(evidence: Readonly<Record<string, string>>): ReadonlyArray<readonly [string, string]> {
   return Object.entries(evidence).sort(([left], [right]) => left.localeCompare(right))
+}
+
+export function evidenceFieldDisplayName(value: string): string {
+  return ({
+    actualWeightKg: '实际重量',
+    actualReps: '实际次数',
+    status: '完成状态',
+    rir: '训练余力',
+    discomfort: '身体反馈',
+    setType: '训练组类型',
+    updatedAt: '记录时间',
+  } as Record<string, string>)[value] ?? '记录信息'
+}
+
+export function evidenceValueDisplayName(value: string): string {
+  return ({
+    COMPLETED: '已完成',
+    FAILED: '未完成',
+    SKIPPED: '已跳过',
+    PAIN: '疼痛或明显不适',
+    NONE: '无不适',
+    UNKNOWN: '未填写',
+    WARMUP: '热身组',
+    WORK: '正式组',
+  } as Record<string, string>)[value] ?? value
 }

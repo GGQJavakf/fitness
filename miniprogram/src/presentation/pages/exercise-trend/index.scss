@@ -1,2 +1,193 @@
-.trend-row { gap: 14px; }
-.trend-row__heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.trend-hero__latest {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  margin-top: 28px;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.trend-hero__latest-label {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 20px;
+}
+
+.trend-hero__latest-value {
+  font-size: 44px;
+  font-weight: 750;
+}
+
+.trend-overview {
+  display: grid;
+  grid-template-columns: auto 1px minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+
+.trend-overview__metric {
+  min-width: 104px;
+}
+
+.trend-overview__value {
+  display: block;
+  color: #0b2f28;
+  font-size: 42px;
+  font-weight: 750;
+}
+
+.trend-overview__label {
+  display: block;
+  margin-top: 5px;
+  color: #6d7972;
+  font-size: 20px;
+}
+
+.trend-overview__divider {
+  height: 72px;
+  background: #e0e8e3;
+}
+
+.trend-overview__copy {
+  min-width: 0;
+}
+
+.trend-overview__title {
+  display: block;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.trend-overview__description {
+  display: block;
+  margin-top: 7px;
+  color: #68756e;
+  font-size: 21px;
+  line-height: 1.5;
+}
+
+.trend-timeline {
+  gap: 0;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.trend-row {
+  display: grid;
+  min-height: 112px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.trend-row__rail {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.trend-row__dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin-top: 29px;
+  border: 4px solid #fffefb;
+  border-radius: 50%;
+  background: #9caaa2;
+  box-shadow: 0 0 0 2px #9caaa2;
+}
+
+.trend-row__dot--latest {
+  background: #46c794;
+  box-shadow: 0 0 0 2px #0f6b57;
+}
+
+.trend-row__line {
+  position: absolute;
+  top: 44px;
+  bottom: -29px;
+  width: 2px;
+  background: #dce6e0;
+}
+
+.trend-row__content {
+  padding: 20px 0;
+  border-bottom: 1px solid #e6ece8;
+}
+
+.trend-row:last-child .trend-row__content {
+  border-bottom: 0;
+}
+
+.trend-row__heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.trend-row__weight {
+  color: #0b2f28;
+  font-size: 30px;
+  font-weight: 750;
+}
+
+.trend-row__time {
+  color: #7a867f;
+  font-size: 20px;
+}
+
+.trend-row__volume {
+  display: block;
+  margin-top: 7px;
+  color: #627069;
+  font-size: 22px;
+}
+
+.trend-empty__mark {
+  display: flex;
+  width: 104px;
+  height: 76px;
+  margin: 0 auto 10px;
+  gap: 10px;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.trend-empty__line {
+  width: 14px;
+  border-radius: 999px 999px 4px 4px;
+  background: #b9dccc;
+}
+
+.trend-empty__line--one { height: 32px; }
+.trend-empty__line--two { height: 52px; }
+.trend-empty__line--three { height: 72px; background: #46c794; }
+
+.trend-action {
+  width: 100%;
+}
+
+.trend-back {
+  width: 100%;
+  min-height: 72px;
+  margin-top: 10px;
+  background: transparent;
+  color: #647169;
+  font-size: 22px;
+}
+
+@media (max-width: 360px) {
+  .trend-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .trend-overview__divider {
+    width: 100%;
+    height: 1px;
+  }
+
+  .trend-row__heading {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

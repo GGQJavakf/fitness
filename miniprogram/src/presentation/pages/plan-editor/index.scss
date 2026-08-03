@@ -58,5 +58,6 @@
 
 @media (max-width: 360px) {
   .editor-field { grid-template-columns: 1fr 120px; }
-  .editor-field > :last-child { grid-column: 1 / -1; }
+  .editor-field__lock,
+  .editor-field > .secondary-action { grid-column: 1 / -1; }
 }

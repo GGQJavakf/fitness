@@ -54,11 +54,27 @@ class WorkoutSummaryTest {
         assertThat(result.validationStatus()).isEqualTo("DECISION_CONFLICT");
     }
 
+    @Test
+    void disabledAiDescribesBodyweightWorkWithRepetitions() {
+        UUID sessionId = UUID.randomUUID();
+        AiContentService service = service(sessionId, AiProvider.disabled(), false, false);
+
+        AiContentService.GeneratedContent result = service.summarizeWorkout(
+                new AuthenticatedUserId(UUID.randomUUID()), sessionId);
+
+        assertThat(result.content()).isEqualTo("完成 3 组，共 36 次。规则结论保持权威。");
+    }
+
     private static AiContentService service(UUID sessionId, AiProvider provider, boolean enabled) {
+        return service(sessionId, provider, enabled, true);
+    }
+
+    private static AiContentService service(
+            UUID sessionId, AiProvider provider, boolean enabled, boolean usesExternalLoad) {
         WorkoutHistoryQueryService workouts = mock(WorkoutHistoryQueryService.class);
         when(workouts.summary(any(), org.mockito.ArgumentMatchers.eq(sessionId))).thenReturn(
                 new WorkoutHistoryQueryService.Summary(
-                        sessionId, WorkoutStatus.COMPLETED, 3, new BigDecimal("1200")));
+                        sessionId, WorkoutStatus.COMPLETED, 3, new BigDecimal("1200"), 36, usesExternalLoad));
         RecommendationService recommendations = mock(RecommendationService.class);
         when(recommendations.list(any(), any(Optional.class))).thenReturn(List.of());
         return new AiContentService(
@@ -69,6 +85,7 @@ class WorkoutSummaryTest {
                 new AiOutputValidator(new ObjectMapper(), new DecisionConsistencyGuard()),
                 Map.of(
                         "PLAN_EXPLANATION_DEFAULT", "规则版本 {ruleVersion}。",
-                        "WORKOUT_SUMMARY_DEFAULT", "完成 {completedWorkSets} 组，容量 {completedVolumeKg}。规则结论保持权威。"));
+                        "WORKOUT_SUMMARY_DEFAULT", "完成 {completedWorkSets} 组，容量 {completedVolumeKg}。规则结论保持权威。",
+                        "WORKOUT_SUMMARY_BODYWEIGHT_DEFAULT", "完成 {completedWorkSets} 组，共 {completedReps} 次。规则结论保持权威。"));
     }
 }

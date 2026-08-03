@@ -1,11 +1,313 @@
-.workout-entry { padding-bottom: 0; }
-.metric-input { min-height: 92px; padding: 0 22px; border: 2px solid #cbd8d2; border-radius: 18px; background: #f8faf9; font-size: 34px; font-weight: 650; }
-.rir-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.rir-option { width: 100%; min-height: 72px; margin: 0; border: 2px solid #cbd8d2; border-radius: 16px; background: #fff; color: #31433d; font-size: 26px; }
-.rir-option--selected { border-color: #176b58; background: #e8f4f0; color: #105343; font-weight: 650; }
-.timer { font-size: 64px; font-weight: 750; color: #176b58; text-align: center; }
-.workout-actions { margin: 6px -28px 0; }
-.workout-actions .primary-action { flex-basis: 100%; }
-.workout-actions .danger-action { flex-basis: 100%; }
-.workout-secondary-links { display: grid; gap: 12px; margin-top: 20px; }
-.warmup-card { display: flex; flex-direction: column; gap: 20px; }
+.workout-session-page {
+  padding-bottom: calc(138px + env(safe-area-inset-bottom));
+}
+
+.workout-session-page--focus {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-hero {
+  padding-bottom: 30px;
+}
+
+.session-progress {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  height: 8px;
+  margin-top: 28px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.session-progress__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #46c794;
+  transition: width 240ms ease;
+}
+
+.session-progress__label {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 20px;
+}
+
+.session-hero--warmup,
+.session-hero--rest {
+  min-height: 430px;
+  box-sizing: border-box;
+}
+
+.session-timer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 270px;
+  height: 270px;
+  margin: 34px auto 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(70, 199, 148, 0.45);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 16px rgba(70, 199, 148, 0.06);
+}
+
+.session-timer__value {
+  font-size: 74px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.session-timer__label {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 20px;
+}
+
+.session-guide {
+  gap: 0;
+}
+
+.session-guide__step {
+  display: grid;
+  padding: 20px 0;
+  grid-template-columns: 54px 1fr;
+  gap: 14px;
+  align-items: center;
+  border-bottom: 1px solid #e5ece8;
+  font-size: 24px;
+}
+
+.session-guide__step:last-child {
+  border-bottom: 0;
+}
+
+.session-guide__index {
+  color: #0f6b57;
+  font-size: 21px;
+}
+
+.session-passive-note {
+  display: block;
+  margin: 4px 0 30px;
+  color: #748078;
+  font-size: 21px;
+  text-align: center;
+}
+
+.session-focus-action .primary-action {
+  width: 100%;
+}
+
+.workout-entry {
+  padding-bottom: 0;
+}
+
+.session-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.session-metrics--bodyweight {
+  grid-template-columns: 1fr;
+}
+
+.session-bodyweight-note {
+  margin-bottom: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(70, 199, 148, 0.24);
+  border-radius: 18px;
+  background: #edf7f2;
+  color: #245f50;
+  font-size: 24px;
+  line-height: 1.55;
+}
+
+.metric-input-wrap {
+  display: grid;
+  min-height: 100px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  border: 1px solid #cad8d1;
+  border-radius: 20px;
+  background: #f7faf8;
+}
+
+.metric-input {
+  min-width: 0;
+  min-height: 98px;
+  padding: 0 14px 0 20px;
+  box-sizing: border-box;
+  color: #0b2f28;
+  font-family: 'DIN Alternate', 'PingFang SC', sans-serif;
+  font-size: 38px;
+  font-weight: 700;
+}
+
+.metric-input-unit {
+  padding-right: 18px;
+  color: #748078;
+  font-size: 21px;
+}
+
+.session-safety-note,
+.session-inline-message {
+  padding: 18px 20px;
+  border-radius: 18px;
+  font-size: 22px;
+  line-height: 1.5;
+}
+
+.session-safety-note {
+  background: #fff5d9;
+  color: #7a5a10;
+}
+
+.session-inline-message {
+  margin-bottom: 20px;
+  background: #e6f4ee;
+  color: #315f52;
+}
+
+.session-effort {
+  display: flex;
+  padding-top: 24px;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #e5ece8;
+}
+
+.rir-options {
+  display: grid;
+  margin-top: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rir-option {
+  width: 100%;
+  min-height: 74px;
+  padding: 0 10px;
+  border: 1px solid #d5e0da;
+  border-radius: 17px;
+  background: #fffefb;
+  color: #435149;
+  font-size: 23px;
+}
+
+.rir-option--selected {
+  border-color: #0f6b57;
+  background: #def4e9;
+  color: #0b2f28;
+  font-weight: 700;
+}
+
+.session-replace-action {
+  min-height: 70px;
+  padding: 0;
+  justify-content: flex-start;
+  background: transparent;
+  color: #0f6b57;
+  font-size: 23px;
+  text-align: left;
+}
+
+.session-replacements {
+  display: grid;
+  gap: 10px;
+}
+
+.workout-actions {
+  display: flex;
+  margin: 24px -28px 0;
+  padding: 20px 28px 26px;
+  flex-direction: column;
+  border-top: 1px solid #e2eae6;
+  background: #f7f9f6;
+}
+
+.workout-actions .primary-action {
+  width: 100%;
+}
+
+.workout-actions__secondary {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.workout-actions__pain {
+  min-height: 64px;
+  background: transparent;
+  color: #a8443b;
+  font-size: 22px;
+}
+
+.workout-secondary-links {
+  display: grid;
+  margin-top: 22px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.workout-secondary-links button {
+  min-height: 68px;
+  padding: 0 12px;
+  background: transparent;
+  color: #6a766f;
+  font-size: 21px;
+}
+
+.rest-controls {
+  margin-top: -54px;
+  border-color: transparent;
+}
+
+.rest-controls__next {
+  color: #0f6b57;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.rest-controls__adjust {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.session-alert {
+  margin-bottom: 16px;
+}
+
+@media (max-width: 360px) {
+  .session-hero--warmup,
+  .session-hero--rest {
+    min-height: 390px;
+  }
+
+  .session-timer {
+    width: 230px;
+    height: 230px;
+  }
+
+  .session-timer__value {
+    font-size: 62px;
+  }
+
+  .session-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .rir-options,
+  .workout-secondary-links {
+    grid-template-columns: 1fr;
+  }
+}

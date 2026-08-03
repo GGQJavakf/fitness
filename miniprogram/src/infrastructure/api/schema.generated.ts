@@ -1100,6 +1100,8 @@ export interface components {
             completedAt: components["schemas"]["UtcDateTime"];
             completedWorkSets: number;
             completedVolumeKg: number;
+            completedReps: number;
+            usesExternalLoad: boolean;
         };
         WorkoutHistoryData: {
             items: components["schemas"]["WorkoutHistoryItem"][];

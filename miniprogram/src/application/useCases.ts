@@ -78,6 +78,10 @@ export function createFitnessApplication(
   let onboardingDraft: OnboardingDraft | null = null
   let activePlan: ActivePlanData | null = null
   let editor: PlanEditorState | null = null
+  let activatedCandidateId: string | null = null
+  const candidateActivations = new Map<string, Promise<ActivePlanData>>()
+  let editorSessionId = 0
+  let editorCandidateId: string | null = null
 
   function requireEditor(): PlanEditorState {
     if (!editor) {
@@ -106,10 +110,52 @@ export function createFitnessApplication(
     })
   }
 
+  function assertEditorSession(
+    expectedSessionId: number,
+    expectedCandidateId: string | null,
+  ): void {
+    const candidateStillCurrent = expectedCandidateId === null
+      || candidateData?.candidate?.candidateId === expectedCandidateId
+    if (editorSessionId !== expectedSessionId || !candidateStillCurrent) {
+      throw new ApplicationError(
+        'VALIDATION_FAILED',
+        '推荐方案已更新，本次旧编辑未保存',
+      )
+    }
+  }
+
+  async function activateCurrentCandidate(): Promise<ActivePlanData> {
+    const candidateId = candidateData?.candidate?.candidateId
+    if (!candidateId) {
+      throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
+    }
+    if (activePlan && activatedCandidateId === candidateId) return activePlan
+    const pendingActivation = candidateActivations.get(candidateId)
+    if (pendingActivation) return pendingActivation
+
+    const promise = planPort.createInitialPlan(candidateId)
+    candidateActivations.set(candidateId, promise)
+    try {
+      const activatedPlan = await promise
+      if (candidateData?.candidate?.candidateId === candidateId) {
+        activePlan = activatedPlan
+        activatedCandidateId = candidateId
+        editor = editorWithActivePlan(activatedPlan)
+      }
+      return activatedPlan
+    } finally {
+      if (candidateActivations.get(candidateId) === promise) {
+        candidateActivations.delete(candidateId)
+      }
+    }
+  }
+
   return {
     async completeOnboarding(draft) {
       onboardingDraft = cloneOnboardingDraft(draft)
       candidateData = await saveProfileAndGenerateCandidate(onboardingPort, draft)
+      editorSessionId += 1
+      editorCandidateId = null
       return buildCandidateViewModel(candidateData)
     },
 
@@ -119,7 +165,7 @@ export function createFitnessApplication(
       return {
         ...initial,
         stepIndex: 3,
-        step: 'EQUIPMENT',
+        step: 'LOCATION_AND_EQUIPMENT',
         draft: cloneOnboardingDraft(onboardingDraft),
       }
     },
@@ -128,15 +174,7 @@ export function createFitnessApplication(
       return candidateData ? buildCandidateViewModel(candidateData) : null
     },
 
-    async activateCandidate() {
-      const candidateId = candidateData?.candidate?.candidateId
-      if (!candidateId) {
-        throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
-      }
-      activePlan = await planPort.createInitialPlan(candidateId)
-      editor = editorWithActivePlan(activePlan)
-      return activePlan
-    },
+    activateCandidate: activateCurrentCandidate,
 
     openCandidateEditor() {
       const candidate = candidateData?.candidate
@@ -156,6 +194,8 @@ export function createFitnessApplication(
         ...editor,
         lockedFieldOutcomes: { ...candidate.lockedFieldOutcomes },
       }
+      editorSessionId += 1
+      editorCandidateId = candidate.candidateId
       return editor
     },
 
@@ -173,6 +213,8 @@ export function createFitnessApplication(
         return null
       }
       editor = editorWithActivePlan(activePlan)
+      editorSessionId += 1
+      editorCandidateId = null
       return editor
     },
 
@@ -205,6 +247,8 @@ export function createFitnessApplication(
 
     async saveEditor() {
       let state = requireEditor()
+      const savingEditorSessionId = editorSessionId
+      const savingCandidateId = editorCandidateId
       try {
         buildSaveCommand(state)
         const ruleReference = activePlan?.activeVersion.ruleReference
@@ -216,19 +260,22 @@ export function createFitnessApplication(
           state,
           await planPort.validatePlan(validationDraft(state), ruleReference),
         )
+        assertEditorSession(savingEditorSessionId, savingCandidateId)
         editor = state
         buildSaveCommand(state)
         if (!state.planId) {
-          const candidateId = candidateData?.candidate?.candidateId
-          if (!candidateId) {
+          if (!savingCandidateId) {
             throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
           }
           const pendingWorkingCopy = state.workingCopy
           const pendingLockCommands = state.lockCommands
           const pendingValidation = state.validationResult
-          activePlan = await planPort.createInitialPlan(candidateId)
-          const baseEditor = editorWithActivePlan(activePlan)
-          const hasPlanChanges = JSON.stringify(pendingWorkingCopy) !== JSON.stringify(activePlan.activeVersion.plan)
+          const activatedPlan = await activateCurrentCandidate()
+          assertEditorSession(savingEditorSessionId, savingCandidateId)
+          activePlan = activatedPlan
+          activatedCandidateId = savingCandidateId
+          const baseEditor = editorWithActivePlan(activatedPlan)
+          const hasPlanChanges = JSON.stringify(pendingWorkingCopy) !== JSON.stringify(activatedPlan.activeVersion.plan)
           const hasLockChanges = Object.keys(pendingLockCommands).length > 0
           if (!hasPlanChanges && !hasLockChanges) {
             editor = baseEditor
@@ -244,6 +291,7 @@ export function createFitnessApplication(
           editor = state
         }
         const result = await planPort.createPlanVersion(state.planId, buildSaveCommand(state))
+        assertEditorSession(savingEditorSessionId, savingCandidateId)
         editor = applyVersionResult(state, result)
         if (result.version) {
           activePlan = { planId: state.planId, activeVersion: result.version }

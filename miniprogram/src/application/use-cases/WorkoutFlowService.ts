@@ -9,6 +9,7 @@ import {
   createWorkoutFlow,
   beginWorkSets,
   completeGeneralWarmup,
+  isWorkoutPrescriptionFinished,
   recordWorkoutSet,
   replaceExerciseForSession,
   type RecordWorkoutSetInput,
@@ -64,7 +65,10 @@ export class WorkoutFlowService {
   async recordSet(state: WorkoutFlowState, input: RecordWorkoutSetInput): Promise<WorkoutFlowState> {
     let updated = recordWorkoutSet(state, input)
     if (updated === state) return state
-    if (input.setType === 'WORK' && input.status === 'COMPLETED') {
+    const prescriptionFinished = isWorkoutPrescriptionFinished(updated)
+    if (prescriptionFinished) {
+      updated = { ...updated, restTimer: null }
+    } else if (input.setType === 'WORK' && input.status === 'COMPLETED') {
       const exercise = updated.exercises[input.exerciseIndex]
       updated = {
         ...updated,
@@ -163,23 +167,26 @@ export class WorkoutFlowService {
     const draft = await this.drafts.loadActive()
     if (!draft || draft.clientSessionKey !== state.clientSessionKey) return state
     const pending = draft.queue.operations.filter((operation) => operation.status === 'PENDING' && operation.type === 'UPSERT_SET')
-    if (pending.length === 0) return { ...state, syncStatus: 'SYNCED' }
+    if (pending.length === 0) return restoreFlowFromDraft(draft)
     const results = await this.remote.syncWorkoutOperations(pending.map((operation) => ({
       clientOperationSeq: operation.clientOperationSeq,
       operationType: 'UPSERT_SET' as const,
       clientKey: operation.idempotencyKey,
       payload: operation.payload as Readonly<Record<string, unknown>>,
     })))
-    let queue = draft.queue
-    let serverVersion = draft.lastServerVersion
+    const latest = await this.drafts.loadActive()
+    if (!latest || latest.clientSessionKey !== state.clientSessionKey) return state
+    const persisted = restoreFlowFromDraft(latest)
+    let queue = latest.queue
+    let serverVersion = latest.lastServerVersion
     let syncStatus: WorkoutFlowState['syncStatus'] = 'SYNCED'
     for (const result of results) {
       const operation = pending.find((item) => item.clientOperationSeq === result.clientOperationSeq)
       if (!operation) continue
-      queue = acknowledgeOperation(queue, result.clientOperationSeq)
       if (result.status === 'CONFLICT') syncStatus = 'CONFLICT'
       if (result.status === 'REJECTED') syncStatus = 'SYNC_REJECTED'
       if (result.status === 'APPLIED' || result.status === 'DUPLICATE') {
+        queue = acknowledgeOperation(queue, result.clientOperationSeq)
         const expected = Number((operation.payload as { expectedSessionVersion?: unknown }).expectedSessionVersion)
         if (Number.isSafeInteger(expected)) serverVersion = Math.max(serverVersion, expected + 1)
       }
@@ -187,8 +194,8 @@ export class WorkoutFlowService {
     if (queue.operations.some((operation) => operation.status === 'PENDING') && syncStatus === 'SYNCED') {
       syncStatus = 'OFFLINE_PENDING'
     }
-    const updated = { ...state, syncStatus }
-    const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
+    const updated = { ...persisted, syncStatus }
+    const mapped = toWorkoutDraft(updated, latest, this.clock.nowUtc())
     await this.drafts.save({ ...mapped, queue, lastServerVersion: serverVersion })
     return updated
   }

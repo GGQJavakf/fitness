@@ -48,10 +48,11 @@ public final class WorkoutHistoryController {
     public record HistoryData(List<HistoryItem> items, Optional<String> nextCursor, boolean hasMore) {}
     public record HistoryItem(
             UUID sessionId, String trainingDayCode, String status, Instant startedAt, Instant completedAt,
-            int completedWorkSets, BigDecimal completedVolumeKg) {
+            int completedWorkSets, BigDecimal completedVolumeKg, int completedReps, boolean usesExternalLoad) {
         static HistoryItem from(WorkoutHistoryQueryService.Item item) {
             return new HistoryItem(item.sessionId(), item.trainingDayCode(), item.status().name(), item.startedAt(),
-                    item.completedAt(), item.completedWorkSets(), item.completedVolumeKg());
+                    item.completedAt(), item.completedWorkSets(), item.completedVolumeKg(),
+                    item.completedReps(), item.usesExternalLoad());
         }
     }
 }

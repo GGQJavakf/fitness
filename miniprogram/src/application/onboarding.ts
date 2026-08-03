@@ -17,9 +17,7 @@ export const ONBOARDING_STEPS = [
   'SAFETY',
   'GOAL_AND_EXPERIENCE',
   'SCHEDULE',
-  'EQUIPMENT',
-  'PREFERENCES',
-  'REVIEW',
+  'LOCATION_AND_EQUIPMENT',
 ] as const
 
 export const DEFAULT_GYM_EQUIPMENT: EquipmentItemRequest[] = [
@@ -185,6 +183,18 @@ export function previousOnboardingStep(state: OnboardingState): OnboardingState 
   }
 }
 
+export function goToOnboardingStep(
+  state: OnboardingState,
+  step: OnboardingStep,
+): OnboardingState {
+  return {
+    ...state,
+    stepIndex: ONBOARDING_STEPS.indexOf(step),
+    step,
+    errors: [],
+  }
+}
+
 export function validateOnboardingDraft(draft: OnboardingDraft): string[] {
   return ONBOARDING_STEPS.flatMap((step) => validateStep(step, draft))
 }
@@ -234,9 +244,7 @@ export function buildCandidateViewModel(
       canContinue: false,
       explanationMessage: '',
       days: [],
-      reason: reasonCodes.length > 0
-        ? `暂未生成候选：${reasonCodes.join('、')}`
-        : '当前资料不足以生成安全候选，请调整器械或训练频率后重试。',
+      reason: candidateUnavailableReason(reasonCodes),
       action: {
         label: '返回调整器械与频率',
         route: 'ONBOARDING_EQUIPMENT',
@@ -262,6 +270,20 @@ export function buildCandidateViewModel(
       })),
     })),
   }
+}
+
+function candidateUnavailableReason(reasonCodes: string[]): string {
+  if (reasonCodes.includes('NO_TEMPLATE_FOR_FREQUENCY')) {
+    return '当前训练频率暂无可用模板，请调整每周训练天数后重试。'
+  }
+  if (reasonCodes.some((code) => (
+    code === 'NO_ELIGIBLE_TEMPLATE'
+    || code === 'EQUIPMENT_UNAVAILABLE'
+    || code === 'EXERCISE_NOT_ELIGIBLE'
+  ))) {
+    return '当前器械或动作排除设置无法组成安全计划，请调整后重试。'
+  }
+  return '当前资料不足以生成安全候选，请调整器械或训练频率后重试。'
 }
 
 export function createStartupUseCases(ports: StartupPorts) {
@@ -326,19 +348,17 @@ function validateStep(step: OnboardingStep, draft: OnboardingDraft): string[] {
         ...(draft.sessionMinutes === undefined || !allowedDurations.includes(draft.sessionMinutes)
           ? ['单次训练时长只能选择 30/45/60/75/90 分钟']
           : []),
-        ...(!draft.location ? ['请选择训练场地'] : []),
       ]
-    case 'EQUIPMENT':
-      return draft.equipment.some((item) => (
-        item.minIncrement.unit !== 'KG'
-        || item.availableLevels.some((weight) => weight.unit !== 'KG')
-      ))
-        ? ['P0 仅支持 KG，不支持 LB 或隐式换算']
-        : []
-    case 'PREFERENCES':
-      return []
-    case 'REVIEW':
-      return []
+    case 'LOCATION_AND_EQUIPMENT':
+      return [
+        ...(!draft.location ? ['请选择训练场地'] : []),
+        ...(draft.equipment.some((item) => (
+          item.minIncrement.unit !== 'KG'
+          || item.availableLevels.some((weight) => weight.unit !== 'KG')
+        ))
+          ? ['P0 仅支持 KG，不支持 LB 或隐式换算']
+          : []),
+      ]
   }
 }
 

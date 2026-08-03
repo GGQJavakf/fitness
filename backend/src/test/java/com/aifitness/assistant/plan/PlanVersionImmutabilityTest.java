@@ -8,6 +8,7 @@ import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.FieldLock;
 import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import com.aifitness.assistant.plan.infrastructure.InMemoryPlanRepository;
 import java.time.Clock;
@@ -65,6 +66,18 @@ class PlanVersionImmutabilityTest {
         TrainingPlanVersion first = service.createInitial(USER, "candidate-1").activeVersion();
 
         assertThat(first.plan().locks()).containsEntry(path, FieldLock.Status.USER_LOCKED);
+    }
+
+    @Test
+    void repeatedInitialCreationForTheSameCandidateReplaysTheCreatedPlan() {
+        PlanVersionService service = service(new StubPolicy(draft(90)));
+
+        TrainingPlan first = service.createInitial(USER, "candidate-response-lost");
+        TrainingPlan replay = service.createInitial(USER, "candidate-response-lost");
+
+        assertThat(replay.id()).isEqualTo(first.id());
+        assertThat(replay.activeVersion().id()).isEqualTo(first.activeVersion().id());
+        assertThat(replay.activeVersionNumber()).isEqualTo(1);
     }
 
     @Test

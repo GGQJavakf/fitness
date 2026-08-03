@@ -97,6 +97,27 @@ class PlanGenerationFixtureTest {
                 .hasSize(3);
     }
 
+    @Test
+    void prefersEquipmentTemplateWhenBothEquipmentAndBodyweightTemplatesAreEligible() {
+        PlanGenerationEngine.Exercise equipmentExercise = new PlanGenerationEngine.Exercise(
+                "DUMBBELL_SQUAT", 3, 8, 12, 90, PlanGenerationEngine.WeightStatus.NEEDS_CALIBRATION);
+        PlanGenerationEngine.Exercise bodyweightExercise = new PlanGenerationEngine.Exercise(
+                "BODYWEIGHT_SQUAT", 3, 8, 12, 90, PlanGenerationEngine.WeightStatus.BODYWEIGHT);
+        PlanGenerationEngine.Template bodyweight = repeatedTemplate(
+                "A_BODYWEIGHT_2_DAY", 2, bodyweightExercise);
+        PlanGenerationEngine.Template equipment = repeatedTemplate(
+                "Z_EQUIPMENT_2_DAY", 2, equipmentExercise);
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "DUMBBELL_SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS")),
+                "BODYWEIGHT_SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS")));
+
+        PlanGenerationEngine.GenerationResult result = engine().generate(
+                new PlanGenerationEngine.GenerationInput(
+                        REFERENCE, 2, 60, List.of(bodyweight, equipment), facts, Map.of()));
+
+        assertThat(result.candidate().orElseThrow().templateCode()).isEqualTo("Z_EQUIPMENT_2_DAY");
+    }
+
     private static PlanGenerationEngine.GenerationInput input(
             int frequency,
             int sessionMinutes,
@@ -161,6 +182,18 @@ class PlanGenerationFixtureTest {
                 .map(exercise -> new PlanGenerationEngine.Exercise(
                         exercise, 4, 8, 12, 90, PlanGenerationEngine.WeightStatus.KNOWN))
                 .toList());
+    }
+
+    private static PlanGenerationEngine.Template repeatedTemplate(
+            String code, int frequency, PlanGenerationEngine.Exercise exercise) {
+        return new PlanGenerationEngine.Template(
+                code,
+                code,
+                frequency,
+                IntStream.rangeClosed(1, frequency)
+                        .mapToObj(day -> new PlanGenerationEngine.Day(
+                                "DAY_" + day, "第" + day + "天", List.of(exercise)))
+                        .toList());
     }
 
     private static Map<String, PlanValidationEngine.ExerciseFacts> fixtureFacts(

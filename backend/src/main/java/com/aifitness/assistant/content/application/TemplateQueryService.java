@@ -29,6 +29,23 @@ public final class TemplateQueryService {
     public List<PlanTemplateCatalog.Template> list(
             AuthenticatedUserId user, Optional<Integer> weeklyFrequency) {
         Objects.requireNonNull(user, "authenticated user must not be null");
+        Set<String> eligibleExerciseCodes = exercises.list(user, ExerciseQueryService.Filter.none()).stream()
+                .map(ExerciseCatalog.Exercise::code)
+                .collect(Collectors.toUnmodifiableSet());
+        return activeTemplates(weeklyFrequency).stream()
+                .filter(template -> eligibleExerciseCodes.containsAll(template.exerciseCodes()))
+                .toList();
+    }
+
+    public List<PlanTemplateCatalog.Template> listForGeneration(Optional<Integer> weeklyFrequency) {
+        return activeTemplates(weeklyFrequency);
+    }
+
+    public String version() {
+        return catalogs.templates().metadata().version();
+    }
+
+    private List<PlanTemplateCatalog.Template> activeTemplates(Optional<Integer> weeklyFrequency) {
         weeklyFrequency = Objects.requireNonNull(weeklyFrequency, "weekly frequency must not be null");
         weeklyFrequency.ifPresent(frequency -> {
             if (frequency < 2 || frequency > 6) {
@@ -40,18 +57,10 @@ public final class TemplateQueryService {
                 || !catalog.contentVersion().equals(exercises.version())) {
             return List.of();
         }
-        Set<String> eligibleExerciseCodes = exercises.list(user, ExerciseQueryService.Filter.none()).stream()
-                .map(ExerciseCatalog.Exercise::code)
-                .collect(Collectors.toUnmodifiableSet());
         Optional<Integer> frequency = weeklyFrequency;
         return catalog.templates().stream()
                 .filter(template -> frequency.map(value -> template.sessionsPerWeek() == value).orElse(true))
-                .filter(template -> eligibleExerciseCodes.containsAll(template.exerciseCodes()))
                 .sorted(Comparator.comparing(PlanTemplateCatalog.Template::code))
                 .toList();
-    }
-
-    public String version() {
-        return catalogs.templates().metadata().version();
     }
 }

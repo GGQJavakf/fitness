@@ -6,6 +6,8 @@ export interface WorkoutHistoryItem {
   readonly completedAt: string
   readonly completedWorkSets: number
   readonly completedVolumeKg: number
+  readonly completedReps: number
+  readonly usesExternalLoad: boolean
 }
 
 export interface WorkoutHistoryPage {
@@ -33,7 +35,9 @@ export function toWorkoutHistoryCard(item: WorkoutHistoryItem): WorkoutHistoryCa
     title: item.trainingDayCode,
     statusLabel: item.status === 'COMPLETED' ? '完整完成' : '提前结束',
     timeLabel: formatUtc(item.completedAt),
-    factsLabel: `${item.completedWorkSets} 组 · ${formatVolume(item.completedVolumeKg)} KG·次`,
+    factsLabel: item.usesExternalLoad
+      ? `${item.completedWorkSets} 组 · ${formatVolume(item.completedVolumeKg)} KG·次`
+      : `${item.completedWorkSets} 组 · 共 ${item.completedReps} 次`,
     incomplete: item.status !== 'COMPLETED',
   }
 }
