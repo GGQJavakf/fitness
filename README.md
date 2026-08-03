@@ -16,9 +16,12 @@ Set-Location backend
 小程序默认请求 `http://127.0.0.1:8080`：
 
 ```powershell
+Copy-Item project.config.example.json project.config.json
 Set-Location miniprogram
 npm run dev:weapp
 ```
+
+首次启动前请在本地 `project.config.json` 中填写自己的微信小程序 AppID。该文件不会进入 Git，仓库仅维护脱敏模板 `project.config.example.json`。
 
 ### CloudBase AI
 
