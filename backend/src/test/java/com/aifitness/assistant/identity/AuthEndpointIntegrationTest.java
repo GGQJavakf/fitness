@@ -37,7 +37,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@SpringBootTest(classes = FitnessAssistantApplication.class)
+@SpringBootTest(
+        classes = FitnessAssistantApplication.class,
+        properties = "fitness.auth.wechat.app-id=test-app-id")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(AuthEndpointIntegrationTest.IdentityTestConfiguration.class)
@@ -93,6 +95,40 @@ class AuthEndpointIntegrationTest {
         mvc.perform(post("/api/v1/auth/refresh")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"refreshToken\":\"unknown-refresh-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void cloudBaseMiniProgramIdentityTakesPrecedenceOverTheFallbackWechatCode() throws Exception {
+        String loginJson = mvc.perform(post("/api/v1/auth/wechat/login")
+                        .header("X-WX-OPENID", "cloudbase-openid")
+                        .header("X-WX-APPID", "test-app-id")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"fallback-code\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(loginJson)
+                .doesNotContain("cloudbase-openid")
+                .doesNotContain("fallback-code")
+                .doesNotContain("test-app-id");
+    }
+
+    @Test
+    void cloudBaseIdentityHeadersFailClosedWhenIncompleteOrForAnotherApp() throws Exception {
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .header("X-WX-OPENID", "cloudbase-openid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"fallback-code\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
+
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .header("X-WX-OPENID", "cloudbase-openid")
+                        .header("X-WX-APPID", "another-app-id")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"fallback-code\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
     }

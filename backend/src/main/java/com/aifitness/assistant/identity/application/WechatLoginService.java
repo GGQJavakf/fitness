@@ -35,7 +35,16 @@ public final class WechatLoginService {
         } catch (WechatIdentityProvider.ExchangeRejectedException rejected) {
             throw new AuthenticationRequiredException();
         }
-        byte[] protectedSubject = subjectProtector.protect(providerSubject.subject());
+        return issueForWechatSubject(providerSubject.subject());
+    }
+
+    public SessionTokens loginTrustedWechatSubject(String providerSubject) {
+        requireCredential(providerSubject, 256, "wechat subject");
+        return issueForWechatSubject(providerSubject);
+    }
+
+    private SessionTokens issueForWechatSubject(String providerSubject) {
+        byte[] protectedSubject = subjectProtector.protect(providerSubject);
         if (protectedSubject == null || protectedSubject.length == 0) {
             throw new IllegalStateException("subject protection failed");
         }

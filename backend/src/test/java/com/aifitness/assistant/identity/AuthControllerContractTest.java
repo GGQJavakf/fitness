@@ -38,7 +38,7 @@ class AuthControllerContractTest {
                 new InMemoryIdentityRepository(),
                 new InMemorySessionStore(),
                 clock);
-        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service, clock)).build();
+        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service, clock, "test-app-id")).build();
     }
 
     @Test

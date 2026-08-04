@@ -68,6 +68,27 @@ class WechatLoginServiceTest {
     }
 
     @Test
+    void trustedCloudBaseSubjectIssuesASessionWithoutExchangingAWechatCode() {
+        WechatLoginService.SessionTokens tokens =
+                service.loginTrustedWechatSubject("cloudbase-openid");
+
+        assertThat(exchangedCode).hasValue(null);
+        assertThat(tokens.accessToken()).isNotBlank();
+        assertThat(new String(identities.lastProtectedSubject, StandardCharsets.UTF_8))
+                .isEqualTo("protected:cloudbase-openid");
+    }
+
+    @Test
+    void rejectsMalformedTrustedCloudBaseSubjects() {
+        assertThatThrownBy(() -> service.loginTrustedWechatSubject("openid\r\nforged"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("wechat subject is invalid");
+        assertThatThrownBy(() -> service.loginTrustedWechatSubject("x".repeat(257)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("wechat subject is invalid");
+    }
+
+    @Test
     void refreshRotatesTheRefreshTokenAndLogoutRevokesTheWholeSession() {
         WechatLoginService.SessionTokens login = service.login("subject-a");
 

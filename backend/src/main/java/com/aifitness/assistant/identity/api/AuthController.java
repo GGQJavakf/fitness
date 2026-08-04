@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,15 +22,27 @@ public final class AuthController {
 
     private final WechatLoginService loginService;
     private final Clock clock;
+    private final String expectedWechatAppId;
 
-    public AuthController(WechatLoginService loginService, Clock clock) {
+    public AuthController(
+            WechatLoginService loginService,
+            Clock clock,
+            @Value("${fitness.auth.wechat.app-id:}") String expectedWechatAppId) {
         this.loginService = loginService;
         this.clock = clock;
+        this.expectedWechatAppId = expectedWechatAppId;
     }
 
     @PostMapping("/wechat/login")
-    public ApiResponse<SessionData> login(@RequestBody WechatLoginRequest request) {
-        return sessionResponse(loginService.login(request.code()));
+    public ApiResponse<SessionData> login(
+            @RequestBody WechatLoginRequest request,
+            @RequestHeader(value = "X-WX-OPENID", required = false) String cloudBaseOpenId,
+            @RequestHeader(value = "X-WX-APPID", required = false) String cloudBaseAppId) {
+        String trustedSubject = trustedCloudBaseSubject(cloudBaseOpenId, cloudBaseAppId);
+        WechatLoginService.SessionTokens tokens = trustedSubject == null
+                ? loginService.login(request.code())
+                : loginService.loginTrustedWechatSubject(trustedSubject);
+        return sessionResponse(tokens);
     }
 
     @PostMapping("/refresh")
@@ -65,6 +78,28 @@ public final class AuthController {
             throw new WechatLoginService.AuthenticationRequiredException();
         }
         return token;
+    }
+
+    private String trustedCloudBaseSubject(String openId, String appId) {
+        if (openId == null && appId == null) {
+            return null;
+        }
+        if (!validHeaderValue(openId, 256)
+                || !validHeaderValue(appId, 128)
+                || expectedWechatAppId == null
+                || expectedWechatAppId.isBlank()
+                || !expectedWechatAppId.equals(appId)) {
+            throw new WechatLoginService.AuthenticationRequiredException();
+        }
+        return openId;
+    }
+
+    private static boolean validHeaderValue(String value, int maxLength) {
+        return value != null
+                && !value.isBlank()
+                && value.length() <= maxLength
+                && value.equals(value.strip())
+                && value.chars().noneMatch(character -> character < 0x20 || character == 0x7f);
     }
 
     public record WechatLoginRequest(String code) {}
