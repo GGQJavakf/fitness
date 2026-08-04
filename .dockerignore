@@ -1,6 +1,7 @@
-.git
-.idea
-backend/target
-miniprogram
-docs
-*.log
+**
+!Dockerfile
+!backend/
+backend/**
+!backend/target/
+backend/target/**
+!backend/target/fitness-assistant-backend-*.jar
