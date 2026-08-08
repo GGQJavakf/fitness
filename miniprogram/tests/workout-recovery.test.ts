@@ -98,8 +98,58 @@ describe('workout recovery', () => {
     expect(ramp.warmup).toMatchObject({ phase: 'RAMP', generalTimer: { timerStatus: 'SKIPPED' } })
   })
 
+  it('persists one confirmed formal weight for the rest of the workout', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:00.000Z' },
+    )
+    const started = await service.start({
+      clientSessionKey: 'weight-session',
+      planVersionId: 'plan-version',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id',
+        exerciseCode: 'ROW',
+        name: '划船',
+        targetWorkSets: 2,
+        targetReps: 8,
+        restSeconds: 60,
+        weightStatus: 'NEEDS_CALIBRATION',
+      }],
+    })
+
+    await service.setExerciseWeight(started, 0, 22.5)
+    const restored = await service.load()
+
+    expect(restored?.exercises[0].sessionWeightKg).toBe(22.5)
+  })
+
   it('rejects malformed persisted state instead of fabricating completed work', () => {
     expect(() => restoreWorkoutFlow({ clientSessionKey: 'broken' })).toThrow(/workout state/i)
+  })
+
+  it('restores legacy three-ramp drafts and backfills their planned formal weight', () => {
+    const legacy = JSON.parse(JSON.stringify(createWorkoutFlow({
+      clientSessionKey: 'legacy-ramp-session',
+      planVersionId: 'legacy-plan',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id',
+        exerciseCode: 'ROW',
+        name: '划船',
+        targetWorkSets: 2,
+        targetReps: 8,
+        restSeconds: 60,
+        weightStatus: 'KNOWN',
+        targetWeightKg: 20,
+      }],
+    })))
+    legacy.warmup.maximumRampSets = 3
+    delete legacy.exercises[0].sessionWeightKg
+
+    const restored = restoreWorkoutFlow(legacy)
+
+    expect(restored.warmup.maximumRampSets).toBe(3)
+    expect(restored.exercises[0].sessionWeightKg).toBe(20)
   })
 
   it('atomically keeps a completed set and its pending server operation in the active draft', async () => {
@@ -304,6 +354,42 @@ describe('workout recovery', () => {
     expect(recovered.state.syncStatus).toBe('OFFLINE_PENDING')
     expect(recovered.syncFailed).toBe(true)
     expect(stored!.queue.operations).toHaveLength(1)
+  })
+
+  it('persists a naturally expired rest so the screen advances without an extra tap', async () => {
+    let stored: WorkoutDraft | null = null
+    let nowUtc = '2026-07-24T09:00:00.000Z'
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => nowUtc },
+    )
+    let state = await service.start({
+      clientSessionKey: 'rest-expiry-session',
+      planVersionId: 'plan-version',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id',
+        exerciseCode: 'ROW',
+        name: '划船',
+        targetWorkSets: 2,
+        targetReps: 8,
+        restSeconds: 60,
+      }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'rest-expiry-set-1',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualWeightKg: 25,
+      actualReps: 8,
+    })
+    nowUtc = '2026-07-24T09:01:01.000Z'
+
+    const advanced = await service.finishRest(state)
+
+    expect(advanced.restTimer?.timerStatus).toBe('FINISHED')
+    expect((stored as WorkoutDraft | null)?.restTimer).toMatchObject({ timerStatus: 'FINISHED' })
   })
 
   it('queues successive ramp warmup sets with their own order and no work-set rest timer', async () => {

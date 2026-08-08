@@ -13,7 +13,7 @@
 
     <groupId>com.aifitness</groupId>
     <artifactId>fitness-assistant-backend</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.1</version>
     <name>fitness-assistant-backend</name>
     <description>AI 健身助手后端</description>
 

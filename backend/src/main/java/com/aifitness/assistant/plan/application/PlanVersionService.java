@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -98,13 +99,14 @@ public final class PlanVersionService {
             throw new LockedProgressionFieldException();
         }
         PlanDraft proposed = base.plan().withTargetWeight(exerciseCode, acceptedWeightKg);
-        List<ValidationIssue> issues = List.copyOf(policy.validate(user, proposed, base.ruleReference()));
+        RuleReference effectiveReference = policy.effectiveReference(base.ruleReference());
+        List<ValidationIssue> issues = List.copyOf(policy.validate(user, proposed, effectiveReference));
         if (!issues.isEmpty()) {
             throw new PlanValidationException(issues);
         }
         TrainingPlanVersion version = new TrainingPlanVersion(
                 UUID.randomUUID(), current.id(), expectedVersion + 1, TrainingPlanVersion.SourceType.PROGRESSION,
-                proposed, base.ruleReference(), Set.of(), clock.instant());
+                proposed, effectiveReference, Set.of(), clock.instant());
         return plans.append(user.value(), current.id(), expectedVersion, version).activeVersion();
     }
 
@@ -144,7 +146,15 @@ public final class PlanVersionService {
         }
         TrainingPlanVersion base = current.activeVersion();
         PlanDraft merged = proposed.preserveLockedValues(base.plan(), locks);
-        List<ValidationIssue> issues = List.copyOf(policy.validate(user, merged, base.ruleReference()));
+        RuleReference effectiveReference = policy.effectiveReference(base.ruleReference());
+        List<ValidationIssue> issues = new ArrayList<>(policy.validate(user, merged, effectiveReference));
+        if (!effectiveReference.equals(base.ruleReference())) {
+            issues.add(new ValidationIssue(
+                    Severity.WARNING,
+                    "RULE_REFERENCE_UPGRADED",
+                    "/ruleReference"));
+        }
+        issues = List.copyOf(issues);
         if (hasSeverity(issues, Severity.ERROR)) {
             return new VersionResult(VersionStatus.VALIDATION_ERROR, merged, issues, Optional.empty(), Optional.empty());
         }
@@ -169,7 +179,7 @@ public final class PlanVersionService {
                 .collect(Collectors.toUnmodifiableSet());
         TrainingPlanVersion version = new TrainingPlanVersion(
                 UUID.randomUUID(), planId, baseVersionNumber + 1, TrainingPlanVersion.SourceType.USER_EDIT,
-                merged, base.ruleReference(), confirmedWarnings, clock.instant());
+                merged, effectiveReference, confirmedWarnings, clock.instant());
         TrainingPlan updated = plans.append(user.value(), planId, baseVersionNumber, version);
         return new VersionResult(
                 VersionStatus.CREATED, merged, issues, Optional.empty(), Optional.of(updated.activeVersion()));
@@ -217,6 +227,10 @@ public final class PlanVersionService {
         CandidatePlan candidate(AuthenticatedUserId user, String candidateId);
 
         List<ValidationIssue> validate(AuthenticatedUserId user, PlanDraft plan, RuleReference reference);
+
+        default RuleReference effectiveReference(RuleReference sourceReference) {
+            return Objects.requireNonNull(sourceReference, "source rule reference must not be null");
+        }
     }
 
     public record CandidatePlan(String candidateId, PlanDraft plan, RuleReference ruleReference) {

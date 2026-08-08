@@ -39,6 +39,8 @@ export function createWechatWorkoutDraftStore(): WorkoutDraftStore {
       const checksum = integrityChecksum(payloadJson)
       const recordKey = `${recordKeyPrefix}${encodeURIComponent(draft.draftId)}.${draft.revision}.${checksum}`
       const envelope: StoredEnvelope = { schemaVersion: workoutDraftSchemaVersion, payloadJson, checksum }
+      const previousPointer = await readOptional(activePointerKey)
+      const previousRecordKey = isPointer(previousPointer) ? previousPointer.recordKey : null
       try {
         await Taro.setStorage({ key: recordKey, data: envelope })
         const verified = await readRequired(recordKey)
@@ -47,6 +49,13 @@ export function createWechatWorkoutDraftStore(): WorkoutDraftStore {
           key: activePointerKey,
           data: { recordKey, schemaVersion: workoutDraftSchemaVersion } satisfies ActivePointer,
         })
+        if (previousRecordKey && previousRecordKey !== recordKey) {
+          try {
+            await removeOptional(previousRecordKey)
+          } catch {
+            // The new pointer is already durable. A stale revision is safe and can be cleaned later.
+          }
+        }
       } catch (error) {
         if (isStorageFull(error)) throw new WorkoutDraftStorageFullError()
         throw error

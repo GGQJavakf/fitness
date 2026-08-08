@@ -73,4 +73,39 @@ describe('WeChat CloudBase AI adapter', () => {
       factsJson: '{}',
     })).rejects.toThrow('CloudBase AI is not available')
   })
+
+  it('times out a stalled model call so onboarding can request the rule fallback', async () => {
+    vi.useFakeTimers()
+    try {
+      Reflect.set(globalThis, 'wx', {
+        cloud: {
+          init: vi.fn(),
+          extend: {
+            AI: {
+              createModel: vi.fn().mockReturnValue({
+                generateText: vi.fn().mockReturnValue(new Promise(() => undefined)),
+              }),
+            },
+          },
+        },
+      })
+      initializeWeappCloudBase('fitness-env')
+      const provider = createWeappCloudBaseAiTextProvider('hy3', 100)
+      const observed = provider.generate({
+        purpose: 'PLAN_GENERATION',
+        systemPrompt: 'system',
+        factsJson: '{}',
+      }).then(
+        () => 'resolved',
+        (error: unknown) => error instanceof Error ? error.message : 'rejected',
+      )
+
+      await vi.advanceTimersByTimeAsync(100)
+
+      await expect(Promise.race([observed, Promise.resolve('pending')]))
+        .resolves.toBe('CloudBase AI request timed out')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

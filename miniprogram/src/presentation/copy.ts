@@ -17,6 +17,8 @@ const EXERCISE_NAMES: Readonly<Record<string, string>> = {
   LAT_PULLDOWN: '高位下拉',
   CABLE_STRAIGHT_ARM_PULLDOWN: '直臂绳索下拉',
   NEUTRAL_GRIP_PULLDOWN: '对握高位下拉',
+  PRONE_W_RAISE: '俯卧 W 提拉',
+  PRONE_Y_RAISE: '俯卧 Y 提拉',
   DEAD_BUG: '死虫式',
   BIRD_DOG: '鸟狗式',
   PLANK: '平板支撑',
@@ -24,6 +26,7 @@ const EXERCISE_NAMES: Readonly<Record<string, string>> = {
 
 const PLAN_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
   RULE_VERSION_NOT_SUPPORTED: '当前规则版本已不受支持，请重新生成计划。',
+  RULE_REFERENCE_UPGRADED: '这份计划来自旧规则；保存时会按当前规则校验并生成兼容的新版本，原版本保持不变。',
   P0_UNIT_NOT_SUPPORTED: 'P0 仅支持 KG，请使用公斤填写重量。',
   SESSION_FREQUENCY_OUT_OF_RANGE: '每周训练频率需保持在 2～6 天。',
   EXERCISE_COUNT_OUT_OF_RANGE: '本次训练的动作数量不在支持范围内。',
@@ -46,7 +49,12 @@ function readableCode(value: string): string {
 }
 
 export function goalDisplayName(value?: string): string {
-  return ({ GENERAL_FITNESS: '一般健身', STRENGTH: '提升力量', HYPERTROPHY: '增肌' } as Record<string, string>)[value ?? ''] ?? readableCode(value ?? '未设置')
+  return ({
+    GENERAL_FITNESS: '一般健身',
+    STRENGTH: '提升力量',
+    HYPERTROPHY: '增肌',
+    FAT_LOSS: '减脂',
+  } as Record<string, string>)[value ?? ''] ?? readableCode(value ?? '未设置')
 }
 
 export function experienceDisplayName(value?: string): string {

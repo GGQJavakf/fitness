@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.2.0", "ruleVersion": "1.1.0", "contentVersion": "1.1.0", "status": "AI_VALIDATED",
-    "generatedAt": "2026-07-30T03:00:00Z",
+    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.2.0", "ruleVersion": "1.2.0", "contentVersion": "1.2.0", "status": "AI_VALIDATED",
+    "generatedAt": "2026-08-05T03:07:27Z",
     "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写", "仅自重模板不得引用外部器械动作", "每周四至六练的自重模板必须交替肌群以满足恢复窗口", "每个可选训练频率和器械范围都必须存在不超过三十分钟的有效模板"],
     "sourceReferences": [{ "id": "ACSM_PTR_11", "title": "ACSM Position Stand for Healthy Adults", "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/", "accessedAt": "2026-07-23", "usage": "用于模板频率和训练范围候选，不用于个体绝对重量" }],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "fd5fb3ad8c409801a64611acda2b5861d4bb4f58f84b1aa35458f894d50bb2af"
+    "digestSha256": "dc50cfc8f6d33b56f9ac757b96ff196403697f9796431c3b1ff7201add42cfc7"
   },
   "templates": [
     {

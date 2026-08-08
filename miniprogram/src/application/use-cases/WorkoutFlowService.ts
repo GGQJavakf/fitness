@@ -12,6 +12,7 @@ import {
   isWorkoutPrescriptionFinished,
   recordWorkoutSet,
   replaceExerciseForSession,
+  setWorkoutExerciseWeight,
   type RecordWorkoutSetInput,
   type WorkoutExerciseSnapshot,
   type WorkoutFlowState,
@@ -152,6 +153,14 @@ export class WorkoutFlowService {
     return this.save(beginWorkSets(state))
   }
 
+  async setExerciseWeight(
+    state: WorkoutFlowState,
+    exerciseIndex: number,
+    weightKg: number,
+  ): Promise<WorkoutFlowState> {
+    return this.save(setWorkoutExerciseWeight(state, exerciseIndex, weightKg))
+  }
+
   async adjustRest(state: WorkoutFlowState, seconds: 15 | -15): Promise<WorkoutFlowState> {
     if (!state.restTimer) return state
     return this.save({ ...state, restTimer: adjustRestTimer(state.restTimer, seconds, this.clock.nowUtc()) })
@@ -160,6 +169,13 @@ export class WorkoutFlowService {
   async skipRest(state: WorkoutFlowState): Promise<WorkoutFlowState> {
     if (!state.restTimer) return state
     return this.save({ ...state, restTimer: skipRestTimer(state.restTimer, this.clock.nowUtc()) })
+  }
+
+  async finishRest(state: WorkoutFlowState): Promise<WorkoutFlowState> {
+    if (!state.restTimer) return state
+    const resumed = resumeRestTimer(state.restTimer, this.clock.nowUtc())
+    if (resumed.timer.timerStatus === 'RUNNING') return state
+    return this.save({ ...state, restTimer: resumed.timer })
   }
 
   async flush(state: WorkoutFlowState): Promise<WorkoutFlowState> {

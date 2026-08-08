@@ -174,8 +174,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description 规则引擎生成合法结构和全部关键数字；AI 解释允许为空、异步或降级。 */
+        /** @description 接收小程序 AI 生成的结构化计划并由服务端规则校验；AI 不可用或一次修复仍失败时，可显式请求规则保底计划。 */
         post: operations["generatePlanCandidates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/generation-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回服务端规范化用户资料、当前可用动作白名单及规则硬约束，供小程序 AI 生成候选；不包含凭据或服务端内部提示。 */
+        get: operations["getPlanGenerationContext"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -772,7 +789,7 @@ export interface components {
         /** @enum {string} */
         ExperienceLevel: "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
         /** @enum {string} */
-        FitnessGoal: "STRENGTH" | "HYPERTROPHY" | "GENERAL_FITNESS";
+        FitnessGoal: "STRENGTH" | "HYPERTROPHY" | "FAT_LOSS" | "GENERAL_FITNESS";
         /** @enum {string} */
         TrainingLocation: "HOME" | "GYM" | "OTHER";
         UserProfile: {
@@ -924,14 +941,36 @@ export interface components {
             data: components["schemas"]["PlanTemplateListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        AiPlanProposalExercise: {
+            exerciseCode: string;
+            workSets: number;
+            repMin: number;
+            repMax: number;
+            restSeconds: number;
+        };
+        AiPlanProposalDay: {
+            code: string;
+            name: string;
+            exercises: components["schemas"]["AiPlanProposalExercise"][];
+        };
+        AiPlanProposal: {
+            name: string;
+            days: components["schemas"]["AiPlanProposalDay"][];
+        };
         PlanCandidateRequest: {
             profileVersion: components["schemas"]["ExpectedVersion"];
+            additionalRequirements?: string;
+            aiProposal?: components["schemas"]["AiPlanProposal"];
+            /** @default true */
+            fallbackAllowed: boolean;
             lockedFields?: {
                 [key: string]: number;
             };
         };
         /** @enum {string} */
         PlanGenerationStatus: "CANDIDATE_READY" | "NO_CANDIDATE";
+        /** @enum {string} */
+        PlanGenerationSource: "AI_PERSONALIZED" | "FALLBACK_RULE_PLAN";
         PlanExercise: {
             exerciseCode: string;
             workSets: number;
@@ -964,6 +1003,7 @@ export interface components {
         };
         PlanCandidate: {
             candidateId: string;
+            generationSource: components["schemas"]["PlanGenerationSource"];
             plan: components["schemas"]["PlanDraft"];
             validationIssues: components["schemas"]["ValidationIssue"][];
             ruleReference: components["schemas"]["RuleReference"];
@@ -984,6 +1024,51 @@ export interface components {
         };
         PlanCandidateGenerationResponse: {
             data: components["schemas"]["PlanCandidateGenerationData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanGenerationContextProfile: {
+            experience: components["schemas"]["ExperienceLevel"];
+            goal: components["schemas"]["FitnessGoal"];
+            weeklyFrequency: number;
+            /** @enum {integer} */
+            sessionMinutes: 30 | 45 | 60 | 75 | 90;
+            location: components["schemas"]["TrainingLocation"];
+            profileVersion: components["schemas"]["ExpectedVersion"];
+        };
+        PlanGenerationExercise: {
+            code: string;
+            name: string;
+            movementPattern: string;
+            difficulty: string;
+            equipment: string[];
+            primaryMuscles: string[];
+            preferred: boolean;
+            bodyweight: boolean;
+        };
+        PlanGenerationConstraints: {
+            minimumSessionsPerWeek: number;
+            maximumSessionsPerWeek: number;
+            maximumExercisesPerSession: number;
+            minimumWorkSets: number;
+            maximumWorkSets: number;
+            minimumReps: number;
+            maximumReps: number;
+            minimumRestSeconds: number;
+            maximumRestSeconds: number;
+            secondsPerWorkSet: number;
+            secondsPerExerciseTransition: number;
+            maximumMovementPatternOccurrencesPerSession: number;
+            maximumWorkSetsPerPrimaryMusclePerSession: number;
+            minimumRecoveryHoursBetweenPrimaryMuscleSessions: number;
+        };
+        PlanGenerationContextData: {
+            profile: components["schemas"]["PlanGenerationContextProfile"];
+            exercises: components["schemas"]["PlanGenerationExercise"][];
+            constraints: components["schemas"]["PlanGenerationConstraints"];
+            ruleReference: components["schemas"]["RuleReference"];
+        };
+        PlanGenerationContextResponse: {
+            data: components["schemas"]["PlanGenerationContextData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         PlanExerciseOption: {
@@ -1930,13 +2015,39 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanCandidates"];
         responses: {
-            /** @description 确定性候选或可操作失败原因 */
+            /** @description 已校验的 AI 个性化候选、明确标记的规则保底候选，或可操作失败原因 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["PlanCandidateGenerationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["VersionConflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    getPlanGenerationContext: {
+        parameters: {
+            query: {
+                profileVersion: components["schemas"]["ExpectedVersion"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前用户的计划生成事实与约束 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanGenerationContextResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

@@ -31,39 +31,56 @@ const pageRoutes: Record<PageDestination, string> = {
   ONBOARDING: '/presentation/pages/onboarding/index',
   PLAN_CANDIDATES: '/presentation/pages/plan-candidates/index',
   PLAN: '/presentation/pages/plan/index',
+  PLAN_EDITOR: '/presentation/pages/plan-editor/index',
   MY: '/presentation/pages/my/index',
   WORKOUT_PREPARE: '/presentation/pages/workout-prepare/index',
-  WORKOUT_SESSION: '/presentation/pages/workout-session/index',
+  WORKOUT_SESSION: '/subpackages/exercise-guide/pages/workout-session/index',
   WORKOUT_SUMMARY: '/presentation/pages/workout-summary/index',
   SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
   HISTORY: '/presentation/pages/history/index',
   EXERCISE_TREND: '/presentation/pages/exercise-trend/index',
-  EXERCISE_DETAIL: '/presentation/pages/exercise-detail/index',
+  EXERCISE_DETAIL: '/subpackages/exercise-guide/pages/detail/index',
   EXERCISE_PREFERENCES: '/presentation/pages/exercise-preferences/index',
+}
+
+const appPageRoutes: Record<AppDestination, PageDestination> = {
+  LOGIN: 'HOME',
+  HOME: 'HOME',
+  ONBOARDING: 'ONBOARDING',
+  PLAN: 'PLAN',
+  WORKOUT_SESSION: 'WORKOUT_SESSION',
 }
 
 export function createWeappTransport(options: {
   environmentId?: string
   serviceName?: string
+  requestTimeoutMs?: number
 } = {}): TransportPort {
   const environmentId = options.environmentId?.trim() ?? ''
   const serviceName = options.serviceName?.trim() ?? ''
+  const requestTimeoutMs = options.requestTimeoutMs ?? WEAPP_REQUEST_TIMEOUT_MS
+  if (!Number.isSafeInteger(requestTimeoutMs) || requestTimeoutMs <= 0) {
+    throw new TypeError('requestTimeoutMs must be a positive integer')
+  }
   return {
     async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
       if (serviceName) {
         if (!environmentId) throw new Error('CloudBase environment is required for container calls')
         const cloud = cloudRuntime()?.cloud
         if (!cloud?.callContainer) throw new Error('CloudBase container transport is not available')
-        const response = await cloud.callContainer<T>({
-          config: { env: environmentId },
-          path: containerPath(request.url),
-          method: request.method,
-          header: {
-            ...request.headers,
-            'X-WX-SERVICE': serviceName,
-          },
-          ...(request.body === undefined ? {} : { data: request.body }),
-        })
+        const response = await withCloudBaseTimeout(
+          cloud.callContainer<T>({
+            config: { env: environmentId },
+            path: containerPath(request.url),
+            method: request.method,
+            header: {
+              ...request.headers,
+              'X-WX-SERVICE': serviceName,
+            },
+            ...(request.body === undefined ? {} : { data: request.body }),
+          }),
+          requestTimeoutMs,
+        )
         if (
           !Number.isInteger(response.statusCode)
           || response.statusCode === undefined
@@ -81,7 +98,7 @@ export function createWeappTransport(options: {
         url: request.url,
         method: request.method,
         header: request.headers,
-        timeout: WEAPP_REQUEST_TIMEOUT_MS,
+        timeout: requestTimeoutMs,
         ...(request.body === undefined ? {} : { data: request.body }),
       })
       return {
@@ -90,6 +107,25 @@ export function createWeappTransport(options: {
       }
     },
   }
+}
+
+function withCloudBaseTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('CloudBase 请求超时，请检查网络后重试')),
+      timeoutMs,
+    )
+    request.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
 }
 
 function cloudRuntime(): CloudContainerRuntime | undefined {
@@ -152,14 +188,7 @@ export function createWeappNavigation(): PageNavigationPort & {
       await Taro.navigateBack()
     },
     async replaceApp(destination): Promise<void> {
-      const page = destination === 'ONBOARDING'
-        ? 'ONBOARDING'
-        : destination === 'PLAN'
-          ? 'PLAN'
-          : destination === 'WORKOUT_SESSION'
-            ? 'WORKOUT_SESSION'
-          : 'HOME'
-      await Taro.redirectTo({ url: pageRoutes[page] })
+      await Taro.reLaunch({ url: pageRoutes[appPageRoutes[destination]] })
     },
   }
 }

@@ -3,6 +3,7 @@ import type {
   ActivePlanData,
   CreatePlanVersionRequest,
   PlanCandidateGenerationData,
+  PlanGenerationContextData,
   PlanValidationData,
   PlanValidationDraft,
   PlanExerciseOption,
@@ -96,6 +97,7 @@ type ExerciseDetailResponse = components['schemas']['ExerciseDetailResponse']
 export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort {
   private readonly baseUrl: string
   private refreshInFlight: Promise<Session> | null = null
+  private readonly rotatedSessions = new Map<string, Session>()
 
   constructor(
     baseUrl: string,
@@ -113,7 +115,9 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       { code } satisfies components['schemas']['WechatLoginRequest'],
       false,
     )
-    return requireData(response.data)
+    const session = requireData(response.data)
+    this.rotatedSessions.clear()
+    return session
   }
 
   async getProfileVersion(): Promise<number | null> {
@@ -187,6 +191,16 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       '/api/v1/plans/candidates',
       'POST',
       request,
+    )
+    return requireData(response.data)
+  }
+
+  async getPlanGenerationContext(
+    profileVersion: number,
+  ): Promise<PlanGenerationContextData> {
+    const response = await this.request<ApiResponse<PlanGenerationContextData>>(
+      `/api/v1/plans/generation-context?profileVersion=${encodeURIComponent(String(profileVersion))}`,
+      'GET',
     )
     return requireData(response.data)
   }
@@ -505,8 +519,8 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     }
 
     if (authenticated && response.statusCode === 401 && session) {
-      const refreshed = await this.refreshSession(session)
-      headers.Authorization = `Bearer ${refreshed.accessToken}`
+      const recovered = await this.recoverSession(session)
+      headers.Authorization = `Bearer ${recovered.accessToken}`
       try {
         response = await this.transport.request({
           url: `${this.baseUrl}${path}`,
@@ -527,6 +541,12 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     throw await this.mapError(response.statusCode, response.data)
   }
 
+  private async recoverSession(failedSession: Session): Promise<Session> {
+    const rotatedSession = this.rotatedSessions.get(failedSession.refreshToken)
+    if (rotatedSession) return rotatedSession
+    return this.refreshSession(failedSession)
+  }
+
   private async refreshSession(session: Session): Promise<Session> {
     if (!this.refreshInFlight) {
       this.refreshInFlight = this.performRefresh(session)
@@ -536,6 +556,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
   }
 
   private async performRefresh(session: Session): Promise<Session> {
+    const sourceRefreshToken = session.refreshToken
     let response: TransportResponse<unknown>
     try {
       response = await this.transport.request({
@@ -557,6 +578,15 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
     }
     await this.sessions.save(refreshed)
+    for (const previousRefreshToken of this.rotatedSessions.keys()) {
+      this.rotatedSessions.set(previousRefreshToken, refreshed)
+    }
+    this.rotatedSessions.set(sourceRefreshToken, refreshed)
+    while (this.rotatedSessions.size > 8) {
+      const oldestRefreshToken = this.rotatedSessions.keys().next().value
+      if (typeof oldestRefreshToken !== 'string') break
+      this.rotatedSessions.delete(oldestRefreshToken)
+    }
     return refreshed
   }
 
@@ -564,6 +594,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     const apiError = isApiErrorResponse(payload) ? payload.error : undefined
     const code = mapErrorCode(statusCode, apiError?.code)
     if (code === 'AUTHENTICATION_REQUIRED') {
+      this.rotatedSessions.clear()
       await this.sessions.clear()
       await this.onAuthenticationExpired?.()
     }

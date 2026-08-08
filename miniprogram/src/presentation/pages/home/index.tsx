@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { AppDestination } from '../../../application/onboarding'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-import MainNavigation from '../../components/main-navigation'
 import { runSingleFlight } from './loginSingleFlight'
 
 import './index.scss'
@@ -50,8 +49,20 @@ export default function HomePage() {
       ? '待建立档案'
       : '训练档案已就绪'
 
+  if (destination === 'LOADING') {
+    return (
+      <View className='home-page screen'>
+        <View className='home-page__loading'>
+          <Text className='home-page__eyebrow'>AI 科学训练系统</Text>
+          <Text className='home-page__loading-title'>正在打开你的训练计划…</Text>
+          <Text className='home-page__loading-note'>正在恢复会话与未完成训练，请稍候</Text>
+        </View>
+      </View>
+    )
+  }
+
   return (
-    <View className={`home-page screen ${destination === 'HOME' ? 'screen--with-nav' : ''}`}>
+    <View className='home-page screen'>
       <View className='home-page__content'>
         <View className='home-page__hero'>
           <View className='home-page__orb home-page__orb--large' />
@@ -155,27 +166,19 @@ export default function HomePage() {
           </View>
         </View>
 
-        {destination !== 'LOADING' && (
-          <Button
-            className='home-page__privacy-action'
-            onClick={() => void application.navigation.open('MY')}
-          >
-            <View className='home-page__privacy-copy'>
-              <Text className='home-page__privacy-title'>我的与隐私</Text>
-              <Text className='home-page__privacy-description'>查看个人资料与数据设置</Text>
-            </View>
-            <Text className='home-page__privacy-arrow'>›</Text>
-          </Button>
-        )}
+        <Button
+          className='home-page__privacy-action'
+          onClick={() => void application.navigation.open('MY')}
+        >
+          <View className='home-page__privacy-copy'>
+            <Text className='home-page__privacy-title'>我的与隐私</Text>
+            <Text className='home-page__privacy-description'>查看个人资料与数据设置</Text>
+          </View>
+          <Text className='home-page__privacy-arrow'>›</Text>
+        </Button>
 
         <Text className='home-page__footer'>科学训练 · 稳定进步 · 尊重身体反馈</Text>
       </View>
-      {destination === 'HOME' && (
-        <MainNavigation
-          current='HOME'
-          onNavigate={(nextDestination) => void application.navigation.replace(nextDestination)}
-        />
-      )}
     </View>
   )
 }

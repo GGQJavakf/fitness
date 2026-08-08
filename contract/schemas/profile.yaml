@@ -35,7 +35,7 @@ components:
       enum: [BEGINNER, INTERMEDIATE, ADVANCED]
     FitnessGoal:
       type: string
-      enum: [STRENGTH, HYPERTROPHY, GENERAL_FITNESS]
+      enum: [STRENGTH, HYPERTROPHY, FAT_LOSS, GENERAL_FITNESS]
     TrainingLocation:
       type: string
       enum: [HOME, GYM, OTHER]

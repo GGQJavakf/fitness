@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import type { ActivePlanData } from '../../../application/models'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { resolveActivePlanLoadFailure } from '../../activePlanLoadFailure'
 import MainNavigation from '../../components/main-navigation'
 import { exerciseDisplayName, weightStatusDisplayName } from '../../copy'
 
@@ -22,8 +23,18 @@ export default function PlanPage() {
     try {
       const nextPlan = await application.loadActivePlan()
       if (mounted.current) setPlan(nextPlan)
-    } catch {
-      if (mounted.current) setError('活动计划加载失败，请检查网络后重试')
+    } catch (error: unknown) {
+      const failure = resolveActivePlanLoadFailure(error)
+      if (failure.kind === 'AUTHENTICATION_REQUIRED') {
+        if (!mounted.current) return
+        try {
+          await application.navigation.replace('HOME')
+        } catch {
+          if (mounted.current) setError('登录状态已失效，请返回首页重新登录')
+        }
+        return
+      }
+      if (mounted.current) setError(failure.message)
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -69,20 +80,33 @@ export default function PlanPage() {
   }
 
   const activeVersion = plan.activeVersion
+  const aiPersonalized = activeVersion.plan.templateCode === 'AI_PERSONALIZED'
   const exerciseCount = activeVersion.plan.days.reduce(
     (total, day) => total + day.exercises.length,
     0,
   )
+
+  async function editPlan(): Promise<void> {
+    application.openPlanEditor()
+    await application.navigation.open('PLAN_EDITOR')
+  }
 
   return (
     <View className='plan-page screen screen--with-nav'>
       <View className='plan-overview'>
         <View className='plan-overview__brand'>
           <View className='plan-overview__status-dot' />
-          <Text className='plan-overview__eyebrow'>当前科学计划 · 第 {activeVersion.versionNumber} 版</Text>
+          <Text className='plan-overview__eyebrow'>
+            {aiPersonalized ? 'AI 个性化计划 · 规则已校验' : '基础保底计划 · 规则已校验'}
+            {' · 第 '}{activeVersion.versionNumber} 版
+          </Text>
         </View>
         <Text className='plan-overview__title'>{activeVersion.plan.name}</Text>
-        <Text className='plan-overview__subtitle'>按当前能力稳健开始，训练后的真实反馈会帮助下一次调整更准确。</Text>
+        <Text className='plan-overview__subtitle'>
+          {aiPersonalized
+            ? '已结合你的档案与训练偏好生成；训练后的真实反馈会帮助下一次调整更准确。'
+            : 'AI 生成暂不可用时采用的安全保底版本，可继续修改或稍后重新生成。'}
+        </Text>
         <View className='plan-overview__metrics'>
           <View className='plan-overview__metric'>
             <Text className='plan-overview__metric-value'>{activeVersion.plan.days.length}</Text>
@@ -95,11 +119,12 @@ export default function PlanPage() {
           </View>
           <View className='plan-overview__metric-divider' />
           <View className='plan-overview__metric'>
-            <Text className='plan-overview__metric-value'>规则</Text>
-            <Text className='plan-overview__metric-label'>关键数值来源</Text>
+            <Text className='plan-overview__metric-value'>{aiPersonalized ? 'AI' : '保底'}</Text>
+            <Text className='plan-overview__metric-label'>计划来源</Text>
           </View>
         </View>
         <Button className='plan-overview__start' onClick={() => void application.navigation.open('WORKOUT_PREPARE')}>开始今日训练</Button>
+        <Button className='plan-overview__edit' onClick={() => void editPlan()}>修改训练计划</Button>
       </View>
 
       <View className='plan-feedback'>
@@ -139,6 +164,14 @@ export default function PlanPage() {
                 <Text className='plan-exercise__tag'>休息 {exercise.restSeconds} 秒</Text>
                 <Text className='plan-exercise__tag'>{weightStatusDisplayName(exercise.weightStatus)}</Text>
               </View>
+              <Button
+                className='plan-exercise__guide'
+                onClick={() => void application.navigation.open('EXERCISE_DETAIL', {
+                  exerciseCode: exercise.exerciseCode,
+                })}
+              >
+                查看动作指导
+              </Button>
             </View>
           ))}
         </View>

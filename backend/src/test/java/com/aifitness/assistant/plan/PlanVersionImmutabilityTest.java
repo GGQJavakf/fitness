@@ -69,6 +69,34 @@ class PlanVersionImmutabilityTest {
     }
 
     @Test
+    void editingAPlanFromAnOlderRuleSnapshotCreatesANewCurrentRuleVersion() {
+        RuleReference currentRules = new RuleReference("rule-v2", "template-v2", "content-v1");
+        StubPolicy policy = new StubPolicy(draft(90));
+        policy.activeRules(currentRules);
+        PlanVersionService service = service(policy);
+        TrainingPlanVersion first = service.createInitial(USER, "candidate-old-rule").activeVersion();
+
+        PlanVersionService.VersionResult warning = service.createVersion(
+                USER, first.planId(), 1, draft(120), Map.of(), null);
+
+        assertThat(warning.status())
+                .isEqualTo(PlanVersionService.VersionStatus.WARNING_CONFIRMATION_REQUIRED);
+        assertThat(warning.validationIssues())
+                .extracting(PlanVersionService.ValidationIssue::reasonCode)
+                .contains("RULE_REFERENCE_UPGRADED");
+
+        PlanVersionService.VersionResult created = service.createVersion(
+                USER, first.planId(), 1, draft(120), Map.of(),
+                warning.warningConfirmationToken().orElseThrow());
+
+        assertThat(created.status()).isEqualTo(PlanVersionService.VersionStatus.CREATED);
+        assertThat(created.version()).get()
+                .extracting(TrainingPlanVersion::ruleReference)
+                .isEqualTo(currentRules);
+        assertThat(service.getVersion(USER, first.planId(), 1).ruleReference()).isEqualTo(RULES);
+    }
+
+    @Test
     void repeatedInitialCreationForTheSameCandidateReplaysTheCreatedPlan() {
         PlanVersionService service = service(new StubPolicy(draft(90)));
 
@@ -131,6 +159,7 @@ class PlanVersionImmutabilityTest {
     static final class StubPolicy implements PlanVersionService.PlanPolicy {
         private final PlanDraft candidate;
         private List<PlanVersionService.ValidationIssue> issues = List.of();
+        private RuleReference activeRules = RULES;
 
         StubPolicy(PlanDraft candidate) {
             this.candidate = candidate;
@@ -147,8 +176,17 @@ class PlanVersionImmutabilityTest {
             return issues;
         }
 
+        @Override
+        public RuleReference effectiveReference(RuleReference sourceReference) {
+            return activeRules;
+        }
+
         void issues(PlanVersionService.ValidationIssue... values) {
             issues = List.of(values);
+        }
+
+        void activeRules(RuleReference value) {
+            activeRules = value;
         }
     }
 }

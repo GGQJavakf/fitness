@@ -40,12 +40,27 @@
 }
 
 .editor-field__input {
+  width: 100%;
   min-height: 72px;
   padding: 0 14px;
+  box-sizing: border-box;
   border: 2px solid #dbe4df;
   border-radius: 14px;
   background: #f8faf9;
   text-align: center;
+}
+
+.editor-field__input-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.editor-field__error {
+  color: #a8443b;
+  font-size: 18px;
+  line-height: 1.35;
 }
 
 .editor-field__lock { color: #65736d; font-size: 22px; }

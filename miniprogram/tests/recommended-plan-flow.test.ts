@@ -2,10 +2,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { ActivePlanData } from '../src/application/models'
+import type {
+  ActivePlanData,
+  PlanCandidateGenerationData,
+} from '../src/application/models'
 import type { OnboardingPersistencePort } from '../src/application/onboarding'
 import type { PlanPersistencePort } from '../src/application/ports'
+import { ApplicationError } from '../src/application/errors'
 import { createFitnessApplication } from '../src/application/useCases'
+import { resolveActivePlanLoadFailure } from '../src/presentation/activePlanLoadFailure'
 
 const projectRoot = resolve(import.meta.dirname, '..')
 
@@ -76,26 +81,31 @@ function onboardingPort(): OnboardingPersistencePort {
 }
 
 describe('recommended plan first-use flow', () => {
-  it('starts from the scientific recommendation without exposing the plan editor', () => {
+  it('starts from the scientific recommendation and offers an optional editor', () => {
     const page = source('src/presentation/pages/plan-candidates/index.tsx')
     const config = source('src/presentation/pages/plan-candidates/index.config.ts')
+    const appConfig = source('src/app.config.ts')
 
     expect(config).toContain("navigationBarTitleText: '科学训练方案'")
-    expect(page).toContain('你的科学训练方案')
+    expect(page).toContain('你的 AI 个性化训练方案')
+    expect(page).toContain('你的基础保底训练方案')
     expect(page).toContain('开始第一次训练')
     expect(page).toContain('application.activateCandidate()')
     expect(page).toContain("navigation.replace('WORKOUT_PREPARE')")
-    expect(page).not.toContain('openCandidateEditor')
-    expect(page).not.toContain("'PLAN_EDITOR'")
+    expect(page).toContain('修改训练计划')
+    expect(page).toMatch(/async function editCandidate[\s\S]*activateCandidate\(\)[\s\S]*openPlanEditor\(\)/)
+    expect(page).toContain("'PLAN_EDITOR'")
+    expect(appConfig).toContain("'presentation/pages/plan-editor/index'")
     expect(page).not.toContain('查看并确认计划')
     expect(page).not.toMatch(/USER_LOCKED|RULE_LOCKED/)
   })
 
-  it('moves manual plan editing out of the primary plan experience', () => {
+  it('lets an active plan open the versioned editor without making it the primary action', () => {
     const page = source('src/presentation/pages/plan/index.tsx')
 
-    expect(page).not.toContain('openPlanEditor')
-    expect(page).not.toContain("'PLAN_EDITOR'")
+    expect(page).toContain('修改训练计划')
+    expect(page).toContain('openPlanEditor')
+    expect(page).toContain("'PLAN_EDITOR'")
     expect(page).not.toContain('重新优化（仅预览）')
     expect(page).toContain('训练反馈与调整建议')
     expect(page).toContain("navigation.replace('HISTORY')")
@@ -110,6 +120,39 @@ describe('recommended plan first-use flow', () => {
     expect(page).toContain('if (error)')
     expect(page).toContain('void loadPlan()')
     expect(page).toContain('disabled={loading}')
+  })
+
+  it('redirects unauthenticated plan loads to the login home instead of reporting a network failure', () => {
+    const page = source('src/presentation/pages/plan/index.tsx')
+
+    expect(page).toContain("failure.kind === 'AUTHENTICATION_REQUIRED'")
+    expect(page).toMatch(/if \(!mounted\.current\) return[\s\S]*navigation\.replace\('HOME'\)/)
+    expect(page).toContain("application.navigation.replace('HOME')")
+    expect(page).toMatch(
+      /catch \(error[^)]*\)[\s\S]*resolveActivePlanLoadFailure[\s\S]*AUTHENTICATION_REQUIRED[\s\S]*navigation\.replace\('HOME'\)/,
+    )
+  })
+
+  it('classifies active-plan failures without misreporting service errors as network errors', () => {
+    expect(resolveActivePlanLoadFailure(
+      new ApplicationError('AUTHENTICATION_REQUIRED', '登录状态已失效，请重新登录'),
+    )).toEqual({ kind: 'AUTHENTICATION_REQUIRED' })
+    expect(resolveActivePlanLoadFailure(
+      new ApplicationError('NETWORK_ERROR', '网络连接失败，请检查本地或体验版网络配置后重试'),
+    )).toEqual({
+      kind: 'DISPLAY_ERROR',
+      message: '网络连接失败，请检查本地或体验版网络配置后重试',
+    })
+    expect(resolveActivePlanLoadFailure(
+      new ApplicationError('INTERNAL_ERROR', '服务暂时不可用，请稍后重试'),
+    )).toEqual({
+      kind: 'DISPLAY_ERROR',
+      message: '服务暂时不可用，请稍后重试',
+    })
+    expect(resolveActivePlanLoadFailure(new Error('sensitive upstream detail'))).toEqual({
+      kind: 'DISPLAY_ERROR',
+      message: '服务暂时不可用，请稍后重试',
+    })
   })
 
   it('keeps the new recommendation surfaces safe-area aware and touch friendly', () => {
@@ -158,6 +201,49 @@ describe('recommended plan first-use flow', () => {
     await expect(Promise.all([firstStart, repeatedStart])).resolves.toEqual([activePlan, activePlan])
     await expect(application.activateCandidate()).resolves.toBe(activePlan)
     expect(createInitialPlan).toHaveBeenCalledTimes(1)
+  })
+
+  it('runs onboarding completion as a single flight across rapid repeated taps', async () => {
+    let finishGeneration: ((value: PlanCandidateGenerationData) => void) | undefined
+    const port = onboardingPort()
+    const generation = new Promise<PlanCandidateGenerationData>((resolveGeneration) => {
+      finishGeneration = resolveGeneration
+    })
+    port.generateCandidate = vi.fn(() => generation)
+    const application = createFitnessApplication(port, {
+      validatePlan: vi.fn(),
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn(),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    })
+    const draft = {
+      adultConfirmed: true,
+      safetyAccepted: true,
+      goal: 'GENERAL_FITNESS' as const,
+      experience: 'BEGINNER' as const,
+      weeklyFrequency: 3,
+      sessionMinutes: 45 as const,
+      location: 'HOME' as const,
+      equipment: [],
+      preferences: [],
+    }
+
+    const first = application.completeOnboarding(draft)
+    const repeated = application.completeOnboarding(draft)
+
+    await vi.waitFor(() => {
+      expect(port.saveProfile).toHaveBeenCalledTimes(1)
+      expect(port.generateCandidate).toHaveBeenCalledTimes(1)
+    })
+    finishGeneration?.({
+      status: 'CANDIDATE_READY',
+      candidate,
+      validationIssues: [],
+      lockedFieldOutcomes: {},
+    })
+    await expect(Promise.all([first, repeated])).resolves.toHaveLength(2)
+    expect(port.saveProfile).toHaveBeenCalledTimes(1)
   })
 
   it('allows a safe retry when candidate activation fails', async () => {

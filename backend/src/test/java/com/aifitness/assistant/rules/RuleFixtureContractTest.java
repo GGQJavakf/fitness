@@ -147,7 +147,7 @@ class RuleFixtureContractTest {
         JsonNode metadata = document.path("metadata");
         assertThat(metadata.path("fixtureVersion").asText()).isEqualTo("1.0.0");
         assertThat(metadata.path("ruleVersion").asText())
-                .isEqualTo("PLAN_VALIDATION".equals(ruleSet) ? "1.1.0" : "1.0.0");
+                .isEqualTo("PLAN_VALIDATION".equals(ruleSet) ? "1.2.0" : "1.0.0");
         assertThat(metadata.path("oracleVersion").asText()).isEqualTo("M0-04-1");
         assertThat(metadata.path("ruleSet").asText()).isEqualTo(ruleSet);
         assertThat(metadata.path("generationConstraints")).isNotEmpty();

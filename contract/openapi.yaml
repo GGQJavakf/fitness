@@ -180,14 +180,34 @@ paths:
     post:
       tags: [Plans]
       operationId: generatePlanCandidates
-      description: 规则引擎生成合法结构和全部关键数字；AI 解释允许为空、异步或降级。
+      description: 接收小程序 AI 生成的结构化计划并由服务端规则校验；AI 不可用或一次修复仍失败时，可显式请求规则保底计划。
       requestBody: {$ref: '#/components/requestBodies/PlanCandidates'}
       responses:
         '200':
-          description: 确定性候选或可操作失败原因
+          description: 已校验的 AI 个性化候选、明确标记的规则保底候选，或可操作失败原因
           content:
             application/json:
               schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanCandidateGenerationResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/generation-context:
+    get:
+      tags: [Plans]
+      operationId: getPlanGenerationContext
+      description: 返回服务端规范化用户资料、当前可用动作白名单及规则硬约束，供小程序 AI 生成候选；不包含凭据或服务端内部提示。
+      parameters:
+        - name: profileVersion
+          in: query
+          required: true
+          schema: {$ref: './schemas/common.yaml#/components/schemas/ExpectedVersion'}
+      responses:
+        '200':
+          description: 当前用户的计划生成事实与约束
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanGenerationContextResponse'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}

@@ -50,9 +50,9 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
                 .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(3))
-                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[0].weightStatus")
-                        .value("NEEDS_CALIBRATION"))
-                .andExpect(jsonPath("$.data.candidate.ruleReference.ruleVersion").value("1.1.0"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[*].exercises[*].weightStatus")
+                        .value(org.hamcrest.Matchers.hasItem("NEEDS_CALIBRATION")))
+                .andExpect(jsonPath("$.data.candidate.ruleReference.ruleVersion").value("1.2.0"))
                 .andExpect(jsonPath("$.data.candidate.explanationStatus").value("DEGRADED"))
                 .andExpect(jsonPath("$.data.candidate.explanation").isNotEmpty())
                 .andReturn().getResponse().getContentAsString();
@@ -66,6 +66,26 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.valid").value(true))
                 .andExpect(jsonPath("$.data.validationIssues[0].reasonCode")
                         .value("INITIAL_WEIGHT_NEEDS_CALIBRATION"));
+    }
+
+    @Test
+    void validatesAnOlderPlanAgainstCurrentRulesWithAnExplicitUpgradeWarning() throws Exception {
+        String token = login();
+        configureProfile(token);
+        configureEquipment(token);
+        JsonNode candidate = generateCandidate(token);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) candidate.path("ruleReference"))
+                .put("ruleVersion", "1.1.0")
+                .put("templateVersion", "1.1.0");
+
+        mvc.perform(post("/api/v1/plans/validate")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validationRequest(candidate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(true))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("RULE_REFERENCE_UPGRADED")));
     }
 
     @Test
@@ -118,8 +138,15 @@ class PlanCandidateEndpointIntegrationTest {
                                  (left, right) -> left.addAll(right));
                 org.assertj.core.api.Assertions.assertThat(exercises)
                         .allMatch(exercise -> "BODYWEIGHT".equals(exercise.path("weightStatus").asText()));
-                org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
-                        .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT".equals(issue.path("reasonCode").asText()));
+                if (frequency == 5) {
+                    org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
+                            .anyMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
+                                    .equals(issue.path("reasonCode").asText()));
+                } else {
+                    org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
+                            .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
+                                    .equals(issue.path("reasonCode").asText()));
+                }
             } catch (Exception exception) {
                 throw new AssertionError(
                         "bodyweight candidate generation failed for weekly frequency " + frequency, exception);
@@ -130,7 +157,7 @@ class PlanCandidateEndpointIntegrationTest {
     @Test
     void everyTemplateDrivingCombinationGeneratesAValidCandidateAndAcceptsAllOtherOptionValues()
             throws Exception {
-        String[] goals = {"GENERAL_FITNESS", "STRENGTH", "HYPERTROPHY"};
+        String[] goals = {"GENERAL_FITNESS", "STRENGTH", "HYPERTROPHY", "FAT_LOSS"};
         String[] experiences = {"BEGINNER", "INTERMEDIATE", "ADVANCED"};
         String[] locations = {"HOME", "GYM", "OTHER"};
         int[] sessionMinutes = {30, 45, 60, 75, 90};
@@ -179,6 +206,48 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void fallbackTemplatesUseDurationAsBudgetAndGoalsChangePrescription() throws Exception {
+        String thirtyMinuteToken = login();
+        configureProfile(thirtyMinuteToken, 3, 30, "GENERAL_FITNESS", "BEGINNER", "GYM");
+        configureEquipment(thirtyMinuteToken);
+        JsonNode thirtyMinutePlan = generateCandidate(thirtyMinuteToken).path("plan");
+
+        String fortyFiveMinuteToken = login();
+        configureProfile(fortyFiveMinuteToken, 3, 45, "GENERAL_FITNESS", "BEGINNER", "GYM");
+        configureEquipment(fortyFiveMinuteToken);
+        JsonNode fortyFiveMinutePlan = generateCandidate(fortyFiveMinuteToken).path("plan");
+
+        int thirtyMinuteExerciseCount =
+                thirtyMinutePlan.at("/days/0/exercises").size();
+        int fortyFiveMinuteExerciseCount =
+                fortyFiveMinutePlan.at("/days/0/exercises").size();
+        org.assertj.core.api.Assertions.assertThat(thirtyMinuteExerciseCount)
+                .isPositive()
+                .isLessThan(fortyFiveMinuteExerciseCount);
+        org.assertj.core.api.Assertions.assertThat(fortyFiveMinuteExerciseCount)
+                .isLessThanOrEqualTo(8);
+        org.assertj.core.api.Assertions.assertThat(thirtyMinutePlan).isNotEqualTo(fortyFiveMinutePlan);
+
+        Map<String, Integer> expectedRepMinimums =
+                Map.of("STRENGTH", 5, "HYPERTROPHY", 8, "FAT_LOSS", 10, "GENERAL_FITNESS", 10);
+        Map<String, Integer> expectedRestSeconds =
+                Map.of("STRENGTH", 120, "HYPERTROPHY", 90, "FAT_LOSS", 75, "GENERAL_FITNESS", 75);
+        for (String goal : expectedRepMinimums.keySet()) {
+            String token = login();
+            configureProfile(token, 3, 45, goal, "BEGINNER", "GYM");
+            configureEquipment(token);
+            JsonNode firstExercise = generateCandidate(token).at("/plan/days/0/exercises/0");
+
+            org.assertj.core.api.Assertions.assertThat(firstExercise.path("repMin").asInt())
+                    .as(goal)
+                    .isEqualTo(expectedRepMinimums.get(goal));
+            org.assertj.core.api.Assertions.assertThat(firstExercise.path("restSeconds").asInt())
+                    .as(goal)
+                    .isEqualTo(expectedRestSeconds.get(goal));
+        }
+    }
+
+    @Test
     void candidateLockSurvivesInitialVersionAndRebalancePreview() throws Exception {
         String token = login();
         configureProfile(token);
@@ -213,18 +282,31 @@ class PlanCandidateEndpointIntegrationTest {
                 .andReturn().getResponse().getContentAsString()).at("/data");
 
         JsonNode proposed = candidate.path("plan").deepCopy();
-        ((com.fasterxml.jackson.databind.node.ObjectNode) proposed.at("/days/0/exercises/0"))
-                .put("restSeconds", 240);
+        boolean changedLockedExercise = false;
+        for (JsonNode exercise : proposed.at("/days/0/exercises")) {
+            if ("GOBLET_SQUAT".equals(exercise.path("exerciseCode").asText())) {
+                ((com.fasterxml.jackson.databind.node.ObjectNode) exercise).put("restSeconds", 240);
+                changedLockedExercise = true;
+            }
+        }
+        org.assertj.core.api.Assertions.assertThat(changedLockedExercise).isTrue();
         ((com.fasterxml.jackson.databind.node.ObjectNode) proposed).remove("locks");
         String request = objectMapper.writeValueAsString(Map.of(
                 "baseVersionNumber", 1, "plan", proposed, "locks", Map.of()));
-        mvc.perform(post("/api/v1/plans/{planId}/rebalance", active.path("planId").asText())
+        String rebalanced = mvc.perform(post("/api/v1/plans/{planId}/rebalance", active.path("planId").asText())
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(request))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.plan.days[0].exercises[0].restSeconds").value(180))
-                .andExpect(jsonPath("$.data.plan.locks['" + path + "']").value("USER_LOCKED"));
+                .andExpect(jsonPath("$.data.plan.locks['" + path + "']").value("USER_LOCKED"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode rebalancedExercises = objectMapper.readTree(rebalanced).at("/data/plan/days/0/exercises");
+        org.assertj.core.api.Assertions.assertThat(rebalancedExercises)
+                .filteredOn(exercise -> "GOBLET_SQUAT".equals(exercise.path("exerciseCode").asText()))
+                .singleElement()
+                .satisfies(exercise -> org.assertj.core.api.Assertions.assertThat(
+                                exercise.path("restSeconds").asInt())
+                        .isEqualTo(180));
     }
 
     @Test
@@ -315,8 +397,6 @@ class PlanCandidateEndpointIntegrationTest {
                         .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
-                .andExpect(jsonPath("$.data.candidate.plan.templateCode")
-                        .value(org.hamcrest.Matchers.containsString("BODYWEIGHT")))
                 .andExpect(jsonPath("$.data.candidate.plan.days[*].exercises[*].exerciseCode")
                         .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("GOBLET_SQUAT"))));
         mvc.perform(post("/api/v1/plans/validate")
@@ -364,6 +444,17 @@ class PlanCandidateEndpointIntegrationTest {
                         "name", plan.path("name"),
                         "days", plan.path("days")),
                 "ruleReference", candidate.path("ruleReference")));
+    }
+
+    private JsonNode generateCandidate(String token) throws Exception {
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).at("/data/candidate");
     }
 
     private void configureEquipment(String token) throws Exception {

@@ -2,9 +2,9 @@
   "metadata": {
     "schemaVersion": "1.0.0",
     "kind": "RULE_CONFIG",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "status": "AI_VALIDATED",
-    "generatedAt": "2026-07-23T12:00:00Z",
+    "generatedAt": "2026-08-04T13:47:04Z",
     "promptConstraints": [
       "仅面向成年一般健身用户",
       "仅使用 KG 且不得生成 LB 运行值",
@@ -22,7 +22,7 @@
       }
     ],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "cd6e59e7f48fe6703b0ae4b276aa61e80b2f4c446bbf68c236e2b73564327995"
+    "digestSha256": "ba1903ad8d21905262511f7fe3e22a3b29d85dd2cc970fb4f05d3bd25e9b8d8b"
   },
   "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
   "parameters": {
@@ -33,6 +33,17 @@
     "initialWeight": { "sourcePriority": ["RECENT_VALID_RECORD", "USER_INPUT", "CALIBRATION", "BODYWEIGHT"], "unknownResult": "NEEDS_CALIBRATION", "demographicEstimationAllowed": false },
     "duration": { "secondsPerWorkSet": 45, "secondsPerWarmupSet": 30, "secondsPerExerciseTransition": 75 },
     "balance": { "maximumMovementPatternOccurrencesPerSession": 1, "maximumWorkSetsPerPrimaryMusclePerSession": 12, "minimumRecoveryHoursBetweenPrimaryMuscleSessions": 48 },
+    "sessionComposition": {
+      "accessoryWorkSets": 2,
+      "accessoryRepMin": 8,
+      "accessoryRepMax": 12,
+      "accessoryRestSeconds": 60
+    },
+    "goalPrescriptions": [
+      { "goal": "STRENGTH", "workSets": 3, "repMin": 5, "repMax": 8, "restSeconds": 120 },
+      { "goal": "HYPERTROPHY", "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90 },
+      { "goal": "GENERAL_FITNESS", "workSets": 3, "repMin": 10, "repMax": 15, "restSeconds": 75 }
+    ],
     "equipmentIncrements": [
       { "equipmentType": "BARBELL", "unit": "KG", "allowedSteps": [1.25, 2.5, 5] },
       { "equipmentType": "DUMBBELL", "unit": "KG", "allowedSteps": [1, 2, 2.5] },

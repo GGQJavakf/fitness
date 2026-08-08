@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.StreamSupport;
 
@@ -84,8 +85,8 @@ class ValidatedConfigValidationTest {
         Set<String> exerciseCodes = new HashSet<>();
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
-        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.1.0");
-        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.1.0");
+        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.2.0");
+        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.2.0");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());
             template.path("days").forEach(day -> day.path("exercises").forEach(slot ->
@@ -168,6 +169,15 @@ class ValidatedConfigValidationTest {
         assertThat(rules.at("/parameters/warmup/countsTowardTrainingVolume").asBoolean()).isFalse();
     }
 
+    @Test
+    void sessionCompositionDoesNotTurnDurationIntoAFixedExerciseCount()
+            throws IOException {
+        JsonNode composition = readValidated("rule-config-v1.json").at("/parameters/sessionComposition");
+        assertThat(composition.has("targetExercisesByMinutes")).isFalse();
+        assertThat(composition.has("experiencedExerciseBonus")).isFalse();
+        assertThat(composition.path("accessoryWorkSets").asInt()).isEqualTo(2);
+    }
+
     private static int estimatedSeconds(JsonNode day, int secondsPerWorkSet, int secondsPerTransition) {
         return StreamSupport.stream(day.path("exercises").spliterator(), false)
                 .mapToInt(slot -> slot.path("workSets").asInt()
@@ -193,6 +203,25 @@ class ValidatedConfigValidationTest {
         assertThat(rules.at("/parameters/rest/minimumSeconds").asInt())
                 .isLessThanOrEqualTo(rules.at("/parameters/rest/defaultSeconds").asInt())
                 .isLessThanOrEqualTo(rules.at("/parameters/rest/maximumSeconds").asInt());
+        Set<String> configuredGoals = new HashSet<>();
+        rules.at("/parameters/goalPrescriptions").forEach(goalPrescription -> {
+            configuredGoals.add(goalPrescription.path("goal").asText());
+            assertThat(goalPrescription.path("workSets").asInt())
+                    .isBetween(
+                            rules.at("/parameters/prescription/minimumWorkSets").asInt(),
+                            rules.at("/parameters/prescription/maximumWorkSets").asInt());
+            assertThat(goalPrescription.path("repMin").asInt())
+                    .isGreaterThanOrEqualTo(rules.at("/parameters/prescription/minimumReps").asInt())
+                    .isLessThanOrEqualTo(goalPrescription.path("repMax").asInt());
+            assertThat(goalPrescription.path("repMax").asInt())
+                    .isLessThanOrEqualTo(rules.at("/parameters/prescription/maximumReps").asInt());
+            assertThat(goalPrescription.path("restSeconds").asInt())
+                    .isBetween(
+                            rules.at("/parameters/rest/minimumSeconds").asInt(),
+                            rules.at("/parameters/rest/maximumSeconds").asInt());
+        });
+        assertThat(configuredGoals)
+                .containsExactlyInAnyOrder("STRENGTH", "HYPERTROPHY", "GENERAL_FITNESS");
 
         readValidated("plan-templates-v1.json").path("templates").forEach(template ->
                 template.path("days").forEach(day -> day.path("exercises").forEach(slot ->

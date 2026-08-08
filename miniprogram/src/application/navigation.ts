@@ -3,6 +3,7 @@ export type PageDestination =
   | 'ONBOARDING'
   | 'PLAN_CANDIDATES'
   | 'PLAN'
+  | 'PLAN_EDITOR'
   | 'MY'
   | 'WORKOUT_PREPARE'
   | 'WORKOUT_SESSION'

@@ -26,6 +26,7 @@ interface WechatCloudRuntime {
 declare const wx: WechatCloudRuntime | undefined
 
 let initializedEnvironment = ''
+export const WEAPP_CLOUDBASE_AI_TIMEOUT_MS = 15_000
 
 export function initializeWeappCloudBase(environmentId: string): void {
   const normalized = environmentId.trim()
@@ -40,26 +41,54 @@ export function initializeWeappCloudBase(environmentId: string): void {
   }
 }
 
-export function createWeappCloudBaseAiTextProvider(model: string): AiTextGenerationPort {
+export function createWeappCloudBaseAiTextProvider(
+  model: string,
+  timeoutMs = WEAPP_CLOUDBASE_AI_TIMEOUT_MS,
+): AiTextGenerationPort {
   const normalizedModel = model.trim()
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError('CloudBase AI timeout must be a positive integer')
+  }
   return {
     async generate(request: AiTextGenerationRequest): Promise<string> {
       const ai = runtime()?.cloud?.extend?.AI
       if (!initializedEnvironment || !normalizedModel || !ai) {
         throw new Error('CloudBase AI is not available')
       }
-      const response = await ai.createModel('cloudbase').generateText({
-        model: normalizedModel,
-        messages: [
-          { role: 'system', content: request.systemPrompt },
-          { role: 'user', content: request.factsJson },
-        ],
-      })
+      const response = await withAiTimeout(
+        ai.createModel('cloudbase').generateText({
+          model: normalizedModel,
+          messages: [
+            { role: 'system', content: request.systemPrompt },
+            { role: 'user', content: request.factsJson },
+          ],
+        }),
+        timeoutMs,
+      )
       const content = response.choices?.[0]?.message?.content?.trim()
       if (!content) throw new Error('CloudBase AI returned no content')
       return content
     },
   }
+}
+
+function withAiTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error('CloudBase AI request timed out')),
+      timeoutMs,
+    )
+    request.then(
+      (value) => {
+        clearTimeout(timeout)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
 }
 
 export function resetWeappCloudBaseForTests(): void {

@@ -16,13 +16,13 @@ export default function PlanCandidatesPage() {
   const exerciseCount = candidate?.days.reduce((total, day) => total + day.exercises.length, 0) ?? 0
 
   useEffect(() => {
-    if (!candidate?.candidateId) return
+    if (!candidate?.candidateId || candidate.generationSource !== 'AI_PERSONALIZED') return
     let active = true
     void application.requestPlanExplanation(candidate.candidateId)
       .then((result) => { if (active) setExplanation(result.content) })
       .catch(() => { /* The rule template already shown remains authoritative. */ })
     return () => { active = false }
-  }, [candidate?.candidateId])
+  }, [candidate?.candidateId, candidate?.generationSource])
 
   async function startFirstWorkout(): Promise<void> {
     setBusy(true)
@@ -47,6 +47,20 @@ export default function PlanCandidatesPage() {
     await application.navigation.replace('ONBOARDING')
   }
 
+  async function editCandidate(): Promise<void> {
+    setBusy(true)
+    setError('')
+    try {
+      await application.activateCandidate()
+      application.openPlanEditor()
+      await application.navigation.open('PLAN_EDITOR')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '计划编辑器暂时无法打开，请稍后重试')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (!candidate) {
     return (
       <View className='recommendation-page screen'>
@@ -68,16 +82,29 @@ export default function PlanCandidatesPage() {
           <View className='recommendation-hero__mark'>
             <View className='recommendation-hero__mark-core' />
           </View>
-          <Text className='recommendation-hero__eyebrow'>AI SCIENTIFIC PLAN</Text>
+          <Text className='recommendation-hero__eyebrow'>
+            {candidate.generationSource === 'AI_PERSONALIZED'
+              ? 'AI PERSONALIZED PLAN'
+              : 'SAFE FALLBACK PLAN'}
+          </Text>
         </View>
         <Text className='recommendation-hero__title'>
-          {candidate.status === 'READY' ? '你的科学训练方案' : '需要补充训练条件'}
+          {candidate.status === 'READY'
+            ? candidate.generationSource === 'AI_PERSONALIZED'
+              ? '你的 AI 个性化训练方案'
+              : '你的基础保底训练方案'
+            : '需要补充训练条件'}
         </Text>
         <Text className='recommendation-hero__subtitle'>
           {candidate.status === 'READY'
-            ? '已结合你的目标、经验、训练频率与器械条件生成，可直接开始。'
+            ? candidate.generationSource === 'AI_PERSONALIZED'
+              ? 'AI 已结合目标、经验、训练频率、器械与额外偏好生成，并通过服务端规则校验。'
+              : 'AI 本次不可用，已按你的档案与器械生成规则保底计划；稍后可重新生成。'
             : '当前信息暂时无法组成安全有效的训练方案。'}
         </Text>
+        {candidate.generationLabel && (
+          <Text className='recommendation-hero__source'>{candidate.generationLabel}</Text>
+        )}
         {candidate.status === 'READY'
           ? (
             <View className='recommendation-hero__summary'>
@@ -106,6 +133,9 @@ export default function PlanCandidatesPage() {
           <Text className='recommendation-reason__text'>{explanation}</Text>
         </View>
       )}
+      {candidate.notices.map((notice) => (
+        <View className='recommendation-notice' key={notice}>{notice}</View>
+      ))}
 
       {candidate.days.map((day, dayIndex) => (
         <View key={day.code} className='recommendation-day'>
@@ -126,6 +156,14 @@ export default function PlanCandidatesPage() {
                 <Text className='recommendation-exercise__tag'>{exercise.restLabel}</Text>
                 <Text className='recommendation-exercise__tag'>{exercise.weightLabel}</Text>
               </View>
+              <Button
+                className='recommendation-exercise__guide'
+                onClick={() => void application.navigation.open('EXERCISE_DETAIL', {
+                  exerciseCode: exercise.exerciseCode,
+                })}
+              >
+                查看动作指导
+              </Button>
             </View>
           ))}
         </View>
@@ -154,7 +192,16 @@ export default function PlanCandidatesPage() {
             </Button>
           )
           : <Button className='recommendation-actions__primary' onClick={() => void adjustCandidate()}>{candidate.action?.label ?? '返回调整档案'}</Button>}
-        {candidate.canContinue && <Text className='recommendation-actions__note'>计划关键数值由科学规则生成，训练记录不会被后续调整覆盖。</Text>}
+        {candidate.canContinue && (
+          <Button
+            className='recommendation-actions__edit'
+            disabled={busy}
+            onClick={() => void editCandidate()}
+          >
+            修改训练计划
+          </Button>
+        )}
+        {candidate.canContinue && <Text className='recommendation-actions__note'>进入修改时会先保存初始版本；后续调整生成新版本，已有训练记录不会改变。</Text>}
       </View>
     </View>
   )

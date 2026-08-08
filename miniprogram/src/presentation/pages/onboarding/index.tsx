@@ -1,6 +1,7 @@
-import { Button, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { Button, Text, Textarea, View } from '@tarojs/components'
+import { useEffect, useRef, useState } from 'react'
 
+import type { ExerciseContent } from '../../../application/content'
 import {
   DEFAULT_GYM_EQUIPMENT,
   ONBOARDING_STEPS,
@@ -43,9 +44,41 @@ export default function OnboardingPage() {
   )
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [preferenceOptions, setPreferenceOptions] = useState<readonly ExerciseContent[]>([])
+  const submittingRef = useRef(false)
 
   useEffect(() => {
     application.telemetry.track('onboarding_started', { source: state.stepIndex > 0 ? 'resume' : 'new' })
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void application.listExercises()
+      .then((items) => {
+        if (active) setPreferenceOptions(items)
+      })
+      .catch(() => {
+        // Optional preference controls stay hidden until exercise content is available.
+      })
+    void application.getExercisePreferences()
+      .then((profile) => {
+        if (!active) return
+        setState((current) => current.draft.preferencesTouched
+          ? current
+          : {
+              ...current,
+              draft: {
+                ...current.draft,
+                preferences: profile.items.map((item) => ({ ...item })),
+              },
+            })
+      })
+      .catch(() => {
+        // A first-time user has no preference profile yet.
+      })
+    return () => {
+      active = false
+    }
   }, [])
 
   function patch(patchValue: Partial<OnboardingDraft>): void {
@@ -70,7 +103,30 @@ export default function OnboardingPage() {
     patch({ location })
   }
 
+  function setExercisePreference(
+    exerciseId: string,
+    preferenceType: 'PREFERRED' | 'EXCLUDED',
+  ): void {
+    setState((current) => {
+      const existing = current.draft.preferences.find(
+        (item) => item.exerciseId === exerciseId,
+      )
+      const withoutExercise = current.draft.preferences.filter(
+        (item) => item.exerciseId !== exerciseId,
+      )
+      const preferences = existing?.preferenceType === preferenceType
+        ? withoutExercise
+        : [...withoutExercise, { exerciseId, preferenceType }]
+      return updateOnboardingDraft(current, {
+        preferences,
+        preferencesTouched: true,
+      })
+    })
+    setSubmitError('')
+  }
+
   async function submit(): Promise<void> {
+    if (submittingRef.current) return
     const checked = advanceOnboarding(state)
     setState(checked)
     if (checked.errors.length > 0) return
@@ -79,6 +135,7 @@ export default function OnboardingPage() {
       return
     }
 
+    submittingRef.current = true
     setSubmitting(true)
     setSubmitError('')
     try {
@@ -96,6 +153,7 @@ export default function OnboardingPage() {
       application.telemetry.track('plan_generation_failed', { reason: 'network' })
       setSubmitError(error instanceof Error ? error.message : '保存失败，请稍后重试')
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
@@ -149,9 +207,9 @@ export default function OnboardingPage() {
               <Text className='field-label'>你的目标</Text>
               <View className='onboarding__option-list'>
                 {([
-                  ['GENERAL_FITNESS', '提升体能，建立稳定训练习惯'],
-                  ['STRENGTH', '优先提升主要动作的力量表现'],
                   ['HYPERTROPHY', '以肌肉增长和训练容量为重点'],
+                  ['FAT_LOSS', '以规律训练和提高日常消耗为重点'],
+                  ['GENERAL_FITNESS', '提升体能，建立稳定训练习惯'],
                 ] as const).map(([value, description]) => (
                   <Button
                     key={value}
@@ -266,6 +324,62 @@ export default function OnboardingPage() {
               </View>
             )}
 
+            <View className='field-group onboarding__preferences'>
+              <Text className='field-label'>偏好动作（可选）</Text>
+              <Text className='onboarding__requirements-help'>
+                标记想优先练或需要避开的动作；未修改时会保留你之前保存的选择。
+              </Text>
+              {preferenceOptions.length > 0 ? (
+                <View className='onboarding__preference-list'>
+                  {preferenceOptions.map((exercise) => {
+                    const selected = state.draft.preferences.find(
+                      (item) => item.exerciseId === exercise.id,
+                    )?.preferenceType
+                    return (
+                      <View key={exercise.id} className='onboarding__preference-row'>
+                        <Text className='onboarding__preference-name'>{exercise.name}</Text>
+                        <View className='onboarding__preference-actions'>
+                          <Button
+                            className={`onboarding__preference-action ${selected === 'PREFERRED' ? 'choice--selected' : ''}`}
+                            disabled={submitting}
+                            onClick={() => setExercisePreference(exercise.id, 'PREFERRED')}
+                          >优先</Button>
+                          <Button
+                            className={`onboarding__preference-action ${selected === 'EXCLUDED' ? 'onboarding__preference-action--excluded' : ''}`}
+                            disabled={submitting}
+                            onClick={() => setExercisePreference(exercise.id, 'EXCLUDED')}
+                          >避开</Button>
+                        </View>
+                      </View>
+                    )
+                  })}
+                </View>
+              ) : (
+                <Text className='onboarding__requirements-help'>
+                  当前没有可选动作；仍可在下方用文字描述训练侧重点。
+                </Text>
+              )}
+            </View>
+
+            <View className='field-group onboarding__requirements'>
+              <View className='onboarding__requirements-heading'>
+                <Text className='field-label'>额外训练偏好（可选）</Text>
+                <Text className='onboarding__requirements-count'>
+                  {state.draft.additionalRequirements?.length ?? 0}/300
+                </Text>
+              </View>
+              <Textarea
+                className='onboarding__requirements-input'
+                maxlength={300}
+                value={state.draft.additionalRequirements ?? ''}
+                placeholder='例如：胸背优先、不安排跳跃动作、希望覆盖更多动作模式'
+                onInput={(event) => patch({ additionalRequirements: event.detail.value })}
+              />
+              <Text className='onboarding__requirements-help'>
+                AI 会结合档案、器械和这些偏好生成计划。疼痛、疾病、诊断或康复需求请咨询专业人士，不在这里处理。
+              </Text>
+            </View>
+
             <View className='onboarding__summary'>
               <View className='onboarding__summary-row'>
                 <View className='onboarding__summary-copy'>
@@ -305,7 +419,12 @@ export default function OnboardingPage() {
           >上一步</Button>
         )}
         {state.step === 'LOCATION_AND_EQUIPMENT'
-          ? <Button className='primary-action' loading={submitting} onClick={() => void submit()}>生成我的计划</Button>
+          ? <Button
+              className='primary-action'
+              loading={submitting}
+              disabled={submitting}
+              onClick={() => void submit()}
+            >生成我的计划</Button>
           : <Button className='primary-action' onClick={next}>继续</Button>}
       </View>
     </View>

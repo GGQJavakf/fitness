@@ -1,4 +1,5 @@
 import { ApplicationError } from './errors'
+import type { AiPlanGenerator } from './cloudbaseAi'
 import type {
   ActivePlanData,
   PlanCandidateGenerationData,
@@ -73,6 +74,7 @@ export interface FitnessApplication {
 export function createFitnessApplication(
   onboardingPort: OnboardingPersistencePort,
   planPort: PlanPersistencePort,
+  aiPlanGenerator?: AiPlanGenerator,
 ): FitnessApplication {
   let candidateData: PlanCandidateGenerationData | null = null
   let onboardingDraft: OnboardingDraft | null = null
@@ -82,6 +84,7 @@ export function createFitnessApplication(
   const candidateActivations = new Map<string, Promise<ActivePlanData>>()
   let editorSessionId = 0
   let editorCandidateId: string | null = null
+  let onboardingCompletion: Promise<CandidateViewModel> | null = null
 
   function requireEditor(): PlanEditorState {
     if (!editor) {
@@ -152,11 +155,25 @@ export function createFitnessApplication(
 
   return {
     async completeOnboarding(draft) {
-      onboardingDraft = cloneOnboardingDraft(draft)
-      candidateData = await saveProfileAndGenerateCandidate(onboardingPort, draft)
-      editorSessionId += 1
-      editorCandidateId = null
-      return buildCandidateViewModel(candidateData)
+      if (onboardingCompletion) return onboardingCompletion
+      const submittedDraft = cloneOnboardingDraft(draft)
+      const submission = (async () => {
+        onboardingDraft = submittedDraft
+        candidateData = await saveProfileAndGenerateCandidate(
+          onboardingPort,
+          submittedDraft,
+          aiPlanGenerator,
+        )
+        editorSessionId += 1
+        editorCandidateId = null
+        return buildCandidateViewModel(candidateData)
+      })()
+      onboardingCompletion = submission
+      try {
+        return await submission
+      } finally {
+        if (onboardingCompletion === submission) onboardingCompletion = null
+      }
     },
 
     resumeOnboarding() {

@@ -27,4 +27,10 @@ public final class RulesPlanPolicy implements PlanVersionService.PlanPolicy {
             AuthenticatedUserId user, PlanDraft plan, RuleReference reference) {
         return candidates.validate(user, plan, reference);
     }
+
+    @Override
+    public RuleReference effectiveReference(RuleReference sourceReference) {
+        Objects.requireNonNull(sourceReference, "source rule reference must not be null");
+        return candidates.currentReference();
+    }
 }

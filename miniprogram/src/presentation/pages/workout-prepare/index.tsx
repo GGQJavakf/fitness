@@ -2,6 +2,7 @@ import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
 import type { ActivePlanData } from '../../../application/models'
+import { selectNextTrainingDayCode } from '../../../application/selectNextTrainingDay'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { exerciseDisplayName } from '../../copy'
 
@@ -22,10 +23,23 @@ export default function WorkoutPreparePage() {
     setLoading(true)
     setMessage('正在准备今天的训练…')
     try {
-      const value = await application.loadActivePlan()
+      let historyUnavailable = false
+      const [value, history] = await Promise.all([
+        application.loadActivePlan(),
+        application.listWorkoutHistory(undefined, 50).catch(() => {
+          historyUnavailable = true
+          return { items: [] }
+        }),
+      ])
       setPlan(value)
-      setSelectedDayCode(value?.activeVersion.plan.days[0]?.code ?? '')
-      setMessage(value ? '计划已就绪，确认今天的训练安排即可开始。' : '暂时没有可开始的训练计划。')
+      setSelectedDayCode(value
+        ? selectNextTrainingDayCode(value.activeVersion.plan.days, history.items)
+        : '')
+      setMessage(value
+        ? historyUnavailable
+          ? '计划已加载，但暂时无法判断上次完成到哪一天；当前临时选择第一训练日，请手动确认。'
+          : '计划已就绪，确认今天的训练安排即可开始。'
+        : '暂时没有可开始的训练计划。')
     } catch {
       setMessage('计划暂时无法读取，请检查网络后重试。')
     } finally {

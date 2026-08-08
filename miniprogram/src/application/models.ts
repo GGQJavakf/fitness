@@ -1,5 +1,5 @@
 export type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
-export type FitnessGoal = 'STRENGTH' | 'HYPERTROPHY' | 'GENERAL_FITNESS'
+export type FitnessGoal = 'STRENGTH' | 'HYPERTROPHY' | 'FAT_LOSS' | 'GENERAL_FITNESS'
 export type TrainingLocation = 'HOME' | 'GYM' | 'OTHER'
 export type SessionMinutes = 30 | 45 | 60 | 75 | 90
 export type WeightUnit = 'KG'
@@ -7,6 +7,7 @@ export type WeightStatus = 'KNOWN' | 'NEEDS_CALIBRATION' | 'BODYWEIGHT'
 export type LockStatus = 'USER_LOCKED' | 'RULE_LOCKED' | 'UNLOCKED'
 export type LockCommandStatus = 'USER_LOCKED' | 'UNLOCKED'
 export type AiExplanationStatus = 'READY' | 'PENDING' | 'DEGRADED'
+export type PlanGenerationSource = 'AI_PERSONALIZED' | 'FALLBACK_RULE_PLAN'
 export type ValidationSeverity = 'INFO' | 'WARNING' | 'ERROR'
 
 export interface EquipmentWeightInput {
@@ -99,6 +100,7 @@ export interface RuleReference {
 
 export interface PlanCandidate {
   candidateId: string
+  generationSource?: PlanGenerationSource
   plan: PlanDraft
   validationIssues: ValidationIssue[]
   ruleReference: RuleReference
@@ -106,6 +108,63 @@ export interface PlanCandidate {
   explanationStatus: AiExplanationStatus
   explanation: string
   expiresAt: string
+}
+
+export interface AiPlanProposalExercise {
+  exerciseCode: string
+  workSets: number
+  repMin: number
+  repMax: number
+  restSeconds: number
+}
+
+export interface AiPlanProposalDay {
+  code: string
+  name: string
+  exercises: AiPlanProposalExercise[]
+}
+
+export interface AiPlanProposal {
+  name: string
+  days: AiPlanProposalDay[]
+}
+
+export interface PlanGenerationContextData {
+  profile: {
+    experience: ExperienceLevel
+    goal: FitnessGoal
+    weeklyFrequency: number
+    sessionMinutes: SessionMinutes
+    location: TrainingLocation
+    profileVersion: number
+  }
+  exercises: Array<{
+    code: string
+    name: string
+    movementPattern: string
+    difficulty: string
+    equipment: string[]
+    primaryMuscles: string[]
+    preferred: boolean
+    bodyweight: boolean
+  }>
+  constraints: {
+    minimumSessionsPerWeek: number
+    maximumSessionsPerWeek: number
+    maximumExercisesPerSession: number
+    minimumWorkSets: number
+    maximumWorkSets: number
+    minimumReps: number
+    maximumReps: number
+    minimumRestSeconds: number
+    maximumRestSeconds: number
+    secondsPerWorkSet: number
+    secondsPerExerciseTransition: number
+    maximumMovementPatternOccurrencesPerSession: number
+    maximumWorkSetsPerPrimaryMusclePerSession: number
+    minimumRecoveryHoursBetweenPrimaryMuscleSessions: number
+  }
+  ruleReference: RuleReference
 }
 
 export interface PlanCandidateGenerationData {

@@ -60,6 +60,7 @@ class LockedFieldPreservationPropertyTest {
         assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.NO_CANDIDATE);
         assertThat(result.candidate()).isEmpty();
         assertThat(result.issues())
+                .filteredOn(issue -> issue.severity() == PlanGenerationEngine.ValidationSeverity.ERROR)
                 .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
                 .containsExactly("REST_OUT_OF_RANGE");
         assertThat(result.lockedFieldOutcomes()).containsEntry(path, PlanGenerationEngine.LockStatus.USER_LOCKED);

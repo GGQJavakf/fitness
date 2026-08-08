@@ -37,7 +37,7 @@ class ProfileEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"experience":"BEGINNER","goal":"GENERAL_FITNESS","weeklyFrequency":3,
+                                {"experience":"BEGINNER","goal":"FAT_LOSS","weeklyFrequency":3,
                                  "sessionMinutes":60,"location":"GYM","expectedVersion":0}
                                 """))
                 .andExpect(status().isOk())
@@ -45,6 +45,7 @@ class ProfileEndpointIntegrationTest {
 
         mvc.perform(get("/api/v1/profile").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.goal").value("FAT_LOSS"))
                 .andExpect(jsonPath("$.data.weeklyFrequency").value(3));
 
         mvc.perform(put("/api/v1/profile")

@@ -6,6 +6,7 @@ import com.aifitness.assistant.common.domain.RuleReference;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
 import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.application.TrainingPreferenceSafetyPolicy;
 import com.aifitness.assistant.plan.domain.FieldLock;
 import java.time.Clock;
 import java.time.Instant;
@@ -15,9 +16,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -33,6 +36,15 @@ public final class PlanCandidateController {
         this.clock = clock;
     }
 
+    @GetMapping("/generation-context")
+    public ApiResponse<PlanCandidateService.GenerationContext> generationContext(
+            AuthenticatedUserId user, @RequestParam long profileVersion) {
+        if (profileVersion < 0) {
+            throw new IllegalArgumentException("profileVersion must be non-negative");
+        }
+        return response(candidates.generationContext(user, profileVersion));
+    }
+
     @PostMapping("/candidates")
     public ApiResponse<GenerationData> generate(
             AuthenticatedUserId user, @RequestBody CandidateRequest request) {
@@ -41,7 +53,12 @@ public final class PlanCandidateController {
         }
         Map<String, Integer> lockedFields = validLockedFields(request.lockedFields());
         PlanCandidateService.GeneratedCandidates generated = candidates.generate(
-                user, request.profileVersion(), lockedFields);
+                user,
+                request.profileVersion(),
+                lockedFields,
+                validAdditionalRequirements(request.additionalRequirements()),
+                request.aiProposal(),
+                request.fallbackAllowed() == null || request.fallbackAllowed());
         return response(new GenerationData(
                 generated.status(),
                 generated.candidate().map(candidate -> CandidateData.from(
@@ -88,7 +105,19 @@ public final class PlanCandidateController {
         return new ApiResponse<>(data, new ResponseMeta(requestId, clock.instant()));
     }
 
-    public record CandidateRequest(Long profileVersion, Map<String, Integer> lockedFields) {}
+    private static String validAdditionalRequirements(String value) {
+        return TrainingPreferenceSafetyPolicy.normalize(value)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "additionalRequirements only accepts at most 300 characters "
+                                + "of non-medical training preferences without control text"));
+    }
+
+    public record CandidateRequest(
+            Long profileVersion,
+            Map<String, Integer> lockedFields,
+            String additionalRequirements,
+            PlanCandidateService.AiPlanProposal aiProposal,
+            Boolean fallbackAllowed) {}
 
     public record ValidateRequest(PlanController.PlanData plan, RuleReferenceData ruleReference) {}
 
@@ -100,6 +129,7 @@ public final class PlanCandidateController {
 
     public record CandidateData(
             String candidateId,
+            PlanCandidateService.GenerationSource generationSource,
             PlanController.PlanData plan,
             List<PlanVersionService.ValidationIssue> validationIssues,
             RuleReferenceData ruleReference,
@@ -112,7 +142,8 @@ public final class PlanCandidateController {
                 List<PlanVersionService.ValidationIssue> issues,
                 Map<String, FieldLock.Status> lockedFieldOutcomes) {
             return new CandidateData(
-                    envelope.candidateId(), PlanController.PlanData.from(envelope.plan()), issues,
+                    envelope.candidateId(), envelope.generationSource(),
+                    PlanController.PlanData.from(envelope.plan()), issues,
                     RuleReferenceData.from(envelope.ruleReference()), lockedFieldOutcomes,
                     envelope.explanationStatus(), envelope.explanation(), envelope.expiresAt());
         }

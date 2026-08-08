@@ -1,0 +1,991 @@
+{
+  "format": "static-keyframes-v1",
+  "imageWidth": 256,
+  "imageHeight": 256,
+  "maxImageBytes": 40960,
+  "character": {
+    "id": "golden-shaded-cat-coach-v4-rigged",
+    "modelSheet": "assets-source/exercise-guides/golden-cat-coach-turnaround-v3.png",
+    "modelSheetSha256": "0a51c0d5e4a627cc82c988e2702f2803ae38c6c00e2eb8aac96cf333481ff85c",
+    "rigPartSheet": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+    "rigPartSheetSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555"
+  },
+  "renderMode": "approved-static-source-crops",
+  "assets": [
+    {
+      "exerciseCode": "GOBLET_SQUAT",
+      "primaryRef": "asset://exercise-guides/goblet-squat-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌稳定，负重靠近身体。",
+          "file": "goblet-squat-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
+          "sha256": "c2270b59cf0da0bbd7a894a01858880b5ec57a3921af12be5f43ebd17d0684aa",
+          "sizeBytes": 11987
+        },
+        {
+          "id": "drive",
+          "label": "下蹲",
+          "description": "屈髋屈膝，膝盖跟随脚尖方向。",
+          "file": "goblet-squat-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
+          "sha256": "260e42cbf6631df8cb01cb9db74360b80c55c5e12c3d0d1f8eb49f05acc3cbbe",
+          "sizeBytes": 12932
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "保持躯干稳定，在可控深度停住。",
+          "file": "goblet-squat-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
+          "sha256": "86221cd91a68cfe742f94f088acc4728916e5ce8c711d496ef6aae96302536b0",
+          "sizeBytes": 13948
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_FRONT_SQUAT",
+      "primaryRef": "asset://exercise-guides/dumbbell-front-squat-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌稳定，负重靠近身体。",
+          "file": "dumbbell-front-squat-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
+          "sha256": "666d82b2c53688f965931d2f1709570ae7282fe373a75750ff4b9eec0663e985",
+          "sizeBytes": 11942
+        },
+        {
+          "id": "drive",
+          "label": "下蹲",
+          "description": "屈髋屈膝，膝盖跟随脚尖方向。",
+          "file": "dumbbell-front-squat-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
+          "sha256": "bb4644964f1ee6738a1bbd9343931ceee416dbaa1e81d7f3755cd56bfd1133c5",
+          "sizeBytes": 13997
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "保持躯干稳定，在可控深度停住。",
+          "file": "dumbbell-front-squat-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
+          "sha256": "6d7166bfd1b561601452214864628aaa3128d41893f0763f984f00f2ff0dd8ac",
+          "sizeBytes": 13602
+        }
+      ]
+    },
+    {
+      "exerciseCode": "BODYWEIGHT_SQUAT",
+      "primaryRef": "asset://exercise-guides/bodyweight-squat-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌稳定，负重靠近身体。",
+          "file": "bodyweight-squat-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
+          "sha256": "681271a18ca64748ba3736e5e16530f09e1f4d8d30fc75f2942ab1c724f9773c",
+          "sizeBytes": 11301
+        },
+        {
+          "id": "drive",
+          "label": "下蹲",
+          "description": "屈髋屈膝，膝盖跟随脚尖方向。",
+          "file": "bodyweight-squat-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
+          "sha256": "bb4e6524c4aaeda1646a7f0b1e45e700d74cadc480dbbda6073592ad90133d62",
+          "sizeBytes": 11875
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "保持躯干稳定，在可控深度停住。",
+          "file": "bodyweight-squat-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
+          "sha256": "8c17599eb6257d2d5ca35f2a96a703020a9afb2c3a55463189d78d4236e946b0",
+          "sizeBytes": 12863
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT",
+      "primaryRef": "asset://exercise-guides/dumbbell-romanian-deadlift-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌压稳，背部保持自然。",
+          "file": "dumbbell-romanian-deadlift-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
+          "sha256": "44e1d779e8fb54b35a134ef0186f25776ab14f48ed42d061b4b7cdb85b412886",
+          "sizeBytes": 11587
+        },
+        {
+          "id": "drive",
+          "label": "送髋",
+          "description": "髋部向后，负重贴近腿部。",
+          "file": "dumbbell-romanian-deadlift-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
+          "sha256": "86602cc7c4e1fdbff027253bf34cc9d90a3e577d32d204586e16f9c396518c8f",
+          "sizeBytes": 13439
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "大腿后侧有拉伸感时保持稳定。",
+          "file": "dumbbell-romanian-deadlift-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
+          "sha256": "ffc5b87c8a5f3f779209cdc1e71c01955a41a11f30027e905ab04d9a3d7fc4e6",
+          "sizeBytes": 13739
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_DEADLIFT",
+      "primaryRef": "asset://exercise-guides/dumbbell-deadlift-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "握稳",
+          "description": "哑铃靠近小腿，脚掌压稳并保持背部自然。",
+          "file": "dumbbell-deadlift-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
+          "sha256": "2db8290bbe18f271a561228057117b554156d2c335afa2627b7e870bd4cf8edc",
+          "sizeBytes": 14708
+        },
+        {
+          "id": "drive",
+          "label": "提起",
+          "description": "脚掌发力站起，负重持续贴近腿部。",
+          "file": "dumbbell-deadlift-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
+          "sha256": "4379532373aab7354871d4e1840d3b5889b73ef5d23752a185c2c93016864079",
+          "sizeBytes": 13447
+        },
+        {
+          "id": "finish",
+          "label": "站直",
+          "description": "髋膝伸直后稳定站立，避免身体后仰。",
+          "file": "dumbbell-deadlift-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
+          "sha256": "c8f92f0d80564bd3a089c6e3c234af3117c0ee28bb4ac9cc55464b1520cba94b",
+          "sizeBytes": 11312
+        }
+      ]
+    },
+    {
+      "exerciseCode": "BODYWEIGHT_HIP_HINGE",
+      "primaryRef": "asset://exercise-guides/bodyweight-hip-hinge-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌压稳，背部保持自然。",
+          "file": "bodyweight-hip-hinge-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
+          "sha256": "fda2071a54034a360ad5d011ba995f307ccc88a1d714454523b6cb14a1ef1b29",
+          "sizeBytes": 11330
+        },
+        {
+          "id": "drive",
+          "label": "送髋",
+          "description": "髋部向后，负重贴近腿部。",
+          "file": "bodyweight-hip-hinge-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
+          "sha256": "a3d7753fe2b2eac22052425dfb8bb21ff378606f8ace80037664a6f3325bc13b",
+          "sizeBytes": 11818
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "大腿后侧有拉伸感时保持稳定。",
+          "file": "bodyweight-hip-hinge-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
+          "sha256": "40490726022c85e0dba6029001398ed56207adc83e97157da4dc9b3c9480570b",
+          "sizeBytes": 11554
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_BENCH_PRESS",
+      "primaryRef": "asset://exercise-guides/dumbbell-bench-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "起始",
+          "description": "肩背和脚部先稳定支撑。",
+          "file": "dumbbell-bench-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-00-bottom.png",
+          "sourceSha256": "4418699e835041676e5b0802d919d9ff86148c6282e985583c36a4034a4c5941",
+          "sha256": "c7a4aabb8bc7ba1ab2bd1334b882d5b763958959ea2b7ab3d39280cd83d938d4",
+          "sizeBytes": 9934
+        },
+        {
+          "id": "drive",
+          "label": "推起",
+          "description": "手腕稳定，沿可控路径推起负重。",
+          "file": "dumbbell-bench-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-50-middle.png",
+          "sourceSha256": "1e852483d8a9795fd1ba96e3d449231930b9f090d56478ab21596f4913608fb1",
+          "sha256": "fa67a1f103fb46b9543fdf26fcb64f8f6c67f27403cd0eb3f72dd641048a687f",
+          "sizeBytes": 10766
+        },
+        {
+          "id": "finish",
+          "label": "完成",
+          "description": "手臂接近伸直，避免锁死关节。",
+          "file": "dumbbell-bench-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-100-top.png",
+          "sourceSha256": "e3b053b7552254b0b4c713b4b7681d7be3837b0c6766af9f4fe22e6efb113aff",
+          "sha256": "06d6858507dcdcbebaab6779d29f13a2a7c2ff545ae661ef52f8884a61560e87",
+          "sizeBytes": 11233
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_FLOOR_PRESS",
+      "primaryRef": "asset://exercise-guides/dumbbell-floor-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "起始",
+          "description": "肩背和脚部先稳定支撑。",
+          "file": "dumbbell-floor-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
+          "sha256": "a7c0d6cb35e4f7beb92c853ca61c82c5f86d191f8a79d552829473f0d8515326",
+          "sizeBytes": 12172
+        },
+        {
+          "id": "drive",
+          "label": "推起",
+          "description": "手腕稳定，沿可控路径推起负重。",
+          "file": "dumbbell-floor-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
+          "sha256": "a62fde84d9396a30c3e9b787b7a081aef1700710d02d7dd665bec71c91b830f9",
+          "sizeBytes": 12223
+        },
+        {
+          "id": "finish",
+          "label": "完成",
+          "description": "手臂接近伸直，避免锁死关节。",
+          "file": "dumbbell-floor-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
+          "sourceGridIndex": 3,
+          "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
+          "sha256": "dcb127af08bee7340368b4c5745c935c0d46f7d62d84d890c2e735864eeacd41",
+          "sizeBytes": 15006
+        }
+      ]
+    },
+    {
+      "exerciseCode": "INCLINE_PUSH_UP",
+      "primaryRef": "asset://exercise-guides/incline-push-up-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "支撑",
+          "description": "双手撑稳，身体保持一条直线。",
+          "file": "incline-push-up-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
+          "sha256": "24012384e393f6fad98d049c79f1b72b7a1820480a6a2df1289e4c84a98b24f5",
+          "sizeBytes": 13476
+        },
+        {
+          "id": "drive",
+          "label": "下降",
+          "description": "屈肘让胸口靠近支撑面。",
+          "file": "incline-push-up-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
+          "sha256": "59fc73b67cb9db2a8a4f3e2569169f409fa65c8e389ae0dc1361920c98795669",
+          "sizeBytes": 11852
+        },
+        {
+          "id": "finish",
+          "label": "最低点",
+          "description": "核心收紧，不塌腰或耸肩。",
+          "file": "incline-push-up-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
+          "sourceGridIndex": 4,
+          "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
+          "sha256": "e4ae6e0953c6a35ace82c90751aa48541262d1d8751aa88a96d4cb699579d750",
+          "sizeBytes": 11503
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SEATED_CABLE_ROW",
+      "primaryRef": "asset://exercise-guides/seated-cable-row-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸臂",
+          "description": "躯干稳定，肩膀自然下沉。",
+          "file": "seated-cable-row-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
+          "sha256": "e9e0cb4a2bfd6d34216b3c666c76c6ef1b948be4b24c55b2286a49903920f877",
+          "sizeBytes": 16228
+        },
+        {
+          "id": "drive",
+          "label": "后拉",
+          "description": "肘部向后，肩胛向中间收拢。",
+          "file": "seated-cable-row-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
+          "sha256": "649ad06b626da070141c9b7f4105acb0b0ea1598039c9b9bfd5ba9a1a87b3e82",
+          "sizeBytes": 15776
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "握把靠近身体，避免大幅后仰。",
+          "file": "seated-cable-row-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
+          "sha256": "2085a5b00e57c966dc71ecd9edf8afa4755817a463b45f9e1e4dfbe77fbf713d",
+          "sizeBytes": 15769
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_HIGH_ROW",
+      "primaryRef": "asset://exercise-guides/cable-high-row-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸臂",
+          "description": "躯干稳定，肩膀自然下沉。",
+          "file": "cable-high-row-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
+          "sha256": "b81dc2fc845edfeace1ed7e7d3829fc35d1050603f8e77d11d1b591fc2bd3e59",
+          "sizeBytes": 14521
+        },
+        {
+          "id": "drive",
+          "label": "后拉",
+          "description": "肘部向后，肩胛向中间收拢。",
+          "file": "cable-high-row-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
+          "sha256": "f220b22299c8c3052482d292ade8566d5a7c0a3fc4d623a7ca722f93c1014265",
+          "sizeBytes": 14139
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "握把靠近身体，避免大幅后仰。",
+          "file": "cable-high-row-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
+          "sha256": "41ee3781189cb7432c5df7cfef4e4ae0bb39db278cc5502dc0b198ceea47896c",
+          "sizeBytes": 14080
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_SINGLE_ARM_ROW",
+      "primaryRef": "asset://exercise-guides/cable-single-arm-row-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸臂",
+          "description": "躯干稳定，肩膀自然下沉。",
+          "file": "cable-single-arm-row-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
+          "sha256": "2b387cffb491268dc2cb23870b841ef1dd9b3be97f5171c17b2fafb6c705595e",
+          "sizeBytes": 11918
+        },
+        {
+          "id": "drive",
+          "label": "后拉",
+          "description": "肘部向后，肩胛向中间收拢。",
+          "file": "cable-single-arm-row-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
+          "sha256": "800e309e12670f7fdbf81386495e1259eb42992d5618049b016e73ff8e9d7416",
+          "sizeBytes": 11499
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "握把靠近身体，避免大幅后仰。",
+          "file": "cable-single-arm-row-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
+          "sha256": "122f9158d69da2f4b689727df88fa96c139fb8150f03d6ea9eed17aff935f46a",
+          "sizeBytes": 11405
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_OVERHEAD_PRESS",
+      "primaryRef": "asset://exercise-guides/dumbbell-overhead-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩前",
+          "description": "核心收紧，负重稳定在肩部附近。",
+          "file": "dumbbell-overhead-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
+          "sha256": "074b21f6ff0e3738dea84d9a2579310cde9bcc001bb02a361a145acf2196aa28",
+          "sizeBytes": 13965
+        },
+        {
+          "id": "drive",
+          "label": "推举",
+          "description": "沿头部两侧向上推，避免腰部后仰。",
+          "file": "dumbbell-overhead-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
+          "sha256": "7010225a36802d32ee22aad182396a646428a213744caae5b365da01be0b7d81",
+          "sizeBytes": 13429
+        },
+        {
+          "id": "finish",
+          "label": "顶端",
+          "description": "负重位于身体上方，肩颈保持放松。",
+          "file": "dumbbell-overhead-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
+          "sha256": "23b75794f2157f531f33b1d86030b51bc88941102060751740b408ff06b8b6c8",
+          "sizeBytes": 12331
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SEATED_DUMBBELL_PRESS",
+      "primaryRef": "asset://exercise-guides/seated-dumbbell-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩前",
+          "description": "核心收紧，负重稳定在肩部附近。",
+          "file": "seated-dumbbell-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
+          "sha256": "0f7e9048fc391a76967149f7c175f1d61f6edb8391285398f3e123cf340e2a4a",
+          "sizeBytes": 15095
+        },
+        {
+          "id": "drive",
+          "label": "推举",
+          "description": "沿头部两侧向上推，避免腰部后仰。",
+          "file": "seated-dumbbell-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
+          "sha256": "0988ad13cc7e1ca8fc668ba076dd628a8c2625f674a142c3b364957ca2a60b83",
+          "sizeBytes": 14562
+        },
+        {
+          "id": "finish",
+          "label": "顶端",
+          "description": "负重位于身体上方，肩颈保持放松。",
+          "file": "seated-dumbbell-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
+          "sha256": "8f77d6dbbceed1f458bd1d0d1c18b42c4c279baf4c89aa218d0370c86250da9c",
+          "sizeBytes": 13478
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SINGLE_ARM_DUMBBELL_PRESS",
+      "primaryRef": "asset://exercise-guides/single-arm-dumbbell-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩前",
+          "description": "核心收紧，负重稳定在肩部附近。",
+          "file": "single-arm-dumbbell-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
+          "sha256": "5c769bd13762b5b2e1b0e0c0965a66ee1a3eea85606b3178ac3bbad4de92f212",
+          "sizeBytes": 12071
+        },
+        {
+          "id": "drive",
+          "label": "推举",
+          "description": "沿头部两侧向上推，避免腰部后仰。",
+          "file": "single-arm-dumbbell-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 8,
+          "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
+          "sha256": "07fc7d754dc7ccb95c8b6ca7366bb497c5a0eebbaa10af0527163762090f5bec",
+          "sizeBytes": 11933
+        },
+        {
+          "id": "finish",
+          "label": "顶端",
+          "description": "负重位于身体上方，肩颈保持放松。",
+          "file": "single-arm-dumbbell-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
+          "sourceGridIndex": 3,
+          "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
+          "sha256": "23c86de1c1ad56b9a478d867b1aa23ae45d8ad70a168117ab518e656c9cc41b3",
+          "sizeBytes": 11059
+        }
+      ]
+    },
+    {
+      "exerciseCode": "LAT_PULLDOWN",
+      "primaryRef": "asset://exercise-guides/lat-pulldown-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸展",
+          "description": "坐稳并保持胸廓自然。",
+          "file": "lat-pulldown-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
+          "sha256": "e739ef63d8d289324d42e4f25f3d3ed7f88dd6828af65eebd805337d18cc8dfe",
+          "sizeBytes": 14268
+        },
+        {
+          "id": "drive",
+          "label": "下拉",
+          "description": "肘部向下，握把朝上胸移动。",
+          "file": "lat-pulldown-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
+          "sha256": "b69f22a78c37fadbccbe3c76f88340c9bc3039c45185b25594c7b8539b77a0a1",
+          "sizeBytes": 13801
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "肩胛下沉，不把握把拉到颈后。",
+          "file": "lat-pulldown-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
+          "sha256": "716bdc128fc783a0b51fff4d1cb446a08fc8528e5b2877e7f19c43ced60b4941",
+          "sizeBytes": 13597
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_STRAIGHT_ARM_PULLDOWN",
+      "primaryRef": "asset://exercise-guides/cable-straight-arm-pulldown-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "举臂",
+          "description": "手臂接近伸直，躯干保持稳定。",
+          "file": "cable-straight-arm-pulldown-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
+          "sha256": "18e540dc43007bd2afae6816e7088ee004824dbe04999a00fc212435e061b34c",
+          "sizeBytes": 14169
+        },
+        {
+          "id": "drive",
+          "label": "下压",
+          "description": "以肩关节为轴向下压握把。",
+          "file": "cable-straight-arm-pulldown-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
+          "sha256": "e17f651a8eee358719f22bea62f1d74caeadc0791251f9553552e66d1cde1e1f",
+          "sizeBytes": 13987
+        },
+        {
+          "id": "finish",
+          "label": "到腿侧",
+          "description": "背部收紧，避免摆动借力。",
+          "file": "cable-straight-arm-pulldown-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
+          "sha256": "a135acdca794e2d33703c3aa2c364b9d54419673355cf436635cc64019d966f0",
+          "sizeBytes": 13677
+        }
+      ]
+    },
+    {
+      "exerciseCode": "NEUTRAL_GRIP_PULLDOWN",
+      "primaryRef": "asset://exercise-guides/neutral-grip-pulldown-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸展",
+          "description": "坐稳并保持胸廓自然。",
+          "file": "neutral-grip-pulldown-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
+          "sha256": "9c83abd76db22a472523d1ab0088e705b228c1f15cc95c222b58819520bfaa29",
+          "sizeBytes": 11937
+        },
+        {
+          "id": "drive",
+          "label": "下拉",
+          "description": "肘部向下，握把朝上胸移动。",
+          "file": "neutral-grip-pulldown-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
+          "sha256": "4d21cabb291e7715a937b44e625100b4e270b38cd4047bc998a1280bfc31ab62",
+          "sizeBytes": 11461
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "肩胛下沉，不把握把拉到颈后。",
+          "file": "neutral-grip-pulldown-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
+          "sha256": "b5bca6472ceab692fdf597635a910ed4eced452bdfa12a4e3f99cf33e8d1862c",
+          "sizeBytes": 11135
+        }
+      ]
+    },
+    {
+      "exerciseCode": "PRONE_W_RAISE",
+      "primaryRef": "asset://exercise-guides/prone-w-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "俯卧",
+          "description": "颈部放松，额头轻靠支撑。",
+          "file": "prone-w-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
+          "sha256": "b352950460a5693d450893408c78e5311ad9685a03729be7d5c7d4732a91c9f9",
+          "sizeBytes": 9192
+        },
+        {
+          "id": "drive",
+          "label": "抬臂",
+          "description": "肩胛先稳定，再小幅抬起手臂。",
+          "file": "prone-w-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
+          "sha256": "bec47c1a860db40fcbcc6133d3d256e2517ffa177039818dd29805096adba69b",
+          "sizeBytes": 9687
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "保持 W 或 Y 形，不耸肩。",
+          "file": "prone-w-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
+          "sha256": "708863a29ffd354dc4459653434e16c5c5e611d6cb55674a6a49d6a7b4b9fa95",
+          "sizeBytes": 9719
+        }
+      ]
+    },
+    {
+      "exerciseCode": "PRONE_Y_RAISE",
+      "primaryRef": "asset://exercise-guides/prone-y-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "俯卧",
+          "description": "颈部放松，额头轻靠支撑。",
+          "file": "prone-y-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
+          "sha256": "4333426e6ad2fd7d6deddf52b888d2e8c4d5af084fa9c6e9778b6612bd0f6678",
+          "sizeBytes": 11105
+        },
+        {
+          "id": "drive",
+          "label": "抬臂",
+          "description": "肩胛先稳定，再小幅抬起手臂。",
+          "file": "prone-y-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
+          "sha256": "0bf800adb3c4c0a54822cbe22ad4727b6cb0efacbd61b83884386da387eee19c",
+          "sizeBytes": 11420
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "保持 W 或 Y 形，不耸肩。",
+          "file": "prone-y-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
+          "sha256": "e51a349e2fb2b89e4d24b2a5d91f4af0deeb775973bf40b380bc81b7d54b2981",
+          "sizeBytes": 11368
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DEAD_BUG",
+      "primaryRef": "asset://exercise-guides/dead-bug-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "准备",
+          "description": "仰卧抬起手脚，腰背保持稳定。",
+          "file": "dead-bug-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
+          "sha256": "6423dda93a623d9ba6e53179f37f414eb2ffdd7691a71ad949868c76d875b216",
+          "sizeBytes": 10343
+        },
+        {
+          "id": "extend",
+          "label": "伸展",
+          "description": "对侧手臂和腿缓慢远离身体。",
+          "file": "dead-bug-02-extend.jpg",
+          "phase": 0.34,
+          "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
+          "sourceGridIndex": 1,
+          "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
+          "sha256": "a0ea3862d2d3414d2db6ff18046da935cdae2b9a128a7c98bef7743f2e4abaeb",
+          "sizeBytes": 9842
+        },
+        {
+          "id": "control",
+          "label": "控制",
+          "description": "继续伸展，同时保持腰背贴稳。",
+          "file": "dead-bug-03-control.jpg",
+          "phase": 0.67,
+          "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
+          "sha256": "cefdf874edf187da6eb801ccee3af47dce739b6cd7c0d360d81c2ca41a48dcda",
+          "sizeBytes": 8829
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "在躯干不晃动的范围内停住。",
+          "file": "dead-bug-04-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
+          "sourceGridIndex": 3,
+          "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
+          "sha256": "78e356468f3ce36d97c2b8c92c3edf543e9b3c44015f6bc0b76bbdff16744a4d",
+          "sizeBytes": 8482
+        }
+      ]
+    },
+    {
+      "exerciseCode": "BIRD_DOG",
+      "primaryRef": "asset://exercise-guides/bird-dog-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "四点支撑",
+          "description": "双手双膝压稳，背部保持平直。",
+          "file": "bird-dog-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
+          "sha256": "8d4a3a09d08ac317399fc0344e05c8835edff62d624b9d96401ed4a749ec4149",
+          "sizeBytes": 9508
+        },
+        {
+          "id": "extend",
+          "label": "开始伸展",
+          "description": "对侧手脚缓慢离地。",
+          "file": "bird-dog-02-extend.jpg",
+          "phase": 0.34,
+          "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
+          "sourceGridIndex": 1,
+          "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
+          "sha256": "76c9e6a8f96c8abda0bacdfbae271fc5ca24fbc6ae3173c2487b88e9f2829f3e",
+          "sizeBytes": 10114
+        },
+        {
+          "id": "control",
+          "label": "继续伸展",
+          "description": "髋部保持水平，避免身体旋转。",
+          "file": "bird-dog-03-control.jpg",
+          "phase": 0.67,
+          "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
+          "sha256": "91dccebf8ef10ea08818b8588746264e674c6dabcb993974cf1bb22be1b16f82",
+          "sizeBytes": 9079
+        },
+        {
+          "id": "finish",
+          "label": "伸直到位",
+          "description": "手脚延伸，躯干仍然稳定。",
+          "file": "bird-dog-04-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
+          "sourceGridIndex": 3,
+          "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
+          "sha256": "ffa171be99192381dc8df3a238611b9726159f16b5b657c5627b90f9faf3baf5",
+          "sizeBytes": 9287
+        }
+      ]
+    },
+    {
+      "exerciseCode": "PLANK",
+      "primaryRef": "asset://exercise-guides/plank-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "支撑定位",
+          "description": "前臂和脚尖压稳，身体接近直线。",
+          "file": "plank-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/plank-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "4d2c40e91ab7a14af4c32023cce02a5b1ab076b85ac0e7c0299096577aff2db4",
+          "sha256": "22313cdfb9aac746fb4066c088f40c99cb93331a27cba6eee12bd410e2084adf",
+          "sizeBytes": 10059
+        },
+        {
+          "id": "hold",
+          "label": "稳定保持",
+          "description": "收紧腹部并自然呼吸，不塌腰。",
+          "file": "plank-02-hold.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/plank-sprite-v3.png",
+          "sourceGridIndex": 3,
+          "sourceSha256": "4d2c40e91ab7a14af4c32023cce02a5b1ab076b85ac0e7c0299096577aff2db4",
+          "sha256": "72d89580eb486fb34ddc5a23890bf5204c08860850c621a4ecf21b8a2b46ac18",
+          "sizeBytes": 10475
+        }
+      ]
+    }
+  ]
+}

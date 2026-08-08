@@ -11,7 +11,7 @@ export interface WarmupExecutionState {
   readonly generalDurationSeconds: 180 | 300 | 480
   readonly generalTimer: RestTimerState | null
   readonly rampExerciseIndex: number
-  readonly maximumRampSets: 3
+  readonly maximumRampSets: 2 | 3
 }
 
 export interface WorkoutExerciseSnapshot {
@@ -37,7 +37,13 @@ export interface WorkoutSetRecord {
 
 export interface WorkoutExerciseState extends WorkoutExerciseSnapshot {
   readonly replacedExerciseCode?: string
+  readonly sessionWeightKg?: number
   readonly sets: readonly WorkoutSetRecord[]
+}
+
+export interface RampWarmupSet {
+  readonly weightKg: number
+  readonly reps: number
 }
 
 export interface WorkoutFlowState {
@@ -80,7 +86,7 @@ export function createWorkoutFlow(input: {
     schemaVersion: 1,
     clientSessionKey: input.clientSessionKey,
     planVersionId: input.planVersionId,
-    exercises: input.exercises.map((exercise) => ({ ...exercise, sets: [] })),
+    exercises: input.exercises.map(createExerciseState),
     currentExerciseIndex: 0,
     currentSetIndex: 0,
     restTimer: null,
@@ -89,7 +95,7 @@ export function createWorkoutFlow(input: {
       generalDurationSeconds: input.warmupDurationSeconds ?? 180,
       generalTimer: null,
       rampExerciseIndex: 0,
-      maximumRampSets: 3,
+      maximumRampSets: 2,
     },
     syncStatus: 'LOCAL_ONLY',
     automaticProgressionEligible: true,
@@ -121,6 +127,47 @@ export function completedRampSets(state: WorkoutFlowState): number {
     .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED').length
 }
 
+export function buildRampWarmupSets(formalWeightKg: number): readonly RampWarmupSet[] {
+  if (!Number.isFinite(formalWeightKg) || formalWeightKg <= 0) return []
+  const candidates = formalWeightKg <= 10
+    ? [2, 5]
+    : [roundToHalfKg(formalWeightKg * 0.5), roundToHalfKg(formalWeightKg * 0.7)]
+  const reps = [10, 6] as const
+  return candidates
+    .filter((weightKg, index, weights) =>
+      weightKg > 0 && weightKg < formalWeightKg && weights.indexOf(weightKg) === index)
+    .map((weightKg, index) => ({ weightKg, reps: reps[index] ?? reps[reps.length - 1] }))
+}
+
+export function buildRemainingRampWarmupSets(
+  formalWeightKg: number,
+  completedWeightKg: readonly number[],
+): readonly RampWarmupSet[] {
+  const completed = completedWeightKg.filter((weightKg) => Number.isFinite(weightKg) && weightKg >= 0)
+  const highestCompletedWeight = completed.length === 0 ? 0 : Math.max(...completed)
+  return buildRampWarmupSets(formalWeightKg)
+    .slice(Math.min(completed.length, 2))
+    .filter((set) => set.weightKg > highestCompletedWeight)
+}
+
+export function setWorkoutExerciseWeight(
+  state: WorkoutFlowState,
+  exerciseIndex: number,
+  weightKg: number,
+): WorkoutFlowState {
+  validateStateShape(state)
+  const exercise = state.exercises[exerciseIndex]
+  if (!exercise) throw new Error('exerciseIndex is outside the workout snapshot')
+  if (exercise.weightStatus === 'BODYWEIGHT') throw new Error('bodyweight exercises do not accept a formal weight')
+  if (!Number.isFinite(weightKg) || weightKg <= 0) throw new Error('formal weight must be greater than zero')
+  if (exercise.sessionWeightKg === weightKg) return state
+  return {
+    ...state,
+    exercises: state.exercises.map((item, index) =>
+      index === exerciseIndex ? { ...item, sessionWeightKg: weightKg } : item),
+  }
+}
+
 export function isWorkoutPrescriptionFinished(state: WorkoutFlowState): boolean {
   validateStateShape(state)
   return state.exercises.every((exercise) =>
@@ -131,7 +178,20 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   validateStateShape(state)
   const exercise = state.exercises[input.exerciseIndex]
   if (!exercise) throw new Error('exerciseIndex is outside the workout snapshot')
-  const record = normalizeSet(input)
+  if (input.setType === 'WORK'
+    && input.status !== 'SKIPPED'
+    && exercise.weightStatus !== 'BODYWEIGHT'
+    && input.actualWeightKg === undefined
+    && exercise.sessionWeightKg === undefined) {
+    throw new Error('external-load work sets require a formal weight')
+  }
+  const defaultWorkWeight = input.setType === 'WORK' && input.status !== 'SKIPPED'
+    ? exercise.sessionWeightKg
+    : undefined
+  const record = normalizeSet({
+    ...input,
+    actualWeightKg: input.actualWeightKg ?? defaultWorkWeight,
+  })
   const existing = state.exercises.flatMap((item) => item.sets)
     .find((item) => item.clientSetKey === record.clientSetKey)
   if (existing) {
@@ -178,7 +238,12 @@ export function replaceExerciseForSession(
   const current = state.exercises[exerciseIndex]
   if (!current) throw new Error('exerciseIndex is outside the workout snapshot')
   const exercises = state.exercises.map((item, index) => index === exerciseIndex
-    ? { ...replacement, replacedExerciseCode: current.exerciseCode, sets: item.sets }
+    ? {
+        ...replacement,
+        replacedExerciseCode: current.exerciseCode,
+        sessionWeightKg: initialSessionWeight(replacement),
+        sets: item.sets,
+      }
     : item)
   return { ...state, exercises }
 }
@@ -209,7 +274,12 @@ export function restoreWorkoutFlow(value: unknown): WorkoutFlowState {
   } catch {
     throw new Error('workout state is invalid')
   }
-  return { ...state, ...derivePosition(state.exercises) }
+  const exercises = state.exercises.map((exercise) => exercise.weightStatus !== 'BODYWEIGHT'
+      && exercise.sessionWeightKg === undefined
+      && initialSessionWeight(exercise) !== undefined
+    ? { ...exercise, sessionWeightKg: initialSessionWeight(exercise) }
+    : exercise)
+  return { ...state, exercises, ...derivePosition(exercises) }
 }
 
 export function summarizeWorkout(state: WorkoutFlowState): {
@@ -294,9 +364,13 @@ function validateStateShape(state: WorkoutFlowState): void {
     || ![180, 300, 480].includes(state.warmup.generalDurationSeconds)
     || !(state.warmup.generalTimer === null || isRecord(state.warmup.generalTimer))
     || state.warmup.rampExerciseIndex !== 0
-    || state.warmup.maximumRampSets !== 3) throw new Error('workout state is invalid')
+    || ![2, 3].includes(state.warmup.maximumRampSets)) throw new Error('workout state is invalid')
   state.exercises.forEach((exercise) => {
     validateExercise(exercise)
+    if (exercise.sessionWeightKg !== undefined
+      && (!Number.isFinite(exercise.sessionWeightKg) || exercise.sessionWeightKg <= 0)) {
+      throw new Error('workout state is invalid')
+    }
     if (!Array.isArray(exercise.sets)) throw new Error('workout state is invalid')
     exercise.sets.forEach((set: WorkoutSetRecord) => normalizeSet(set))
   })
@@ -311,6 +385,27 @@ function validateExercise(exercise: WorkoutExerciseSnapshot): void {
     || !Number.isSafeInteger(exercise.restSeconds) || exercise.restSeconds <= 0) {
     throw new Error('workout exercise snapshot is invalid')
   }
+}
+
+function createExerciseState(exercise: WorkoutExerciseSnapshot): WorkoutExerciseState {
+  const sessionWeightKg = initialSessionWeight(exercise)
+  return {
+    ...exercise,
+    ...(sessionWeightKg === undefined ? {} : { sessionWeightKg }),
+    sets: [],
+  }
+}
+
+function initialSessionWeight(exercise: WorkoutExerciseSnapshot): number | undefined {
+  return exercise.weightStatus !== 'BODYWEIGHT'
+    && Number.isFinite(exercise.targetWeightKg)
+    && Number(exercise.targetWeightKg) > 0
+    ? exercise.targetWeightKg
+    : undefined
+}
+
+function roundToHalfKg(value: number): number {
+  return Math.round(value * 2) / 2
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

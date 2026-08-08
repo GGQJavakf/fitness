@@ -14,7 +14,6 @@ import com.aifitness.assistant.rules.domain.PlanValidationEngine;
 import com.aifitness.assistant.rules.infrastructure.ClasspathPlanRulePolicyLoader;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -50,10 +49,9 @@ public class PlanConfiguration {
             PlanGenerationEngine generator,
             PlanValidationEngine validator,
             PlanRulePolicy policy,
-            Clock clock,
-            @Value("${fitness.ai.enabled:false}") boolean aiEnabled) {
+            Clock clock) {
         return new PlanCandidateService(
-                profiles, templates, exercises, generator, validator, policy, clock, aiEnabled);
+                profiles, templates, exercises, generator, validator, policy, clock);
     }
 
     @Bean

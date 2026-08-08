@@ -8,6 +8,7 @@ import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.domain.FieldLock;
 import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import java.time.Clock;
@@ -230,7 +231,7 @@ public final class PlanController {
             int repMax,
             int restSeconds,
             PlanDraft.WeightStatus weightStatus,
-            BigDecimal targetWeightKg) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal targetWeightKg) {
         PlanDraft.Exercise toDomain() {
             return new PlanDraft.Exercise(
                     exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus,

@@ -62,7 +62,8 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
         if ("PLACEHOLDER_ONLY".equals(exercise.path("assetStatus").asText())) {
             return new ExerciseCatalog.Image(PLACEHOLDER, PLACEHOLDER);
         }
-        return new ExerciseCatalog.Image(exercise.path("imageRef").asText(), PLACEHOLDER);
+        String imageRef = exercise.path("imageRef").asText();
+        return new ExerciseCatalog.Image(imageRef, imageRef);
     }
 
     private static List<ExerciseCatalog.Alternative> alternatives(JsonNode nodes) {

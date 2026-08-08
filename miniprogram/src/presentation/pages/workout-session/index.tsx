@@ -2,6 +2,7 @@ import { Button, Input, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import {
+  buildRemainingRampWarmupSets,
   completedRampSets,
   isWorkoutPrescriptionFinished,
   type WorkoutFlowState,
@@ -10,6 +11,13 @@ import {
 import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecycle'
+import ExerciseMotionGuide from '../../../subpackages/exercise-guide/components/exercise-motion-guide'
+import {
+  resolveExerciseGuidance,
+  toExerciseGuidance,
+  type ExerciseGuidance,
+} from '../../../subpackages/exercise-guide/exercise-guidance'
+import { toWeightInputValue } from '../../workoutWeightInput'
 
 import './index.scss'
 
@@ -21,10 +29,15 @@ const rirOptions: ReadonlyArray<{ value: WorkoutRir; label: string }> = [
   { value: '3_PLUS', label: '还能 3 次以上' },
   { value: 'UNKNOWN', label: '不确定或跳过' },
 ]
+type WorkoutInputError = {
+  readonly field: 'weight' | 'reps' | 'action'
+  readonly message: string
+}
 
 export default function WorkoutSessionPage() {
   const [state, setState] = useState<WorkoutFlowState | null>(null)
   const [weight, setWeight] = useState('')
+  const [weightHint, setWeightHint] = useState('')
   const [reps, setReps] = useState('')
   const [rir, setRir] = useState<WorkoutRir>('UNKNOWN')
   const [remaining, setRemaining] = useState(0)
@@ -32,7 +45,15 @@ export default function WorkoutSessionPage() {
   const [message, setMessage] = useState('正在恢复训练草稿…')
   const [replacements, setReplacements] = useState<readonly ExerciseReplacementCandidate[]>([])
   const [recording, setRecording] = useState(false)
+  const [showEffort, setShowEffort] = useState(false)
+  const [showWeightEditor, setShowWeightEditor] = useState(false)
+  const [inputError, setInputError] = useState<WorkoutInputError | null>(null)
+  const [exerciseContent, setExerciseContent] = useState<ExerciseGuidance | null>(null)
+  const [exerciseContentStatus, setExerciseContentStatus] = useState<'IDLE' | 'LOADING' | 'LOCAL' | 'FAILED'>('IDLE')
   const recordingRef = useRef(false)
+  const syncAttemptRef = useRef(0)
+  const weightDirtyRef = useRef(false)
+  const weightSuggestionRequestRef = useRef(0)
 
   useWeappDidShow(() => {
     void application.workouts.load().then(async (loaded) => {
@@ -74,10 +95,173 @@ export default function WorkoutSessionPage() {
   }, [state?.restTimer?.timerStatus, remaining <= 0])
 
   useEffect(() => {
-    setWeight('')
-    setReps('')
+    if (!state || state.restTimer?.timerStatus !== 'RUNNING' || remaining !== 0) return undefined
+    let active = true
+    void application.workouts.finishRest(state)
+      .then((updated) => {
+        if (!active) return
+        if (updated.restTimer?.timerStatus === 'RUNNING') {
+          setRemaining(1)
+          return
+        }
+        setState(updated)
+        setMessage('休息结束，可以开始下一组。')
+      })
+      .catch(() => {
+        if (active) setMessage('休息已结束；计时状态保存失败，请点击结束休息继续。')
+      })
+    return () => { active = false }
+  }, [remaining, state?.restTimer?.sourceSetKey, state?.restTimer?.timerStatus])
+
+  useEffect(() => {
+    const current = state?.exercises[state.currentExerciseIndex]
+    setReps(current ? String(current.targetReps) : '')
     setRir('UNKNOWN')
-  }, [state?.currentExerciseIndex])
+    setShowEffort(false)
+    setInputError(null)
+  }, [
+    state?.clientSessionKey,
+    state?.currentExerciseIndex,
+    state?.currentSetIndex,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.exerciseCode,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.targetReps,
+    state?.warmup.phase,
+  ])
+
+  useEffect(() => {
+    let active = true
+    const requestId = ++weightSuggestionRequestRef.current
+    const current = state?.exercises[state.currentExerciseIndex]
+    weightDirtyRef.current = false
+    setShowWeightEditor(false)
+    if (!current || current.weightStatus === 'BODYWEIGHT') {
+      setWeight('')
+      setWeightHint('')
+      return () => { active = false }
+    }
+    const confirmedWeight = toWeightInputValue(current.sessionWeightKg)
+    if (confirmedWeight !== null) {
+      setWeight(confirmedWeight)
+      setWeightHint(current.targetWeightKg === current.sessionWeightKg
+        ? '已沿用计划重量，本次后续正式组自动复用'
+        : '本次训练已确认，后续正式组自动复用')
+      return () => { active = false }
+    }
+    setWeight('')
+    setWeightHint('')
+    const plannedWeight = toWeightInputValue(current.targetWeightKg)
+    if (plannedWeight !== null) {
+      setWeight(plannedWeight)
+      setWeightHint('已带入计划目标重量，确认一次即可')
+      return () => { active = false }
+    }
+    void application.getExerciseTrend(current.exerciseCode)
+      .then((trend) => trend.points
+        .filter((point) => Number.isFinite(point.topWeightKg) && point.topWeightKg > 0)
+       .sort((left, right) => Date.parse(right.completedAt) - Date.parse(left.completedAt))[0])
+      .then((latest) => {
+        if (!active
+          || requestId !== weightSuggestionRequestRef.current
+          || weightDirtyRef.current
+          || !latest) return
+        setWeight(String(latest.topWeightKg))
+        setWeightHint('已带入最近有效重量，确认一次即可')
+      })
+      .catch(() => { /* No history is a valid calibration state. */ })
+    return () => { active = false }
+  }, [
+    state?.clientSessionKey,
+    state?.currentExerciseIndex,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.exerciseCode,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.sessionWeightKg,
+    state?.warmup.phase,
+  ])
+
+  useEffect(() => {
+    let active = true
+    const currentExerciseCode = state?.exercises[state.currentExerciseIndex]?.exerciseCode
+    if (!currentExerciseCode) {
+      setExerciseContent(null)
+      setExerciseContentStatus('IDLE')
+      return () => { active = false }
+    }
+    const localGuidance = resolveExerciseGuidance(currentExerciseCode)
+    setExerciseContent(localGuidance ?? null)
+    setExerciseContentStatus('LOADING')
+    void application.getExercise(currentExerciseCode)
+      .then((content) => {
+        if (!active) return
+        setExerciseContent(toExerciseGuidance(content))
+        setExerciseContentStatus('IDLE')
+      })
+      .catch(() => {
+        if (!active) return
+        setExerciseContentStatus(localGuidance ? 'LOCAL' : 'FAILED')
+      })
+    return () => { active = false }
+  }, [
+    state?.clientSessionKey,
+    state?.currentExerciseIndex,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.exerciseCode,
+  ])
+
+  function updateWeight(value: string): void {
+    weightDirtyRef.current = true
+    setWeight(value)
+    setWeightHint('')
+    setInputError((current) => current?.field === 'weight' ? null : current)
+  }
+
+  function updateReps(value: string): void {
+    setReps(value)
+    setInputError((current) => current?.field === 'reps' ? null : current)
+  }
+
+  async function confirmFormalWeight(exerciseIndex: number): Promise<void> {
+    if (!state || recordingRef.current) return
+    const parsedWeight = Number(weight)
+    if (weight.trim().length === 0 || !Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      setInputError({ field: 'weight', message: '正式组重量必须是大于 0 的有效 KG 数值。' })
+      return
+    }
+    recordingRef.current = true
+    setRecording(true)
+    setInputError(null)
+    try {
+      const updated = await application.workouts.setExerciseWeight(state, exerciseIndex, parsedWeight)
+      setState(updated)
+      setWeight(String(parsedWeight))
+      setWeightHint('本次训练已确认，后续正式组自动复用')
+      setShowWeightEditor(false)
+      setMessage(state.currentSetIndex > 0
+        ? '已调整本次训练后续正式组重量；之前完成的组保持原记录。'
+        : '正式组重量已确认，后续各组无需重复输入。')
+    } catch {
+      setInputError({ field: 'action', message: '正式组重量保存失败，请稍后重试。' })
+    } finally {
+      recordingRef.current = false
+      setRecording(false)
+    }
+  }
+
+  async function syncRecordedSet(updated: WorkoutFlowState): Promise<void> {
+    const attempt = ++syncAttemptRef.current
+    try {
+      const synchronized = await application.workouts.flush(updated)
+      if (attempt !== syncAttemptRef.current) return
+      if (synchronized.syncStatus === 'CONFLICT') {
+        setMessage('本组已保存在本地；发现两份不同记录，请在同步页确认。')
+        application.telemetry.track('sync_failed', { reason: 'conflict' })
+      } else if (synchronized.syncStatus === 'SYNC_REJECTED') {
+        setMessage('本组已保存在本地，但服务器未接受该记录；请检查输入后重试同步。')
+        application.telemetry.track('sync_failed', { reason: 'rejected' })
+      }
+    } catch {
+      if (attempt !== syncAttemptRef.current) return
+      setMessage('网络不可用，本组已保存在本地，稍后自动补传。')
+      application.telemetry.track('sync_failed', { reason: 'network' })
+    }
+  }
 
   async function recoverAfterRecordFailure(failedState: WorkoutFlowState): Promise<boolean> {
     const recovered = await application.workouts.load().catch(() => null)
@@ -99,22 +283,28 @@ export default function WorkoutSessionPage() {
     if (!state || recordingRef.current) return
     recordingRef.current = true
     setRecording(true)
+    setInputError(null)
     try {
       const exerciseIndex = state.currentExerciseIndex
       const exercise = state.exercises[exerciseIndex]
       const isBodyweight = exercise.weightStatus === 'BODYWEIGHT'
-      if (status === 'COMPLETED' && !isBodyweight && weight.trim().length === 0) {
-        setMessage('请填写实际重量；系统不会把空值静默当成 0 KG。')
+      if (status !== 'SKIPPED' && !isBodyweight && exercise.sessionWeightKg === undefined) {
+        setInputError({ field: 'weight', message: '请先确认本次正式组重量。' })
         return
       }
-      const parsedWeight = isBodyweight ? 0 : weight.trim().length > 0 ? Number(weight) : undefined
-      const parsedReps = Number(reps || exercise.targetReps)
-      if (parsedWeight !== undefined && (!Number.isFinite(parsedWeight) || parsedWeight < 0)) {
-        setMessage('实际重量必须是有效的非负 KG 数值。')
-        return
-      }
-      if (!Number.isSafeInteger(parsedReps) || parsedReps < 0) {
-        setMessage('实际次数必须是有效的非负整数。')
+      const parsedWeight = isBodyweight ? 0 : exercise.sessionWeightKg
+      const parsedReps = reps.trim().length === 0 ? Number.NaN : Number(reps)
+      if (status !== 'SKIPPED' && (
+        !Number.isSafeInteger(parsedReps)
+        || parsedReps < 0
+        || (status === 'COMPLETED' && parsedReps === 0)
+      )) {
+        setInputError({
+          field: 'reps',
+          message: status === 'COMPLETED'
+            ? '完成本组时，实际次数必须是正整数。'
+            : '实际次数必须是有效的非负整数。',
+        })
         return
       }
       const clientSetKey = `${state.clientSessionKey}-${exerciseIndex}-${state.currentSetIndex}`
@@ -129,34 +319,28 @@ export default function WorkoutSessionPage() {
         discomfort,
       })
       setState(updated)
+      setRemaining(updated.restTimer?.configuredDurationSeconds ?? 0)
       setRir('UNKNOWN')
+      setShowEffort(false)
       application.telemetry.track('workout_set_completed', { status: status.toLowerCase() as 'completed' | 'failed' | 'skipped' })
       if (status === 'SKIPPED') application.telemetry.track('exercise_skipped', { reason: 'user' })
-      const resumed = await application.workouts.resume(updated)
-      setState(resumed.state)
-      setRemaining(resumed.remainingSeconds)
-      const prescriptionFinished = isWorkoutPrescriptionFinished(resumed.state)
-      if (resumed.state.syncStatus === 'CONFLICT') {
-        setMessage('发现两份不同的训练记录，请在同步页确认后继续。')
-        application.telemetry.track('sync_failed', { reason: 'conflict' })
-      } else if (resumed.state.syncStatus === 'SYNC_REJECTED') {
-        setMessage('这次记录未能同步，请检查输入后重试；已填写内容仍保留。')
-        application.telemetry.track('sync_failed', { reason: 'rejected' })
-      } else if (resumed.syncFailed) {
-        setMessage('网络不可用，本组已保存在本地，稍后自动补传。')
-        application.telemetry.track('sync_failed', { reason: 'network' })
-      } else {
-        setMessage(prescriptionFinished
-          ? '本次训练已完成，正在整理训练总结。'
-          : status === 'COMPLETED' ? '本组已记录。' : '已按你的实际完成情况记录。')
-      }
+      const prescriptionFinished = isWorkoutPrescriptionFinished(updated)
+      setMessage(prescriptionFinished
+        ? '本次训练已保存，正在整理训练总结。'
+        : status === 'COMPLETED'
+          ? '本组已保存在本地，休息计时已开始。'
+          : '本组实际完成情况已保存在本地。')
+      void syncRecordedSet(updated)
       if (prescriptionFinished) await application.navigation.replace('WORKOUT_SUMMARY')
     } catch (error) {
       const finished = await recoverAfterRecordFailure(state)
       if (!finished) {
-        setMessage(error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
-          ? '训练进度已从本地记录刷新，请核对当前组后重新提交。'
-          : '本组记录失败，请稍后重试；已填写内容仍保留。')
+        setInputError({
+          field: 'action',
+          message: error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
+            ? '训练进度已从本地记录刷新，请核对当前组后重新提交。'
+            : '本组记录失败，请稍后重试；已填写内容仍保留。',
+        })
       }
     } finally {
       recordingRef.current = false
@@ -168,39 +352,50 @@ export default function WorkoutSessionPage() {
     if (!state || recordingRef.current) return
     recordingRef.current = true
     setRecording(true)
-    let locallySaved = false
+    setInputError(null)
     try {
       const exerciseIndex = state.warmup.rampExerciseIndex
       const count = completedRampSets(state)
-      if (count >= state.warmup.maximumRampSets) { setMessage('递增热身组已达到规则上限，请进入正式组。'); return }
-      const parsedWeight = Number(weight)
-      const parsedReps = Number(reps)
-      if (weight.trim().length === 0 || !Number.isFinite(parsedWeight) || parsedWeight < 0) {
-        setMessage('请填写本组实际使用的非负 KG 重量。'); return
-      }
-      if (!Number.isSafeInteger(parsedReps) || parsedReps <= 0) {
-        setMessage('请填写本组实际完成的正整数次数。'); return
+      const exercise = state.exercises[exerciseIndex]
+      const completedWeightKg = exercise.sets
+        .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED' && set.actualWeightKg !== null)
+        .map((set) => set.actualWeightKg as number)
+      const remainingRampSets = exercise.sessionWeightKg === undefined
+        ? []
+        : buildRemainingRampWarmupSets(exercise.sessionWeightKg, completedWeightKg)
+      const nextRampSet = remainingRampSets[0]
+      if (!nextRampSet) {
+        const work = await application.workouts.beginWorkSets(state)
+        setState(work)
+        setMessage('已进入正式组。')
+        return
       }
       const updated = await application.workouts.recordSet(state, {
         clientSetKey: `${state.clientSessionKey}-warmup-${count + 1}`,
         exerciseIndex,
         setType: 'WARMUP',
         status: 'COMPLETED',
-        actualWeightKg: parsedWeight,
-        actualReps: parsedReps,
+        actualWeightKg: nextRampSet.weightKg,
+        actualReps: nextRampSet.reps,
       })
-      locallySaved = true
-      const synced = await application.workouts.flush(updated)
-      setState(synced); setWeight(''); setReps('')
-      setMessage('递增热身组已保存；它不会计入训练容量或重量进阶。')
+      const finalWarmupSet = remainingRampSets.length === 1
+      const nextState = finalWarmupSet
+        ? await application.workouts.beginWorkSets(updated)
+        : updated
+      setState(nextState)
+      setMessage(finalWarmupSet
+        ? '热身完成，正式组重量已准备好。'
+        : '热身完成，下一组重量已自动调整。')
+      void syncRecordedSet(nextState)
     } catch (error) {
       const finished = await recoverAfterRecordFailure(state)
       if (!finished) {
-        setMessage(error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
-          ? '训练进度已从本地记录刷新，请核对当前热身组后重新提交。'
-          : locallySaved
-            ? '网络不可用，热身组已保存在本地，稍后自动补传。'
-            : '热身组记录失败，请稍后重试；已填写内容仍保留。')
+        setInputError({
+          field: 'action',
+          message: error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
+            ? '训练进度已从本地记录刷新，请核对当前热身组后重新提交。'
+            : '热身组记录失败，请稍后重试；已填写内容仍保留。',
+        })
       }
     } finally {
       recordingRef.current = false
@@ -214,13 +409,13 @@ export default function WorkoutSessionPage() {
     setState(updated)
     setMessage(updated.warmup.phase === 'WORK'
       ? '通用热身完成，自重动作无需额外加重，可以开始正式组。'
-      : '通用热身完成。请为第一个动作逐级增加重量。')
+      : '通用热身完成。确认正式组重量后，系统会安排轻重量热身。')
   }
 
   async function enterWorkSets(): Promise<void> {
     if (!state) return
     const updated = await application.workouts.beginWorkSets(state)
-    setState(updated); setWeight(''); setReps('')
+    setState(updated)
     setMessage('递增热身完成，开始记录正式组。')
   }
 
@@ -295,45 +490,118 @@ export default function WorkoutSessionPage() {
 
   if (state?.warmup.phase === 'RAMP' && rampExercise) {
     const count = completedRampSets(state)
+    const formalWeight = rampExercise.sessionWeightKg
+    const completedWeightKg = rampExercise.sets
+      .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED' && set.actualWeightKg !== null)
+      .map((set) => set.actualWeightKg as number)
+    const remainingRampSets = formalWeight === undefined
+      ? []
+      : buildRemainingRampWarmupSets(formalWeight, completedWeightKg)
+    const nextRampSet = remainingRampSets[0]
+    const totalRampSets = count + remainingRampSets.length
+    const progress = totalRampSets === 0 ? 0 : Math.min(100, (count / totalRampSets) * 100)
     return (
       <View className='screen workout-session-page'>
         <View className='page-hero session-hero'>
           <Text className='page-hero__eyebrow'>WARM UP · 02</Text>
           <Text className='page-hero__title'>{rampExercise.name}</Text>
           <Text className='page-hero__description'>
-            {rampExercise.weightStatus === 'KNOWN' && rampExercise.targetWeightKg !== undefined
-              ? `正式组约 ${rampExercise.targetWeightKg} KG，先从明显更轻的重量开始。`
-              : '从轻重量开始，逐步找到能稳定完成目标次数的重量。'}
+            {formalWeight === undefined
+              ? '先确认今天的正式组重量，系统会自动安排轻重量热身。'
+              : `今天正式组 ${formalWeight} KG，热身重量已自动计算。`}
           </Text>
           <View className='session-progress'>
-            <View
-              className='session-progress__fill'
-              style={{ width: `${Math.min(100, (count / state.warmup.maximumRampSets) * 100)}%` }}
-            />
+            <View className='session-progress__fill' style={{ width: `${progress}%` }} />
           </View>
-          <Text className='session-progress__label'>{count} / {state.warmup.maximumRampSets} 个递增组</Text>
+          <Text className='session-progress__label'>
+            {formalWeight === undefined
+              ? '等待确认正式组重量'
+              : totalRampSets === 0
+                ? '正式重量较轻，无需额外热身'
+                : `${count} / ${totalRampSets} 个自动热身组`}
+          </Text>
         </View>
         <View className='surface-card workout-entry'>
-          <View className='session-metrics'>
-            <View className='field-group'>
-              <Text className='field-label'>本组重量</Text>
+          {formalWeight === undefined ? (
+            <View className='session-weight-setup'>
+              <Text className='field-label'>今天正式组重量</Text>
+              <Text className='field-helper'>{weightHint || '只需确认一次，正式组会自动复用'}</Text>
               <View className='metric-input-wrap'>
-                <Input className='metric-input' type='digit' value={weight} placeholder='10' onInput={(event) => setWeight(event.detail.value)} />
+                <Input className='metric-input' type='digit' value={weight} placeholder='例如 10' onInput={(event) => updateWeight(event.detail.value)} />
                 <Text className='metric-input-unit'>KG</Text>
               </View>
+              {inputError?.field === 'weight' && <Text className='session-field-error'>{inputError.message}</Text>}
+              <Button
+                className='primary-action'
+                loading={recording}
+                disabled={recording}
+                onClick={() => void confirmFormalWeight(state.warmup.rampExerciseIndex)}
+              >
+                {recording ? '正在保存' : '确认正式组重量'}
+              </Button>
             </View>
-            <View className='field-group'>
-              <Text className='field-label'>完成次数</Text>
-              <View className='metric-input-wrap'>
-                <Input className='metric-input' type='number' value={reps} placeholder='8' onInput={(event) => setReps(event.detail.value)} />
-                <Text className='metric-input-unit'>次</Text>
+          ) : (
+            <>
+              <View className='session-formal-weight'>
+                <View>
+                  <Text className='session-formal-weight__label'>本次正式组重量</Text>
+                  <Text className='session-formal-weight__value data-number'>{formalWeight} KG</Text>
+                </View>
+                <Button
+                  className='session-formal-weight__edit'
+                  onClick={() => {
+                    setWeight(String(formalWeight))
+                    setShowWeightEditor(true)
+                  }}
+                >调整</Button>
               </View>
-            </View>
-          </View>
-          <View className='session-safety-note'>重量逐级增加；出现疼痛或明显不适请停止。</View>
+              {showWeightEditor && (
+                <View className='session-weight-setup session-weight-setup--inline'>
+                  <Text className='field-helper'>调整后会重新计算尚未完成的热身组。</Text>
+                  <View className='metric-input-wrap'>
+                    <Input className='metric-input' type='digit' value={weight} onInput={(event) => updateWeight(event.detail.value)} />
+                    <Text className='metric-input-unit'>KG</Text>
+                  </View>
+                  {inputError?.field === 'weight' && <Text className='session-field-error'>{inputError.message}</Text>}
+                  <Button className='secondary-action' onClick={() => void confirmFormalWeight(state.warmup.rampExerciseIndex)}>
+                    保存调整
+                  </Button>
+                </View>
+              )}
+              {nextRampSet ? (
+                <View className='session-auto-warmup'>
+                  <Text className='session-auto-warmup__eyebrow'>接下来 · 第 {count + 1} 组热身</Text>
+                  <Text className='session-auto-warmup__value data-number'>{nextRampSet.weightKg} KG</Text>
+                  <Text className='session-auto-warmup__reps'>完成 {nextRampSet.reps} 次即可</Text>
+                </View>
+              ) : (
+                <View className='session-auto-warmup session-auto-warmup--ready'>
+                  <Text className='session-auto-warmup__eyebrow'>无需额外热身组</Text>
+                  <Text className='session-auto-warmup__reps'>当前重量较轻，可以直接开始正式组。</Text>
+                </View>
+              )}
+              <View className='session-safety-note'>热身重量由系统计算；出现疼痛或明显不适请停止。</View>
+            </>
+          )}
           <View className='session-inline-message'>{message}</View>
-          <Button className='primary-action' disabled={recording || count >= state.warmup.maximumRampSets} onClick={() => void recordRampSet()}>记录并继续加重</Button>
-          <Button className='secondary-action' onClick={() => void enterWorkSets()}>{count === 0 ? '直接进入正式组' : '热身重量合适，开始正式组'}</Button>
+          {inputError?.field === 'action' && <View className='session-action-error'>{inputError.message}</View>}
+          {formalWeight !== undefined && (
+            <>
+              <Button
+                className='primary-action'
+                loading={recording}
+                disabled={recording}
+                onClick={() => void recordRampSet()}
+              >
+                {recording ? '正在保存' : nextRampSet ? '完成本热身组' : '开始正式组'}
+              </Button>
+              {nextRampSet && (
+                <Button className='secondary-action' onClick={() => void enterWorkSets()}>
+                  跳过剩余热身，开始正式组
+                </Button>
+              )}
+            </>
+          )}
         </View>
       </View>
     )
@@ -367,7 +635,7 @@ export default function WorkoutSessionPage() {
 
   return (
     <View className='screen workout-session-page'>
-      <View className='page-hero session-hero'>
+      <View className='page-hero session-hero session-hero--work'>
         <Text className='page-hero__eyebrow'>
           {exercise && state ? `SET ${state.currentSetIndex + 1} OF ${exercise.targetWorkSets}` : 'TRAINING'}
         </Text>
@@ -389,72 +657,216 @@ export default function WorkoutSessionPage() {
       <View className='session-inline-message'>{message}</View>
 
       {exercise && (
-        <View className='surface-card workout-entry'>
-          {isBodyweight && (
-            <View className='session-bodyweight-note'>
-              自重动作无需填写重量，只记录这一组完成的次数。
-            </View>
-          )}
-          <View className={isBodyweight ? 'session-metrics session-metrics--bodyweight' : 'session-metrics'}>
+        <>
+          <View className='surface-card workout-entry'>
+            {isBodyweight && (
+              <View className='session-bodyweight-note'>
+                自重动作无需填写重量，只记录本组实际次数。
+              </View>
+            )}
             {!isBodyweight && (
-              <View className='field-group'>
-                <Text className='field-label'>实际重量</Text>
-                <Text className='field-helper'>填写这一组真实使用的重量</Text>
+              exercise.sessionWeightKg === undefined || showWeightEditor
+            ) && (
+              <View className='session-weight-setup'>
+                <View className='session-field-heading'>
+                  <Text className='field-label'>
+                    {exercise.sessionWeightKg === undefined ? '确认本次正式组重量' : '调整本次正式组重量'}
+                  </Text>
+                  <Text className='field-helper'>仅本次训练</Text>
+                </View>
+                <Text className='field-helper'>
+                  {exercise.sessionWeightKg === undefined
+                    ? weightHint || '只确认一次，后续正式组自动复用'
+                    : state.currentSetIndex > 0
+                      ? '只影响后续组，已经完成的组保持原记录'
+                      : '保存后自动复用，不会修改长期计划'}
+                </Text>
                 <View className='metric-input-wrap'>
-                  <Input className='metric-input' type='digit' value={weight} placeholder='12.5' onInput={(event) => setWeight(event.detail.value)} />
+                  <Input className='metric-input' type='digit' value={weight} placeholder='例如 12.5' onInput={(event) => updateWeight(event.detail.value)} />
                   <Text className='metric-input-unit'>KG</Text>
+                </View>
+                {inputError?.field === 'weight' && <Text className='session-field-error'>{inputError.message}</Text>}
+                <View className='session-weight-setup__actions'>
+                  <Button
+                    className='secondary-action'
+                    loading={recording}
+                    disabled={recording}
+                    onClick={() => void confirmFormalWeight(state.currentExerciseIndex)}
+                  >
+                    {recording ? '正在保存' : '保存本次重量'}
+                  </Button>
+                  {exercise.sessionWeightKg !== undefined && (
+                    <Button className='session-formal-weight__edit' onClick={() => setShowWeightEditor(false)}>取消</Button>
+                  )}
                 </View>
               </View>
             )}
-            <View className='field-group'>
-              <Text className='field-label'>实际次数</Text>
-              <Text className='field-helper'>默认使用本组目标次数</Text>
-              <View className='metric-input-wrap'>
-                <Input className='metric-input' type='number' value={reps || String(exercise.targetReps)} onInput={(event) => setReps(event.detail.value)} />
-                <Text className='metric-input-unit'>次</Text>
+
+            <View
+              className={
+                isBodyweight || exercise.sessionWeightKg === undefined || showWeightEditor
+                  ? 'session-recording-grid session-recording-grid--single'
+                  : 'session-recording-grid'
+              }
+            >
+              {!isBodyweight && exercise.sessionWeightKg !== undefined && !showWeightEditor && (
+                <View className='session-formal-weight session-formal-weight--compact'>
+                  <View className='session-field-heading'>
+                    <Text className='session-formal-weight__label'>实际重量</Text>
+                    <Button
+                      className='session-formal-weight__edit session-formal-weight__edit--compact'
+                      onClick={() => {
+                        setWeight(String(exercise.sessionWeightKg))
+                        setShowWeightEditor(true)
+                      }}
+                    >仅本次调整</Button>
+                  </View>
+                  <Text className='session-formal-weight__value data-number'>{exercise.sessionWeightKg} KG</Text>
+                  <Text className='session-formal-weight__hint'>本次各组自动复用</Text>
+                </View>
+              )}
+              <View className='field-group session-reps-field'>
+                <View className='session-field-heading'>
+                  <Text className='field-label'>实际次数</Text>
+                  <Text className='field-helper'>目标 {exercise.targetReps} 次</Text>
+                </View>
+                <View className='metric-input-wrap'>
+                  <Input className='metric-input' type='number' value={reps} onInput={(event) => updateReps(event.detail.value)} />
+                  <Text className='metric-input-unit'>次</Text>
+                </View>
+                {inputError?.field === 'reps' && <Text className='session-field-error'>{inputError.message}</Text>}
               </View>
             </View>
-          </View>
 
-          <View className='session-effort'>
-            <Text className='field-label'>训练余力（可选）</Text>
-            <Text className='field-helper'>选择最接近本组结束时的感受；不确定可以跳过。</Text>
-            <View className='rir-options'>
-              {rirOptions.map((option) => (
-                <Button
-                  key={option.value}
-                  size='mini'
-                  className={rir === option.value ? 'rir-option rir-option--selected' : 'rir-option'}
-                  onClick={() => setRir(option.value)}
-                >{option.label}</Button>
-              ))}
+            <View className='session-effort'>
+              <Button className='session-effort__toggle' onClick={() => setShowEffort((value) => !value)}>
+                <Text>训练余力（可选）</Text>
+                <Text>{rirOptions.find((option) => option.value === rir)?.label} · {showEffort ? '收起' : '修改'}</Text>
+              </Button>
+              {showEffort && (
+                <>
+                  <Text className='field-helper'>选择最接近本组结束时的感受；不确定可以跳过。</Text>
+                  <View className='rir-options'>
+                    {rirOptions.map((option) => (
+                      <Button
+                        key={option.value}
+                        size='mini'
+                        className={rir === option.value ? 'rir-option rir-option--selected' : 'rir-option'}
+                        onClick={() => {
+                          setRir(option.value)
+                          setShowEffort(false)
+                        }}
+                      >{option.label}</Button>
+                    ))}
+                  </View>
+                </>
+              )}
             </View>
-          </View>
 
-          <Button
-            className='session-guide-action'
-            onClick={() => void application.navigation.open('EXERCISE_DETAIL', { exerciseCode: exercise.exerciseCode })}
-          >
-            查看动作步骤与安全提示
-          </Button>
-          <Button className='session-replace-action' onClick={() => void showReplacements()}>这个动作今天不合适？更换动作</Button>
-          {replacements.length > 0 && (
-            <View className='session-replacements'>
-              {replacements.map((candidate) => (
-                <Button key={candidate.id} className='secondary-action' onClick={() => void replace(candidate)}>{candidate.name}</Button>
-              ))}
-            </View>
-          )}
-
-          <View className='action-row workout-actions'>
-            <Button className='primary-action' disabled={recording} onClick={() => void record('COMPLETED')}>完成本组</Button>
-            <View className='workout-actions__secondary'>
-              <Button className='secondary-action' disabled={recording} onClick={() => void record('FAILED')}>未完成</Button>
+            {inputError?.field === 'action' && <View className='session-action-error'>{inputError.message}</View>}
+            <View className='action-row action-row--sticky workout-actions'>
+              <Button
+                className='primary-action'
+                loading={recording}
+                disabled={recording || (!isBodyweight && exercise.sessionWeightKg === undefined)}
+                onClick={() => void record('COMPLETED')}
+              >
+                {recording ? '正在保存本组' : '完成本组'}
+              </Button>
+              <Button
+                className='secondary-action'
+                disabled={recording || (!isBodyweight && exercise.sessionWeightKg === undefined)}
+                onClick={() => void record('FAILED')}
+              >未完成</Button>
               <Button className='secondary-action' disabled={recording} onClick={() => void record('SKIPPED')}>跳过</Button>
+              <Button
+                className='workout-actions__pain'
+                disabled={recording || (!isBodyweight && exercise.sessionWeightKg === undefined)}
+                onClick={() => void record('FAILED', 'PAIN')}
+              >疼痛或明显不适</Button>
             </View>
-            <Button className='workout-actions__pain' disabled={recording} onClick={() => void record('FAILED', 'PAIN')}>疼痛或明显不适</Button>
+
+            <Button className='session-replace-action' onClick={() => void showReplacements()}>这个动作今天不合适？更换动作</Button>
+            {replacements.length > 0 && (
+              <View className='session-replacements'>
+                {replacements.map((candidate) => (
+                  <Button key={candidate.id} className='secondary-action' onClick={() => void replace(candidate)}>{candidate.name}</Button>
+                ))}
+              </View>
+            )}
           </View>
-        </View>
+
+          <View className='session-motion-section'>
+            <ExerciseMotionGuide
+              compact
+              exerciseCode={exercise.exerciseCode}
+              exerciseName={exercise.name}
+              primaryRef={exerciseContent?.primaryRef}
+              fallbackRef={exerciseContent?.fallbackRef}
+            />
+            <View className='surface-card session-exercise-guidance'>
+              <View className='session-exercise-guidance__section'>
+                <View className='session-exercise-guidance__heading'>
+                  <Text className='session-exercise-guidance__title'>动作说明</Text>
+                  <Text className='session-exercise-guidance__meta'>
+                    {exerciseContentStatus === 'LOCAL' ? '本地安全指导' : '训练中可随时对照'}
+                  </Text>
+                </View>
+                <Text className='session-exercise-guidance__description'>
+                  {exerciseContent?.plainLanguage
+                    ?? (exerciseContentStatus === 'FAILED'
+                      ? '动作说明暂时无法读取，请保持稳定姿势并按静态示例控制动作。'
+                      : '正在读取动作说明…')}
+                </Text>
+              </View>
+
+              {exerciseContent && (
+                <>
+                  <View className='session-exercise-guidance__section'>
+                    <View className='session-exercise-guidance__heading'>
+                      <Text className='session-exercise-guidance__title'>动作步骤</Text>
+                      <Text className='session-exercise-guidance__meta'>{exerciseContent.instructions.length} 个要点</Text>
+                    </View>
+                    <View className='session-exercise-steps'>
+                      {exerciseContent.instructions.map((instruction, index) => (
+                        <View className='session-exercise-step' key={`${index}-${instruction}`}>
+                          <Text className='session-exercise-step__index data-number'>
+                            {String(index + 1).padStart(2, '0')}
+                          </Text>
+                          <Text className='session-exercise-step__text'>{instruction}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View className='session-exercise-coaching'>
+                    <View className='session-exercise-coaching__block session-exercise-coaching__block--breathing'>
+                      <Text className='session-exercise-coaching__title'>呼吸提示</Text>
+                      {exerciseContent.breathingCues.map((cue) => (
+                        <Text className='session-exercise-coaching__item' key={cue}>· {cue}</Text>
+                      ))}
+                    </View>
+                    <View className='session-exercise-coaching__block session-exercise-coaching__block--mistakes'>
+                      <Text className='session-exercise-coaching__title'>常见错误</Text>
+                      {exerciseContent.commonMistakes.map((mistake) => (
+                        <Text className='session-exercise-coaching__item' key={mistake}>· {mistake}</Text>
+                      ))}
+                    </View>
+                  </View>
+
+                  {exerciseContent.safetyCues.length > 0 && (
+                    <View className='session-exercise-safety'>
+                      <Text className='session-exercise-safety__title'>安全提醒</Text>
+                      {exerciseContent.safetyCues.map((cue) => (
+                        <Text className='session-exercise-safety__cue' key={cue}>· {cue}</Text>
+                      ))}
+                    </View>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+        </>
       )}
 
       <View className='workout-secondary-links'>

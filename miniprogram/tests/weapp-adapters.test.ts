@@ -8,12 +8,17 @@ const taro = vi.hoisted(() => ({
   login: vi.fn(),
   navigateTo: vi.fn(),
   redirectTo: vi.fn(),
+  reLaunch: vi.fn(),
   navigateBack: vi.fn(),
 }))
 
 vi.mock('@tarojs/taro', () => ({ default: taro }))
 
-import { createWeappSessionStore, createWeappTransport } from '../src/platform/weapp/adapters'
+import {
+  createWeappNavigation,
+  createWeappSessionStore,
+  createWeappTransport,
+} from '../src/platform/weapp/adapters'
 
 describe('WeApp session storage', () => {
   beforeEach(() => {
@@ -35,6 +40,23 @@ describe('WeApp session storage', () => {
   it('does not hide unexpected session removal failures', async () => {
     taro.removeStorage.mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(createWeappSessionStore().clear()).rejects.toThrow('storage unavailable')
+  })
+
+  it('relaunches the login entry and clears the stale page stack after authentication expires', async () => {
+    await createWeappNavigation().replaceApp('LOGIN')
+
+    expect(taro.reLaunch).toHaveBeenCalledWith({
+      url: '/presentation/pages/home/index',
+    })
+    expect(taro.redirectTo).not.toHaveBeenCalled()
+  })
+
+  it('loads the live workout from the exercise-guide subpackage', async () => {
+    await createWeappNavigation().open('WORKOUT_SESSION')
+
+    expect(taro.navigateTo).toHaveBeenCalledWith({
+      url: '/subpackages/exercise-guide/pages/workout-session/index',
+    })
   })
 
   it('uses the CloudBase private container path when a service is configured', async () => {
@@ -82,5 +104,28 @@ describe('WeApp session storage', () => {
     })
 
     await expect(request).rejects.toThrow('CloudBase container returned an invalid HTTP status code')
+  })
+
+  it('times out a stalled CloudBase container call instead of leaving an action pending forever', async () => {
+    vi.useFakeTimers()
+    try {
+      const callContainer = vi.fn(() => new Promise(() => undefined))
+      Reflect.set(globalThis, 'wx', { cloud: { callContainer } })
+      const request = createWeappTransport({
+        environmentId: 'fitness-env',
+        serviceName: 'fitness-api',
+        requestTimeoutMs: 25,
+      }).request({
+        url: 'http://127.0.0.1:8080/api/v1/workouts',
+        method: 'POST',
+        headers: {},
+      })
+
+      const rejection = expect(request).rejects.toThrow('CloudBase 请求超时')
+      await vi.advanceTimersByTimeAsync(25)
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

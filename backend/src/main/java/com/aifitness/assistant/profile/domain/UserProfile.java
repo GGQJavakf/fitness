@@ -45,6 +45,7 @@ public record UserProfile(UUID userId, Details details, long version) {
     public enum FitnessGoal {
         STRENGTH,
         HYPERTROPHY,
+        FAT_LOSS,
         GENERAL_FITNESS
     }
 

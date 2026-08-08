@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildRampWarmupSets,
+  buildRemainingRampWarmupSets,
   createWorkoutFlow,
   beginWorkSets,
   completeGeneralWarmup,
   completedRampSets,
   isWorkoutPrescriptionFinished,
   recordWorkoutSet,
+  markWorkoutSyncPending,
   replaceExerciseForSession,
+  setWorkoutExerciseWeight,
   summarizeWorkout,
 } from '../src/application/workoutFlow'
 
@@ -31,7 +35,7 @@ function createWorkFlow() {
 describe('workout execution state', () => {
   it('moves explicitly through general warmup, ramp sets, and work sets', () => {
     const general = createWorkoutFlow({ ...baseInput, warmupDurationSeconds: 300 })
-    expect(general.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300, maximumRampSets: 3 })
+    expect(general.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300, maximumRampSets: 2 })
 
     let ramp = completeGeneralWarmup(general)
     ramp = recordWorkoutSet(ramp, {
@@ -64,18 +68,78 @@ describe('workout execution state', () => {
     })).toThrow(/after warmup/i)
   })
 
-  it('enforces the deterministic three-set ramp warmup ceiling', () => {
+  it('builds two beginner-friendly warmup sets from the confirmed work weight', () => {
+    expect(buildRampWarmupSets(8)).toEqual([
+      { weightKg: 2, reps: 10 },
+      { weightKg: 5, reps: 6 },
+    ])
+    expect(buildRampWarmupSets(20)).toEqual([
+      { weightKg: 10, reps: 10 },
+      { weightKg: 14, reps: 6 },
+    ])
+    expect(buildRampWarmupSets(5)).toEqual([{ weightKg: 2, reps: 10 }])
+    expect(buildRampWarmupSets(2)).toEqual([])
+  })
+
+  it('never suggests a lighter ramp set after formal weight is adjusted mid-warmup', () => {
+    expect(buildRemainingRampWarmupSets(20, [10])).toEqual([{ weightKg: 14, reps: 6 }])
+    expect(buildRemainingRampWarmupSets(8, [10])).toEqual([])
+    expect(buildRemainingRampWarmupSets(30, [10])).toEqual([{ weightKg: 21, reps: 6 }])
+  })
+
+  it('enforces the deterministic two-set ramp warmup ceiling', () => {
     let state = completeGeneralWarmup(createWorkoutFlow(baseInput))
-    for (let order = 1; order <= 3; order += 1) {
+    for (let order = 1; order <= 2; order += 1) {
       state = recordWorkoutSet(state, {
         clientSetKey: `ramp-${order}`, exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
         actualWeightKg: order * 5, actualReps: 8,
       })
     }
     expect(() => recordWorkoutSet(state, {
-      clientSetKey: 'ramp-4', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
+      clientSetKey: 'ramp-3', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
       actualWeightKg: 20, actualReps: 6,
     })).toThrow(/maximum ramp warmup sets/i)
+  })
+
+  it('keeps one confirmed formal weight on the exercise and reuses it for work sets', () => {
+    const planned = createWorkoutFlow({
+      ...baseInput,
+      exercises: [{ ...baseInput.exercises[0], weightStatus: 'KNOWN' as const, targetWeightKg: 20 }],
+    })
+    expect(planned.exercises[0].sessionWeightKg).toBe(20)
+
+    const calibrated = setWorkoutExerciseWeight(createWorkoutFlow(baseInput), 0, 17.5)
+    const work = beginWorkSets(completeGeneralWarmup(calibrated))
+    const recorded = recordWorkoutSet(work, {
+      clientSetKey: 'work-uses-session-weight',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualReps: 10,
+    })
+
+    expect(recorded.exercises[0].sessionWeightKg).toBe(17.5)
+    expect(recorded.exercises[0].sets[0].actualWeightKg).toBe(17.5)
+  })
+
+  it('preserves pending and conflict evidence when the session weight is adjusted', () => {
+    const pending = markWorkoutSyncPending(createWorkoutFlow(baseInput))
+    const conflict = { ...createWorkoutFlow(baseInput), syncStatus: 'CONFLICT' as const }
+
+    expect(setWorkoutExerciseWeight(pending, 0, 15).syncStatus).toBe('OFFLINE_PENDING')
+    expect(setWorkoutExerciseWeight(conflict, 0, 15).syncStatus).toBe('CONFLICT')
+  })
+
+  it('rejects external-load work attempts without a known or explicit weight', () => {
+    const work = createWorkFlow()
+
+    expect(() => recordWorkoutSet(work, {
+      clientSetKey: 'failed-without-weight',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'FAILED',
+      actualReps: 4,
+    })).toThrow(/formal weight/i)
   })
 
   it('keeps missing RIR unknown and excludes warm-up, failed, and skipped sets from volume', () => {

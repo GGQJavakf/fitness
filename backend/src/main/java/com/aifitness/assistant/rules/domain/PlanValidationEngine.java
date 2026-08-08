@@ -41,6 +41,7 @@ public final class PlanValidationEngine {
             issues.add(error("SESSION_FREQUENCY_OUT_OF_RANGE", "/days"));
         }
         boolean calibrationRequired = false;
+        Map<String, Integer> firstPrimaryMuscleSession = new HashMap<>();
         Map<String, Integer> lastPrimaryMuscleSession = new HashMap<>();
         for (int dayIndex = 0; dayIndex < candidate.days().size(); dayIndex++) {
             PlanGenerationEngine.Day day = candidate.days().get(dayIndex);
@@ -91,6 +92,7 @@ public final class PlanValidationEngine {
             });
             int sessionIndex = dayIndex;
             dayMuscles.stream().sorted().forEach(muscle -> {
+                firstPrimaryMuscleSession.putIfAbsent(muscle, sessionIndex);
                 Integer previous = lastPrimaryMuscleSession.put(muscle, sessionIndex);
                 int estimatedHours = previous == null || candidate.days().isEmpty()
                         ? Integer.MAX_VALUE
@@ -104,6 +106,20 @@ public final class PlanValidationEngine {
                 issues.add(error("SESSION_DURATION_EXCEEDED", dayPath));
             }
         }
+        firstPrimaryMuscleSession.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            String muscle = entry.getKey();
+            int first = entry.getValue();
+            int last = lastPrimaryMuscleSession.get(muscle);
+            int estimatedHours = candidate.days().isEmpty()
+                    ? Integer.MAX_VALUE
+                    : (HOURS_PER_WEEK * (candidate.days().size() - last + first)) / candidate.days().size();
+            if (estimatedHours < policy.balance().minimumRecoveryHoursBetweenPrimaryMuscleSessions()) {
+                String firstDayCode = candidate.days().get(first).code();
+                issues.add(warning(
+                        "RECOVERY_WINDOW_TOO_SHORT",
+                        "/days/" + firstDayCode + "/primaryMuscles/" + muscle));
+            }
+        });
         if (issues.stream().noneMatch(issue -> issue.severity() == PlanGenerationEngine.ValidationSeverity.ERROR)
                 && calibrationRequired) {
             issues.add(new PlanGenerationEngine.ValidationIssue(
@@ -144,7 +160,7 @@ public final class PlanValidationEngine {
                 PlanGenerationEngine.ValidationSeverity.WARNING, reasonCode, fieldPath);
     }
 
-    public record ExerciseFacts(String movementPattern, Set<String> primaryMuscles) {
+    public record ExerciseFacts(String movementPattern, Set<String> primaryMuscles, boolean bodyweight) {
         public ExerciseFacts {
             if (movementPattern == null || movementPattern.isBlank()) {
                 throw new IllegalArgumentException("movement pattern is required");
@@ -154,6 +170,10 @@ public final class PlanValidationEngine {
             if (primaryMuscles.isEmpty() || primaryMuscles.stream().anyMatch(String::isBlank)) {
                 throw new IllegalArgumentException("primary muscles must contain values");
             }
+        }
+
+        public ExerciseFacts(String movementPattern, Set<String> primaryMuscles) {
+            this(movementPattern, primaryMuscles, false);
         }
     }
 }

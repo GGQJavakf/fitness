@@ -18,6 +18,18 @@ const fieldLabels: Record<EditableNumericField, string> = {
 }
 const editableFields = Object.keys(fieldLabels) as EditableNumericField[]
 
+function editableValueError(field: EditableNumericField, raw: string): string {
+  if (!raw.trim()) return `请输入${fieldLabels[field]}`
+  const value = Number(raw)
+  if (!Number.isFinite(value)) return `${fieldLabels[field]}必须是有效数字`
+  if (field === 'targetWeightKg') {
+    return value >= 0 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-8
+      ? ''
+      : '目标重量必须是非负数，最多保留两位小数'
+  }
+  return Number.isInteger(value) && value > 0 ? '' : `${fieldLabels[field]}必须是正整数`
+}
+
 export default function PlanEditorPage() {
   const [editor, setEditor] = useState<PlanEditorState | null>(() => application.getPlanEditor())
   const [busy, setBusy] = useState(false)
@@ -27,6 +39,8 @@ export default function PlanEditorPage() {
   const [dayOptions, setDayOptions] = useState<readonly PlanDayOption[]>([])
   const [showDayOptions, setShowDayOptions] = useState(false)
   const [pendingRemove, setPendingRemove] = useState('')
+  const [rawValues, setRawValues] = useState<Record<string, string>>({})
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (editor) return
@@ -36,13 +50,38 @@ export default function PlanEditorPage() {
   }, [editor])
 
   function edit(dayCode: string, exerciseCode: string, field: EditableNumericField, raw: string): void {
+    const path = numericFieldPath(dayCode, exerciseCode, field)
+    setRawValues((values) => ({ ...values, [path]: raw }))
+    const fieldError = editableValueError(field, raw)
+    setFieldErrors((errors) => {
+      const next = { ...errors }
+      if (fieldError) next[path] = fieldError
+      else delete next[path]
+      return next
+    })
+    if (fieldError) return
     const value = Number(raw)
     const next = application.editPlanNumber(dayCode, exerciseCode, field, value)
     setEditor(next)
     if (next !== editor) application.telemetry.track('plan_edited', { fieldKind: 'prescription' })
   }
 
+  function rawValuesAreValid(): boolean {
+    const errors: Record<string, string> = {}
+    Object.entries(rawValues).forEach(([path, raw]) => {
+      const segments = path.split('/')
+      const field = segments[segments.length - 1] as EditableNumericField
+      const fieldError = editableValueError(field, raw)
+      if (fieldError) errors[path] = fieldError
+    })
+    setFieldErrors(errors)
+    if (Object.keys(errors).length === 0) return true
+    setError('请先修正标出的计划数值')
+    return false
+  }
+
   async function run(action: () => Promise<PlanEditorState>): Promise<void> {
+    if (!rawValuesAreValid()) return
     setBusy(true)
     setError('')
     try {
@@ -55,12 +94,15 @@ export default function PlanEditorPage() {
   }
 
   async function save(): Promise<void> {
+    if (!rawValuesAreValid()) return
     const previousVersion = editor?.baseVersion ?? 0
     setBusy(true)
     setError('')
     try {
       const current = await application.saveEditor()
       setEditor(current)
+      setRawValues({})
+      setFieldErrors({})
       if (current.baseVersion > previousVersion
         && !current.warningConfirmationToken
         && !current.conflict
@@ -116,6 +158,8 @@ export default function PlanEditorPage() {
       setShowDayOptions(false)
       setDayOptions([])
       setPendingRemove('')
+      setRawValues({})
+      setFieldErrors({})
       setError('')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '动作结构调整失败')
@@ -137,7 +181,12 @@ export default function PlanEditorPage() {
     <View className='screen'>
       <View className='card'>
         <Text className='title'>{editor.workingCopy.name}</Text>
-        <Text className='subtitle'>{editor.baseVersion === 0 ? '候选草稿尚未生效。' : `基于不可变版本 v${editor.baseVersion}。`}手改关键数值会自动 USER_LOCKED；RULE_LOCKED 不能由客户端修改。</Text>
+        <Text className='subtitle'>
+          {editor.baseVersion === 0
+            ? '这是启用前的候选方案。保存后会生成第一版计划。'
+            : `正在基于第 ${editor.baseVersion} 版调整；保存会生成新版本，已有训练记录不会改变。`}
+          你修改并锁定的数值会在后续优化中保留；安全边界内的固定项不能手动修改。
+        </Text>
       </View>
 
       {editor.workingCopy.days.map((day, dayIndex) => (
@@ -188,30 +237,35 @@ export default function PlanEditorPage() {
                 const lock = editor.locks[path] ?? 'UNLOCKED'
                 const weightUnavailable = field === 'targetWeightKg' && exercise.weightStatus === 'BODYWEIGHT'
                 const value = exercise[field]
+                const rawValue = rawValues[path]
                 return (
                   <View key={field} className='editor-field'>
                     <Text>{fieldLabels[field]}</Text>
                     {weightUnavailable
                       ? <Text className='editor-field__hint'>自重动作</Text>
-                      : <Input
-                          className='editor-field__input'
-                          type='digit'
-                          value={typeof value === 'number' ? String(value) : ''}
-                          placeholder={field === 'targetWeightKg' ? '先校准' : ''}
-                          disabled={lock === 'RULE_LOCKED'}
-                          onInput={(event) => {
-                            if (event.detail.value.trim()) edit(day.code, exercise.exerciseCode, field, event.detail.value)
-                          }}
-                        />}
+                      : (
+                        <View className='editor-field__input-group'>
+                          <Input
+                            className='editor-field__input'
+                            type='digit'
+                            value={rawValue ?? (typeof value === 'number' ? String(value) : '')}
+                            placeholder={field === 'targetWeightKg' ? '先校准' : ''}
+                            disabled={lock === 'RULE_LOCKED'}
+                            onInput={(event) => edit(day.code, exercise.exerciseCode, field, event.detail.value)}
+                          />
+                          {fieldErrors[path] && <Text className='editor-field__error'>{fieldErrors[path]}</Text>}
+                        </View>
+                      )}
                     {weightUnavailable
                       ? <Text className='editor-field__lock'>无需锁定</Text>
                       : lock === 'RULE_LOCKED'
-                      ? <Text className='editor-field__lock'>🔒 规则锁</Text>
+                      ? <Text className='editor-field__lock'>安全边界固定</Text>
                       : field === 'targetWeightKg' && typeof value !== 'number'
                         ? <Text className='editor-field__lock'>填写后可锁定</Text>
                       : <Button
                           size='mini'
                           className='secondary-action'
+                          disabled={Boolean(fieldErrors[path])}
                           onClick={() => setEditor(application.setPlanFieldLock(path, lock === 'USER_LOCKED' ? 'UNLOCKED' : 'USER_LOCKED'))}
                         >{lock === 'USER_LOCKED' ? '解锁' : '锁定'}</Button>}
                   </View>
@@ -219,7 +273,7 @@ export default function PlanEditorPage() {
               })}
             </View>
           ))}
-          <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openExerciseOptions(day.code)}>＋ 添加模板动作</Button>
+          <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openExerciseOptions(day.code)}>添加动作</Button>
           {optionPicker?.dayCode === day.code && (
             <View className='exercise-option-panel'>
               <View className='editor-exercise__heading'>
@@ -238,7 +292,7 @@ export default function PlanEditorPage() {
       ))}
 
       <View className='card'>
-        <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openDayOptions()}>＋ 恢复模板训练日</Button>
+        <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openDayOptions()}>恢复训练日</Button>
         {showDayOptions && (
           <View className='exercise-option-panel'>
             <View className='editor-exercise__heading'>
@@ -275,7 +329,7 @@ export default function PlanEditorPage() {
       )}
       <View className='action-row action-row--sticky'>
         <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.validateEditor())}>校验</Button>
-        <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.previewRebalance())}>重新优化预览</Button>
+        <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.previewRebalance())}>查看系统调整建议</Button>
         {editor.warningConfirmationToken && !editor.warningConfirmed
           ? <Button className='primary-action' onClick={() => setEditor(application.confirmEditorWarnings())}>确认警告</Button>
           : <Button className='primary-action' loading={busy} onClick={() => void save()}>保存新版本</Button>}

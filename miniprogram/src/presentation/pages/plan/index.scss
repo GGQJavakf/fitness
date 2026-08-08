@@ -180,6 +180,15 @@
   font-weight: 700;
 }
 
+.plan-overview__edit {
+  width: 100%;
+  min-height: 72px;
+  margin-top: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 23px;
+}
+
 .plan-section-heading {
   display: flex;
   margin: 32px 4px 16px;
@@ -281,6 +290,17 @@
   background: #f0f6f3;
   color: #53655d;
   font-size: 19px;
+}
+
+.plan-exercise__guide {
+  width: fit-content;
+  min-height: 88px;
+  padding: 0;
+  background: transparent;
+  color: var(--plan-forest);
+  font-size: 21px;
+  font-weight: 680;
+  justify-content: flex-start;
 }
 
 @media (min-width: 430px) {

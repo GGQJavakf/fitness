@@ -19,6 +19,28 @@
   padding: 30px 24px calc(40px + env(safe-area-inset-bottom));
 }
 
+.home-page__loading {
+  display: flex;
+  min-height: 70vh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.home-page__loading-title {
+  margin-top: 18px;
+  color: var(--home-ink);
+  font-size: 34px;
+  font-weight: 740;
+}
+
+.home-page__loading-note {
+  margin-top: 10px;
+  color: var(--home-muted);
+  font-size: 21px;
+}
+
 .home-page__content {
   display: flex;
   width: 100%;

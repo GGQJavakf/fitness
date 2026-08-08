@@ -24,3 +24,8 @@ application-local.yml
 # Logs and coverage
 *.log
 coverage/
+
+# Local generation and language caches
+.tmp/
+__pycache__/
+*.py[cod]

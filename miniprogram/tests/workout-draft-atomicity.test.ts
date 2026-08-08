@@ -41,6 +41,30 @@ describe('WeChat workout draft atomic storage', () => {
     expect(taro.getStorage).toHaveBeenCalledWith({ key: calls[0] })
   })
 
+  it('removes the previous revision only after the new active pointer is durable', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => {
+      values.set(key, data)
+    })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => {
+      values.delete(key)
+    })
+    const store = createWechatWorkoutDraftStore()
+
+    await store.save(draft(1))
+    const firstRecordKey = [...values.keys()].find((key) => key.startsWith('fitness.workout.draft.record.'))!
+    await store.save(draft(2))
+
+    const recordKeys = [...values.keys()].filter((key) => key.startsWith('fitness.workout.draft.record.'))
+    expect(recordKeys).toHaveLength(1)
+    expect(recordKeys[0]).not.toBe(firstRecordKey)
+    expect(taro.removeStorage).toHaveBeenCalledWith({ key: firstRecordKey })
+  })
+
   it('keeps the previous active draft if pointer switching fails', async () => {
     const values = new Map<string, unknown>([
       ['fitness.workout.draft.active.v1', { recordKey: 'old-record', schemaVersion: 1 }],

@@ -4,7 +4,7 @@ import type { PageDestination } from '../../../application/navigation'
 
 import './index.scss'
 
-type MainDestination = Extract<PageDestination, 'HOME' | 'PLAN' | 'HISTORY' | 'MY'>
+type MainDestination = Extract<PageDestination, 'PLAN' | 'HISTORY' | 'MY'>
 
 interface MainNavigationProps {
   current: MainDestination
@@ -12,7 +12,6 @@ interface MainNavigationProps {
 }
 
 const items: ReadonlyArray<{ destination: MainDestination; label: string }> = [
-  { destination: 'HOME', label: '首页' },
   { destination: 'PLAN', label: '计划' },
   { destination: 'HISTORY', label: '进展' },
   { destination: 'MY', label: '我的' },

@@ -2,7 +2,10 @@ import { createNavigationUseCases } from '../../application/navigation'
 import { createStartupUseCases } from '../../application/onboarding'
 import { createFitnessApplication } from '../../application/useCases'
 import { createVerifiedPrivacyUseCases } from '../../application/privacy'
-import { createValidatedAiContentGenerator } from '../../application/cloudbaseAi'
+import {
+  createValidatedAiContentGenerator,
+  createValidatedAiPlanGenerator,
+} from '../../application/cloudbaseAi'
 import { WorkoutSyncService } from '../../application/use-cases/WorkoutSyncService'
 import { WorkoutFlowService } from '../../application/use-cases/WorkoutFlowService'
 import { FitnessApiClient } from '../../infrastructure/api/client'
@@ -37,11 +40,14 @@ const api = new FitnessApiClient(
   sessions,
   () => navigationPort.replaceApp('LOGIN'),
 )
-const fitness = createFitnessApplication(api, api)
 initializeWeappCloudBase(__FITNESS_CLOUDBASE_ENV_ID__)
-const aiContent = createValidatedAiContentGenerator(
-  createWeappCloudBaseAiTextProvider(__FITNESS_CLOUDBASE_AI_MODEL__),
+const aiTextProvider = createWeappCloudBaseAiTextProvider(__FITNESS_CLOUDBASE_AI_MODEL__)
+const fitness = createFitnessApplication(
+  api,
+  api,
+  createValidatedAiPlanGenerator(aiTextProvider),
 )
+const aiContent = createValidatedAiContentGenerator(aiTextProvider)
 const workoutDrafts = createWechatWorkoutDraftStore()
 const startup = createStartupUseCases({
   sessionStore: sessions,

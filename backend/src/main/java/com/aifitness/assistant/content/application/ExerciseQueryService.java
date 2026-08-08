@@ -61,6 +61,28 @@ public final class ExerciseQueryService {
                 .findFirst();
     }
 
+    public List<ExerciseCatalog.Exercise> catalog() {
+        ExerciseCatalog catalog = catalogs.exercises();
+        if (!catalog.metadata().isEligibleFor(environment)) {
+            return List.of();
+        }
+        Set<String> releasedCodes = catalog.exercises().stream()
+                .filter(ExerciseCatalog.Exercise::active)
+                .filter(ExerciseCatalog.Exercise::hasValidRights)
+                .map(ExerciseCatalog.Exercise::code)
+                .collect(Collectors.toUnmodifiableSet());
+        return catalog.exercises().stream()
+                .filter(ExerciseCatalog.Exercise::active)
+                .filter(ExerciseCatalog.Exercise::hasValidRights)
+                .map(exercise -> exercise.withAlternatives(exercise.alternatives().stream()
+                        .filter(alternative -> releasedCodes.contains(alternative.exerciseCode()))
+                        .filter(alternative -> eligibleAlternative(alternative.reviewStatus()))
+                        .sorted(Comparator.comparingInt(ExerciseCatalog.Alternative::rank))
+                        .toList()))
+                .sorted(Comparator.comparing(ExerciseCatalog.Exercise::code))
+                .toList();
+    }
+
     public String version() {
         return catalogs.exercises().metadata().version();
     }

@@ -9,16 +9,28 @@ function source(path: string): string {
 }
 
 describe('release readiness user surfaces', () => {
-  it('lets users review exercise instructions from preparation and live training', () => {
+  it('keeps full instructions in preparation and embeds the static breakdown in live training', () => {
     const config = source('src/app.config.ts')
     const navigation = source('src/application/navigation.ts')
     const prepare = source('src/presentation/pages/workout-prepare/index.tsx')
     const session = source('src/presentation/pages/workout-session/index.tsx')
 
-    expect(config).toContain('presentation/pages/exercise-detail/index')
+    expect(config).toContain("root: 'subpackages/exercise-guide'")
+    expect(config).toContain("'pages/detail/index'")
+    expect(config).toContain("'pages/workout-session/index'")
     expect(navigation).toContain("'EXERCISE_DETAIL'")
     expect(prepare).toContain("application.navigation.open('EXERCISE_DETAIL'")
-    expect(session).toContain("application.navigation.open('EXERCISE_DETAIL'")
+    expect(session).toContain("import ExerciseMotionGuide")
+    expect(session).toContain('<ExerciseMotionGuide')
+    expect(session).toContain('compact')
+    expect(session).toContain('application.getExercise')
+    expect(session).toContain('动作说明')
+    expect(session).toContain('动作步骤')
+    expect(session).toContain('呼吸提示')
+    expect(session).toContain('常见错误')
+    expect(session).toContain('安全提醒')
+    expect(session).toContain('exerciseContent.instructions.map')
+    expect(session).not.toContain("application.navigation.open('EXERCISE_DETAIL'")
   })
 
   it('provides a post-onboarding exclusion preference editor', () => {

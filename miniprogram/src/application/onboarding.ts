@@ -10,8 +10,18 @@ import type {
   UpdateEquipmentRequest,
   UpdatePreferencesRequest,
   UpdateProfileRequest,
+  ValidationIssue,
   WeightStatus,
+  AiPlanProposal,
+  PlanGenerationContextData,
+  PlanGenerationSource,
 } from './models'
+import type { AiPlanGenerator } from './cloudbaseAi'
+import {
+  AiPlanGenerationError,
+  AiPlanUnavailableError,
+} from './cloudbaseAi'
+import { normalizeSafeTrainingPreference } from './trainingPreferenceSafety'
 
 export const ONBOARDING_STEPS = [
   'SAFETY',
@@ -59,6 +69,8 @@ export interface OnboardingDraft {
   location?: TrainingLocation
   equipment: EquipmentItemRequest[]
   preferences: ExercisePreference[]
+  preferencesTouched?: boolean
+  additionalRequirements?: string
 }
 
 export interface OnboardingState {
@@ -79,8 +91,15 @@ export interface OnboardingPersistencePort {
   saveProfile(request: UpdateProfileRequest): Promise<VersionedResource>
   saveEquipment(request: UpdateEquipmentRequest): Promise<VersionedResource>
   savePreferences(request: UpdatePreferencesRequest): Promise<VersionedResource>
+  getPlanGenerationContext?(profileVersion: number): Promise<PlanGenerationContextData>
   generateCandidate(
-    request: { profileVersion: number; lockedFields?: Record<string, number> },
+    request: {
+      profileVersion: number
+      lockedFields?: Record<string, number>
+      additionalRequirements?: string
+      aiProposal?: AiPlanProposal
+      fallbackAllowed?: boolean
+    },
   ): Promise<PlanCandidateGenerationData>
 }
 
@@ -118,7 +137,10 @@ export interface CandidateViewModel {
   candidateId?: string
   status: 'READY' | 'NO_CANDIDATE'
   canContinue: boolean
+  generationSource?: PlanGenerationSource
+  generationLabel?: string
   explanationMessage: string
+  notices: string[]
   days: Array<{
     code: string
     name: string
@@ -202,6 +224,7 @@ export function validateOnboardingDraft(draft: OnboardingDraft): string[] {
 export async function saveProfileAndGenerateCandidate(
   port: OnboardingPersistencePort,
   draft: OnboardingDraft,
+  aiGenerator?: AiPlanGenerator,
 ): Promise<PlanCandidateGenerationData> {
   const errors = validateOnboardingDraft(draft)
   if (errors.length > 0) {
@@ -226,12 +249,74 @@ export async function saveProfileAndGenerateCandidate(
     items: draft.equipment,
     expectedVersion: equipmentVersion ?? 0,
   })
-  await port.savePreferences({
-    items: draft.preferences,
-    expectedVersion: preferencesVersion ?? 0,
-  })
+  if (preferencesVersion === null || draft.preferencesTouched) {
+    await port.savePreferences({
+      items: draft.preferences,
+      expectedVersion: preferencesVersion ?? 0,
+    })
+  }
 
-  return port.generateCandidate({ profileVersion: profile.version })
+  const requirements = draft.additionalRequirements?.trim() ?? ''
+  if (!aiGenerator || !port.getPlanGenerationContext) {
+    return port.generateCandidate({ profileVersion: profile.version })
+  }
+
+  const context = await port.getPlanGenerationContext(profile.version)
+  let firstProposal: AiPlanProposal
+  try {
+    firstProposal = await aiGenerator.generate(context, requirements)
+  } catch (error) {
+    if (!isAiFallbackError(error)) throw error
+    return requestFallback(port, profile.version, requirements)
+  }
+  const firstResult = await port.generateCandidate({
+    profileVersion: profile.version,
+    additionalRequirements: requirements,
+    aiProposal: firstProposal,
+    fallbackAllowed: false,
+  })
+  if (firstResult.status === 'CANDIDATE_READY' && firstResult.candidate) {
+    return firstResult
+  }
+
+  let repairedProposal: AiPlanProposal
+  try {
+    repairedProposal = await aiGenerator.generate(
+      context,
+      requirements,
+      firstResult.validationIssues,
+    )
+  } catch (error) {
+    if (!isAiFallbackError(error)) throw error
+    return requestFallback(port, profile.version, requirements)
+  }
+  const repairedResult = await port.generateCandidate({
+    profileVersion: profile.version,
+    additionalRequirements: requirements,
+    aiProposal: repairedProposal,
+    fallbackAllowed: false,
+  })
+  if (repairedResult.status === 'CANDIDATE_READY' && repairedResult.candidate) {
+    return repairedResult
+  }
+
+  return requestFallback(port, profile.version, requirements)
+}
+
+function requestFallback(
+  port: OnboardingPersistencePort,
+  profileVersion: number,
+  additionalRequirements: string,
+): Promise<PlanCandidateGenerationData> {
+  return port.generateCandidate({
+    profileVersion,
+    additionalRequirements,
+    fallbackAllowed: true,
+  })
+}
+
+function isAiFallbackError(error: unknown): boolean {
+  return error instanceof AiPlanGenerationError || error instanceof AiPlanUnavailableError
 }
 
 export function buildCandidateViewModel(
@@ -243,6 +328,7 @@ export function buildCandidateViewModel(
       status: 'NO_CANDIDATE',
       canContinue: false,
       explanationMessage: '',
+      notices: [],
       days: [],
       reason: candidateUnavailableReason(reasonCodes),
       action: {
@@ -253,11 +339,20 @@ export function buildCandidateViewModel(
   }
 
   const { candidate } = data
+  const generationSource = candidate.generationSource
+    ?? (candidate.plan.templateCode === 'AI_PERSONALIZED'
+      ? 'AI_PERSONALIZED'
+      : 'FALLBACK_RULE_PLAN')
   return {
     candidateId: candidate.candidateId,
     status: 'READY',
     canContinue: true,
+    generationSource,
+    generationLabel: generationSource === 'AI_PERSONALIZED'
+      ? 'AI 个性化计划 · 规则已校验'
+      : '基础保底计划 · AI 本次不可用',
     explanationMessage: explanationMessage(candidate.explanationStatus, candidate.explanation),
+    notices: candidateNotices(candidate.validationIssues),
     days: candidate.plan.days.map((day) => ({
       code: day.code,
       name: day.name,
@@ -270,6 +365,19 @@ export function buildCandidateViewModel(
       })),
     })),
   }
+}
+
+function candidateNotices(issues: ValidationIssue[]): string[] {
+  return [...new Set(issues
+    .filter((issue) => issue.severity === 'WARNING')
+    .map((issue) => {
+      if (issue.reasonCode === 'INITIAL_WEIGHT_NEEDS_CALIBRATION') return ''
+      if (issue.reasonCode === 'RECOVERY_WINDOW_TOO_SHORT') {
+        return '部分相邻训练日涉及相同主肌群，请在计划编辑中调整安排或确保充分恢复。'
+      }
+      return '计划包含需要留意的规则提示，进入编辑器可查看具体位置。'
+    })
+    .filter(Boolean))]
 }
 
 function candidateUnavailableReason(reasonCodes: string[]): string {
@@ -294,7 +402,7 @@ export function createStartupUseCases(ports: StartupPorts) {
     if (!await ports.profile.exists()) {
       return 'ONBOARDING'
     }
-    return await ports.plan.hasActivePlan() ? 'PLAN' : 'HOME'
+    return await ports.plan.hasActivePlan() ? 'PLAN' : 'ONBOARDING'
   }
 
   async function navigate(destination: AppDestination): Promise<AppDestination> {
@@ -358,6 +466,9 @@ function validateStep(step: OnboardingStep, draft: OnboardingDraft): string[] {
         ))
           ? ['P0 仅支持 KG，不支持 LB 或隐式换算']
           : []),
+        ...(invalidAdditionalRequirements(draft.additionalRequirements)
+          ? ['额外需求仅支持 300 字以内的非医疗训练偏好，请删除提示词控制、疼痛、诊断或康复内容']
+          : []),
       ]
   }
 }
@@ -370,10 +481,14 @@ function explanationMessage(
     case 'READY':
       return explanation || '候选计划已由规则引擎生成。'
     case 'PENDING':
-      return '计划已可用，AI 解释仍在生成中。'
+      return 'AI 已结合你的资料与偏好生成计划，服务端规则校验已通过；详细解释仍在生成中。'
     case 'DEGRADED':
-      return '计划已由规则引擎生成；AI 解释暂不可用，不影响继续编辑和确认。'
+      return 'AI 本次不可用，已切换为规则保底计划；仍可继续编辑和确认。'
   }
+}
+
+function invalidAdditionalRequirements(value?: string): boolean {
+  return normalizeSafeTrainingPreference(value) === null
 }
 
 function weightLabel(status: WeightStatus): string {

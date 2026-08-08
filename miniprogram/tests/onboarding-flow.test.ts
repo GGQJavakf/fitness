@@ -195,7 +195,11 @@ describe('P0 onboarding flow', () => {
           }],
           locks: {},
         },
-        validationIssues: [],
+        validationIssues: [{
+          severity: 'WARNING',
+          reasonCode: 'RECOVERY_WINDOW_TOO_SHORT',
+          fieldPath: '/days/day-a/primaryMuscles/CHEST',
+        }],
         ruleReference: {
           ruleVersion: 'r1',
           templateVersion: 't1',
@@ -211,7 +215,10 @@ describe('P0 onboarding flow', () => {
     })
 
     expect(degraded.canContinue).toBe(true)
-    expect(degraded.explanationMessage).toContain('解释暂不可用')
+    expect(degraded.explanationMessage).toContain('保底计划')
+    expect(degraded.notices).toEqual([
+      expect.stringContaining('充分恢复'),
+    ])
     expect(degraded.days[0].exercises[0].weightLabel).toContain('首次训练中校准')
 
     const noCandidate = buildCandidateViewModel({
@@ -328,6 +335,34 @@ describe('P0 startup and WeChat session', () => {
 
     expect(destination).toBe('ONBOARDING')
     expect(navigate).toHaveBeenCalledWith('ONBOARDING')
+  })
+
+  it('never leaves an authenticated profile on the obsolete home surface', async () => {
+    const navigation = { replace: vi.fn() }
+    const ports: StartupPorts = {
+      sessionStore: {
+        load: vi.fn().mockResolvedValue({
+          accessToken: 'access-redacted',
+          refreshToken: 'refresh-redacted',
+          expiresAt: '2026-07-25T00:00:00Z',
+        }),
+        save: vi.fn(),
+        clear: vi.fn(),
+      },
+      wechatLogin: { getCode: vi.fn() },
+      auth: { login: vi.fn() },
+      workout: { hasActive: vi.fn().mockResolvedValue(false) },
+      profile: { exists: vi.fn().mockResolvedValue(true) },
+      plan: { hasActivePlan: vi.fn().mockResolvedValue(false) },
+      navigation,
+    }
+
+    await expect(createStartupUseCases(ports).start()).resolves.toBe('ONBOARDING')
+    expect(navigation.replace).toHaveBeenCalledWith('ONBOARDING')
+
+    vi.mocked(ports.plan.hasActivePlan).mockResolvedValue(true)
+    await expect(createStartupUseCases(ports).start()).resolves.toBe('PLAN')
+    expect(navigation.replace).toHaveBeenLastCalledWith('PLAN')
   })
 
   it('logs in with a platform code without persisting that temporary code', async () => {
@@ -481,5 +516,115 @@ describe('P0 startup and WeChat session', () => {
     expect(requests[2].authorization).toBe('Bearer renewed-access-redacted')
     expect(save).toHaveBeenCalledWith(refreshedSession)
     expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('reuses a session refreshed by another request when a late 401 arrives', async () => {
+    const expiredSession: Session = {
+      accessToken: 'expired-access-redacted',
+      refreshToken: 'expired-refresh-redacted',
+      expiresAt: '2026-07-25T00:00:00Z',
+    }
+    const refreshedSession: Session = {
+      accessToken: 'renewed-access-redacted',
+      refreshToken: 'renewed-refresh-redacted',
+      expiresAt: '2026-07-25T01:00:00Z',
+    }
+    let storedSession = expiredSession
+    let expiredRequests = 0
+    let refreshRequests = 0
+    let releaseLateUnauthorized!: () => void
+    const lateUnauthorized = new Promise<void>((resolve) => {
+      releaseLateUnauthorized = resolve
+    })
+    const clear = vi.fn()
+    const transport: TransportPort = {
+      async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
+        if (request.url.endsWith('/api/v1/auth/refresh')) {
+          refreshRequests += 1
+          return refreshRequests === 1
+            ? { statusCode: 200, data: { data: refreshedSession } as T }
+            : {
+                statusCode: 401,
+                data: { error: { code: 'AUTHENTICATION_REQUIRED' } } as T,
+              }
+        }
+        if (request.headers.Authorization === `Bearer ${refreshedSession.accessToken}`) {
+          return { statusCode: 200, data: { data: { version: 4 } } as T }
+        }
+        expiredRequests += 1
+        if (expiredRequests === 2) await lateUnauthorized
+        return {
+          statusCode: 401,
+          data: { error: { code: 'AUTHENTICATION_REQUIRED' } } as T,
+        }
+      },
+    }
+    const client = new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      transport,
+      {
+        load: async () => storedSession,
+        save: async (session) => { storedSession = session },
+        clear,
+      },
+      vi.fn(),
+    )
+
+    const first = client.getProfileVersion()
+    const late = client.getEquipmentVersion()
+    await expect(first).resolves.toBe(4)
+    releaseLateUnauthorized()
+    await expect(late).resolves.toBe(4)
+
+    expect(refreshRequests).toBe(1)
+    expect(storedSession).toEqual(refreshedSession)
+    expect(clear).not.toHaveBeenCalled()
+  })
+
+  it('never replays an old request with an unrelated session loaded from storage', async () => {
+    const expiredSession: Session = {
+      accessToken: 'expired-access-redacted',
+      refreshToken: 'expired-refresh-redacted',
+      expiresAt: '2026-07-25T00:00:00Z',
+    }
+    const unrelatedSession: Session = {
+      accessToken: 'unrelated-access-redacted',
+      refreshToken: 'unrelated-refresh-redacted',
+      expiresAt: '2026-07-25T01:00:00Z',
+    }
+    let storedSession = expiredSession
+    const authorizations: Array<string | undefined> = []
+    const client = new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      {
+        async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
+          authorizations.push(request.headers.Authorization)
+          if (request.url.endsWith('/api/v1/auth/refresh')) {
+            return {
+              statusCode: 401,
+              data: { error: { code: 'AUTHENTICATION_REQUIRED' } } as T,
+            }
+          }
+          storedSession = unrelatedSession
+          return request.headers.Authorization === `Bearer ${unrelatedSession.accessToken}`
+            ? { statusCode: 200, data: { data: { version: 9 } } as T }
+            : {
+                statusCode: 401,
+                data: { error: { code: 'AUTHENTICATION_REQUIRED' } } as T,
+              }
+        },
+      },
+      {
+        load: async () => storedSession,
+        save: vi.fn(),
+        clear: vi.fn(),
+      },
+      vi.fn(),
+    )
+
+    await expect(client.getProfileVersion()).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+    })
+    expect(authorizations).not.toContain('Bearer unrelated-access-redacted')
   })
 })

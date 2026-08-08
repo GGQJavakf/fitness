@@ -1,8 +1,9 @@
 import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
-import type { ExerciseContent } from '../../../application/content'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import type { ExerciseContent } from '../../../../application/content'
+import { getWeappApplication } from '../../../../platform/weapp/compositionRoot'
+import ExerciseMotionGuide from '../../components/exercise-motion-guide'
 
 import './index.scss'
 
@@ -61,14 +62,12 @@ export default function ExerciseDetailPage() {
 
       {exercise && (
         <>
-          <View className='exercise-visual' aria-label={`${exercise.name}动作示意区域`}>
-            <View className='exercise-visual__figure'>
-              <View className='exercise-visual__head' />
-              <View className='exercise-visual__body' />
-              <View className='exercise-visual__base' />
-            </View>
-            <Text className='exercise-visual__label'>动作示意资源待专业审核后替换</Text>
-          </View>
+          <ExerciseMotionGuide
+            exerciseCode={exercise.code}
+            exerciseName={exercise.name}
+            primaryRef={exercise.image.primaryRef}
+            fallbackRef={exercise.image.fallbackRef}
+          />
 
           <View className='section-heading'>
             <Text className='section-heading__title'>动作步骤</Text>

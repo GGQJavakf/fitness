@@ -41,9 +41,18 @@ public final class ProfileService {
     }
 
     public Set<UUID> excludedExerciseIds(AuthenticatedUserId user) {
+        return exerciseIdsByPreference(user, PreferenceProfile.PreferenceType.EXCLUDED);
+    }
+
+    public Set<UUID> preferredExerciseIds(AuthenticatedUserId user) {
+        return exerciseIdsByPreference(user, PreferenceProfile.PreferenceType.PREFERRED);
+    }
+
+    private Set<UUID> exerciseIdsByPreference(
+            AuthenticatedUserId user, PreferenceProfile.PreferenceType preferenceType) {
         return profiles.findPreferences(user.value()).stream()
                 .flatMap(profile -> profile.preferences().stream())
-                .filter(preference -> preference.preferenceType() == PreferenceProfile.PreferenceType.EXCLUDED)
+                .filter(preference -> preference.preferenceType() == preferenceType)
                 .map(PreferenceProfile.Preference::exerciseId)
                 .collect(Collectors.toUnmodifiableSet());
     }

@@ -22,18 +22,20 @@ describe('application-wide premium experience contract', () => {
     expect(styles).toContain('.page-hero')
   })
 
-  it('provides a four-destination authenticated navigation with a clear progress section', () => {
+  it('uses the plan as the authenticated landing surface with a clear progress section', () => {
     const navigation = source('src/presentation/components/main-navigation/index.tsx')
     const home = source('src/presentation/pages/home/index.tsx')
     const appConfig = source('src/app.config.ts')
 
-    for (const destination of ["'HOME'", "'PLAN'", "'HISTORY'", "'MY'"]) {
+    for (const destination of ["'PLAN'", "'HISTORY'", "'MY'"]) {
       expect(navigation).toContain(destination)
     }
+    expect(navigation).not.toContain("'HOME'")
     expect(navigation).toContain("label: '进展'")
-    expect(home).toContain("current='HOME'")
-    expect(home).toContain('screen--with-nav')
-    expect(appConfig).not.toContain('presentation/pages/plan-editor/index')
+    expect(home).not.toContain("current='HOME'")
+    expect(home).not.toContain('screen--with-nav')
+    expect(home).toContain('正在打开你的训练计划')
+    expect(appConfig).toContain('presentation/pages/plan-editor/index')
   })
 
   it('turns workout preparation into a clear pre-flight checklist without engineering copy', () => {
@@ -60,11 +62,11 @@ describe('application-wide premium experience contract', () => {
     for (const marker of [
       'session-hero',
       'session-progress',
-      'session-metrics',
+      'session-recording-grid',
       '训练余力（可选）',
       "weightStatus === 'BODYWEIGHT'",
       '自重动作无需填写重量',
-      "className='action-row workout-actions'",
+      "className='action-row action-row--sticky workout-actions'",
       'isWorkoutPrescriptionFinished(resumed.state)',
       '完成本组',
       '疼痛或明显不适',
@@ -107,13 +109,16 @@ describe('application-wide premium experience contract', () => {
     expect(summary).not.toContain('完成得很好')
   })
 
-  it('automatically settles a fully completed workout and resets inputs when the exercise changes', () => {
+  it('automatically settles a fully completed workout and initializes each set independently', () => {
     const summary = source('src/presentation/pages/workout-summary/index.tsx')
     const session = source('src/presentation/pages/workout-session/index.tsx')
 
     expect(summary).toContain('autoSettlementStarted')
     expect(summary).toMatch(/if \(nextSummary\.complete\)[\s\S]*completeWorkout/)
-    expect(session).toMatch(/useEffect\(\(\) => \{[\s\S]*setWeight\(''\)[\s\S]*setReps\(''\)[\s\S]*currentExerciseIndex/)
+    expect(session).toMatch(
+      /useEffect\(\(\) => \{[\s\S]*setReps\(current \? String\(current\.targetReps\) : ''\)[\s\S]*currentSetIndex/
+    )
+    expect(session).toMatch(/setShowWeightEditor\(false\)[\s\S]*currentExerciseIndex/)
   })
 
   it('keeps profile and conflict recovery calm, progressive, and user-facing', () => {
@@ -145,6 +150,8 @@ describe('application-wide premium experience contract', () => {
 
     expect(globalStyles).toContain('env(safe-area-inset-bottom)')
     expect(navigationStyles).toContain('env(safe-area-inset-bottom)')
+    expect(navigationStyles).toContain('grid-template-columns: repeat(3, 1fr)')
+    expect(navigationStyles).not.toContain('grid-template-columns: repeat(4, 1fr)')
     for (const page of pages) {
       expect(source(`src/presentation/pages/${page}/index.scss`)).toMatch(/@media\s*\(max-width:\s*360px\)/)
     }

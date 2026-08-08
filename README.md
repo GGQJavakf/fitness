@@ -32,11 +32,12 @@ npm run dev:weapp
 ```json
 {
   "environmentId": "<CloudBase 环境 ID>",
-  "model": "hy3"
+  "model": "hy3",
+  "serviceName": "fitness-api"
 }
 ```
 
-也可以在构建前设置 `TARO_APP_CLOUDBASE_ENV_ID` 和 `TARO_APP_CLOUDBASE_AI_MODEL`。AI 返回内容只用于解释和总结，必须通过客户端结构、数字和安全校验；失败时自动使用后端规则模板。关键数字和进阶结论始终来自确定性规则引擎。
+体验版或云端调试必须配置 `serviceName`，小程序才会通过 `wx.cloud.callContainer` 访问 CloudBase Run；仅在本机 HTTP 联调时省略该字段。也可以在构建前设置 `TARO_APP_CLOUDBASE_ENV_ID`、`TARO_APP_CLOUDBASE_AI_MODEL` 和 `TARO_APP_CLOUDBASE_SERVICE_NAME`。AI 返回内容只用于解释和总结，必须通过客户端结构、数字和安全校验；失败时自动使用后端规则模板。关键数字和进阶结论始终来自确定性规则引擎。
 
 微信真机局域网调试必须使用真实微信 code 换取身份，不能开放本地假身份实现。完整步骤见 [微信真机局域网调试手册](docs/device-debug-runbook.md)。
 

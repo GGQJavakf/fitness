@@ -9,6 +9,9 @@ components:
     PlanGenerationStatus:
       type: string
       enum: [CANDIDATE_READY, NO_CANDIDATE]
+    PlanGenerationSource:
+      type: string
+      enum: [AI_PERSONALIZED, FALLBACK_RULE_PLAN]
     WeightStatus:
       type: string
       enum: [KNOWN, NEEDS_CALIBRATION, BODYWEIGHT]
@@ -151,6 +154,14 @@ components:
       properties:
         profileVersion:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
+        additionalRequirements:
+          type: string
+          maxLength: 300
+        aiProposal:
+          $ref: '#/components/schemas/AiPlanProposal'
+        fallbackAllowed:
+          type: boolean
+          default: true
         lockedFields:
           type: object
           maxProperties: 100
@@ -166,9 +177,10 @@ components:
     PlanCandidate:
       type: object
       additionalProperties: false
-      required: [candidateId, plan, validationIssues, ruleReference, lockedFieldOutcomes, explanationStatus, explanation, expiresAt]
+      required: [candidateId, generationSource, plan, validationIssues, ruleReference, lockedFieldOutcomes, explanationStatus, explanation, expiresAt]
       properties:
         candidateId: {type: string}
+        generationSource: {$ref: '#/components/schemas/PlanGenerationSource'}
         plan: {$ref: '#/components/schemas/PlanDraft'}
         validationIssues:
           type: array
@@ -180,6 +192,110 @@ components:
         explanationStatus: {$ref: '#/components/schemas/AiExplanationStatus'}
         explanation: {type: string, minLength: 1}
         expiresAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    AiPlanProposal:
+      type: object
+      additionalProperties: false
+      required: [name, days]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        days:
+          type: array
+          minItems: 2
+          maxItems: 6
+          items: {$ref: '#/components/schemas/AiPlanProposalDay'}
+    AiPlanProposalDay:
+      type: object
+      additionalProperties: false
+      required: [code, name, exercises]
+      properties:
+        code: {type: string, pattern: '^DAY_[1-6]$'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        exercises:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items: {$ref: '#/components/schemas/AiPlanProposalExercise'}
+    AiPlanProposalExercise:
+      type: object
+      additionalProperties: false
+      required: [exerciseCode, workSets, repMin, repMax, restSeconds]
+      properties:
+        exerciseCode: {type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$'}
+        workSets: {type: integer, minimum: 1, maximum: 10}
+        repMin: {type: integer, minimum: 1, maximum: 100}
+        repMax: {type: integer, minimum: 1, maximum: 100}
+        restSeconds: {type: integer, minimum: 1, maximum: 3600}
+    PlanGenerationContextProfile:
+      type: object
+      additionalProperties: false
+      required: [experience, goal, weeklyFrequency, sessionMinutes, location, profileVersion]
+      properties:
+        experience: {$ref: './profile.yaml#/components/schemas/ExperienceLevel'}
+        goal: {$ref: './profile.yaml#/components/schemas/FitnessGoal'}
+        weeklyFrequency: {type: integer, minimum: 2, maximum: 6}
+        sessionMinutes:
+          type: integer
+          enum: [30, 45, 60, 75, 90]
+        location: {$ref: './profile.yaml#/components/schemas/TrainingLocation'}
+        profileVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+    PlanGenerationExercise:
+      type: object
+      additionalProperties: false
+      required: [code, name, movementPattern, difficulty, equipment, primaryMuscles, preferred, bodyweight]
+      properties:
+        code: {type: string, pattern: '^[A-Z][A-Z0-9_]{0,63}$'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        movementPattern: {type: string, minLength: 1, maxLength: 64}
+        difficulty: {type: string, minLength: 1, maxLength: 64}
+        equipment:
+          type: array
+          uniqueItems: true
+          items: {type: string, minLength: 1, maxLength: 64}
+        primaryMuscles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, minLength: 1, maxLength: 64}
+        preferred: {type: boolean}
+        bodyweight: {type: boolean}
+    PlanGenerationConstraints:
+      type: object
+      additionalProperties: false
+      required: [minimumSessionsPerWeek, maximumSessionsPerWeek, maximumExercisesPerSession, minimumWorkSets, maximumWorkSets, minimumReps, maximumReps, minimumRestSeconds, maximumRestSeconds, secondsPerWorkSet, secondsPerExerciseTransition, maximumMovementPatternOccurrencesPerSession, maximumWorkSetsPerPrimaryMusclePerSession, minimumRecoveryHoursBetweenPrimaryMuscleSessions]
+      properties:
+        minimumSessionsPerWeek: {type: integer, minimum: 1}
+        maximumSessionsPerWeek: {type: integer, minimum: 1}
+        maximumExercisesPerSession: {type: integer, minimum: 1}
+        minimumWorkSets: {type: integer, minimum: 1}
+        maximumWorkSets: {type: integer, minimum: 1}
+        minimumReps: {type: integer, minimum: 1}
+        maximumReps: {type: integer, minimum: 1}
+        minimumRestSeconds: {type: integer, minimum: 1}
+        maximumRestSeconds: {type: integer, minimum: 1}
+        secondsPerWorkSet: {type: integer, minimum: 1}
+        secondsPerExerciseTransition: {type: integer, minimum: 1}
+        maximumMovementPatternOccurrencesPerSession: {type: integer, minimum: 1}
+        maximumWorkSetsPerPrimaryMusclePerSession: {type: integer, minimum: 1}
+        minimumRecoveryHoursBetweenPrimaryMuscleSessions: {type: integer, minimum: 1}
+    PlanGenerationContextData:
+      type: object
+      additionalProperties: false
+      required: [profile, exercises, constraints, ruleReference]
+      properties:
+        profile: {$ref: '#/components/schemas/PlanGenerationContextProfile'}
+        exercises:
+          type: array
+          maxItems: 128
+          items: {$ref: '#/components/schemas/PlanGenerationExercise'}
+        constraints: {$ref: '#/components/schemas/PlanGenerationConstraints'}
+        ruleReference: {$ref: './common.yaml#/components/schemas/RuleReference'}
+    PlanGenerationContextResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanGenerationContextData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     ValidatePlanRequest:
       type: object
       additionalProperties: false
