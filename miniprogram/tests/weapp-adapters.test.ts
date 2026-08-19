@@ -59,10 +59,21 @@ describe('WeApp session storage', () => {
     })
   })
 
+  it('encodes page parameters when replacing the current page', async () => {
+    await createWeappNavigation().replace('WORKOUT_PREPARE', {
+      trainingDayCode: 'DAY A/1',
+    })
+
+    expect(taro.redirectTo).toHaveBeenCalledWith({
+      url: '/presentation/pages/workout-prepare/index?trainingDayCode=DAY%20A%2F1',
+    })
+  })
+
   it('uses the CloudBase private container path when a service is configured', async () => {
     const callContainer = vi.fn().mockResolvedValue({
       statusCode: 200,
       data: { data: { ok: true } },
+      header: { 'X-Has-More': 'false' },
     })
     Reflect.set(globalThis, 'wx', { cloud: { callContainer } })
 
@@ -85,7 +96,11 @@ describe('WeApp session storage', () => {
         'X-WX-SERVICE': 'fitness-api',
       },
     })
-    expect(response).toEqual({ statusCode: 200, data: { data: { ok: true } } })
+    expect(response).toEqual({
+      statusCode: 200,
+      data: { data: { ok: true } },
+      headers: { 'x-has-more': 'false' },
+    })
   })
 
   it('rejects a CloudBase response without a valid HTTP status code', async () => {
@@ -104,6 +119,29 @@ describe('WeApp session storage', () => {
     })
 
     await expect(request).rejects.toThrow('CloudBase container returned an invalid HTTP status code')
+  })
+
+  it('normalizes mixed-case response headers from the direct Taro transport', async () => {
+    taro.request.mockResolvedValueOnce({
+      statusCode: 200,
+      data: { data: [] },
+      header: {
+        'X-HaS-MoRe': 'true',
+        'x-NeXt-CuRsOr': 'cursor-direct-taro',
+        Ignored: 7,
+      },
+    })
+
+    const response = await createWeappTransport({}).request({
+      url: 'http://127.0.0.1:8080/api/v1/progression-recommendations',
+      method: 'GET',
+      headers: {},
+    })
+
+    expect(response.headers).toEqual({
+      'x-has-more': 'true',
+      'x-next-cursor': 'cursor-direct-taro',
+    })
   })
 
   it('times out a stalled CloudBase container call instead of leaving an action pending forever', async () => {

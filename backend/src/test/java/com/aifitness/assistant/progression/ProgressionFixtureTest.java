@@ -23,7 +23,9 @@ class ProgressionFixtureTest {
     private static final ProgressionEngine.EnginePolicy POLICY =
             new ProgressionEngine.EnginePolicy("double-progression-v1", new BigDecimal("0.05"));
     private static final EquipmentRoundingPolicy EQUIPMENT =
-            new EquipmentRoundingPolicy("KG", List.of(new BigDecimal("2.5"), new BigDecimal("5")));
+            new EquipmentRoundingPolicy("KG", List.of(
+                    new BigDecimal("35"), new BigDecimal("37.5"), new BigDecimal("40"),
+                    new BigDecimal("42.5"), new BigDecimal("45")));
 
     @Test
     void allM0FixturesProduceTheUniqueExpectedDecisionAndReason() throws IOException {
@@ -50,11 +52,12 @@ class ProgressionFixtureTest {
 
         assertThat(reduced.rawRecommendedWeight()).contains(new BigDecimal("38"));
         assertThat(reduced.roundedWeight()).contains(new BigDecimal("37.5"));
-        assertThat(reduced.roundingRule()).contains("FLOOR_TO_MIN_INCREMENT");
-        assertThat(reduced.availableEquipmentSteps()).containsExactly(new BigDecimal("2.5"), new BigDecimal("5"));
+        assertThat(reduced.roundingRule()).contains("FLOOR_TO_AVAILABLE_LEVEL");
+        assertThat(reduced.availableEquipmentSteps()).extracting(BigDecimal::toPlainString)
+                .containsExactly("35", "37.5", "40", "42.5", "45");
         assertThat(increased.rawRecommendedWeight()).contains(new BigDecimal("42.5"));
         assertThat(increased.roundedWeight()).contains(new BigDecimal("42.5"));
-        assertThat(increased.roundingRule()).contains("ADD_ONE_MIN_INCREMENT");
+        assertThat(increased.roundingRule()).contains("NEXT_AVAILABLE_LEVEL");
     }
 
     @Test
@@ -65,17 +68,15 @@ class ProgressionFixtureTest {
         assertThatThrownBy(() -> new EquipmentRoundingPolicy("KG", List.of(BigDecimal.ZERO)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("positive values");
-        assertThatThrownBy(() -> new EquipmentRoundingPolicy("KG", List.of()))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("positive values");
+        assertThat(new EquipmentRoundingPolicy("KG", List.of()).increaseOneStep(new BigDecimal("40")))
+                .isEmpty();
     }
 
     @Test
     void reductionRoundingNeverProducesNegativeWeight() {
-        EquipmentRoundingPolicy policy = new EquipmentRoundingPolicy("KG", List.of(new BigDecimal("2.5")));
+        EquipmentRoundingPolicy policy = new EquipmentRoundingPolicy("KG", List.of(BigDecimal.ONE));
 
-        assertThat(policy.roundReduction(BigDecimal.ONE, new BigDecimal("0.95")))
-                .isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(policy.roundReduction(BigDecimal.ONE, new BigDecimal("0.95"))).isEmpty();
     }
 
     private static void assertNumericResult(ProgressionDecision decision) {

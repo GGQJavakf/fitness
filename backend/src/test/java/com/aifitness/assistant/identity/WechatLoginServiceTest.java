@@ -141,6 +141,23 @@ class WechatLoginServiceTest {
     }
 
     @Test
+    void rejectsRateLimitedCredentialsBeforeCallingTheProviderAndDoesNotEchoThem() {
+        var limited = new WechatLoginService(
+                provider,
+                protector,
+                identities,
+                sessions,
+                Clock.fixed(NOW, ZoneOffset.UTC),
+                (action, credential, now) -> false);
+
+        assertThatThrownBy(() -> limited.login("rate-limited-secret-code"))
+                .isInstanceOf(WechatLoginService.AuthenticationRateLimitedException.class)
+                .hasMessage("authentication request rate limited")
+                .hasMessageNotContaining("rate-limited-secret-code");
+        assertThat(exchangedCode).hasValue(null);
+    }
+
+    @Test
     void neverWritesTheOneTimeCodeToApplicationLogs() {
         String secretCode = "temporary-wechat-code-never-log";
         Logger root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);

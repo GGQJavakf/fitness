@@ -7,6 +7,8 @@ import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.application.PlanRepository;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
+import com.aifitness.assistant.plan.application.WarningConfirmationStore;
+import com.aifitness.assistant.plan.application.InMemoryWarningConfirmationStore;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
 import com.aifitness.assistant.rules.domain.PlanRulePolicy;
@@ -18,6 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Value;
 import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -49,9 +52,22 @@ public class PlanConfiguration {
             PlanGenerationEngine generator,
             PlanValidationEngine validator,
             PlanRulePolicy policy,
-            Clock clock) {
+            Clock clock,
+            @Value("${fitness.plan.candidate-cache-capacity:512}") int candidateCacheCapacity) {
         return new PlanCandidateService(
-                profiles, templates, exercises, generator, validator, policy, clock);
+                profiles, templates, exercises, generator, validator, policy, clock, candidateCacheCapacity);
+    }
+
+    @Bean
+    @Profile({"local", "test"})
+    WarningConfirmationStore localWarningConfirmationStore(Clock clock) {
+        return new InMemoryWarningConfirmationStore(clock);
+    }
+
+    @Bean
+    @Profile("staging-experience")
+    WarningConfirmationStore sharedWarningConfirmationStore(DataSource dataSource, Clock clock) {
+        return new JdbcWarningConfirmationStore(dataSource, clock);
     }
 
     @Bean
@@ -70,8 +86,12 @@ public class PlanConfiguration {
 
     @Bean
     PlanVersionService planVersionService(
-            PlanRepository repository, PlanCandidateService candidates, Clock clock) {
-        return new PlanVersionService(repository, new RulesPlanPolicy(candidates), clock);
+            PlanRepository repository,
+            PlanCandidateService candidates,
+            Clock clock,
+            WarningConfirmationStore warningConfirmations) {
+        return new PlanVersionService(
+                repository, new RulesPlanPolicy(candidates), clock, warningConfirmations);
     }
 
     @Bean

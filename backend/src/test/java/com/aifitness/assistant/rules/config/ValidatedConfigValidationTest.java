@@ -27,6 +27,19 @@ class ValidatedConfigValidationTest {
 
     private static final Path CONFIG_ROOT = Path.of("..", "rule-config");
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final Set<String> REVIEW_REQUIRED_REPLACEMENT_SEMANTICS = Set.of(
+            "LAT_PULLDOWN", "CABLE_STRAIGHT_ARM_PULLDOWN", "NEUTRAL_GRIP_PULLDOWN",
+            "PRONE_W_RAISE", "PRONE_Y_RAISE", "GLUTE_BRIDGE_EXERCISE",
+            "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE");
+    private static final Map<String, Set<String>> REVIEW_REQUIRED_ENVIRONMENT_GAPS = Map.of(
+            "HOME", Set.of(
+                    "BODYWEIGHT_SQUAT", "BODYWEIGHT_HIP_HINGE", "PRISONER_SQUAT",
+                    "PRONE_W_RAISE", "PRONE_Y_RAISE", "GLUTE_BRIDGE_EXERCISE",
+                    "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE"),
+            "GYM", Set.of(
+                    "LAT_PULLDOWN", "CABLE_STRAIGHT_ARM_PULLDOWN", "NEUTRAL_GRIP_PULLDOWN",
+                    "PRONE_W_RAISE", "PRONE_Y_RAISE", "GLUTE_BRIDGE_EXERCISE",
+                    "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE"));
 
     @Test
     void validatedCandidatesConformToTheirSchemas() throws IOException {
@@ -47,6 +60,9 @@ class ValidatedConfigValidationTest {
         assertInvalid("rule-config.schema.json", withText(valid, "/metadata/schemaVersion", "2.0.0"));
         assertInvalid("rule-config.schema.json", withText(valid, "/scope/unit", "LB"));
         assertInvalid("rule-config.schema.json", withInt(valid, "/parameters/rest/maximumSeconds", 900));
+        assertInvalid("rule-config.schema.json", without(valid, "/parameters/progression"));
+        assertInvalid("rule-config.schema.json", withInt(valid, "/parameters/progression/longTrainingGapDays", 6));
+        assertInvalid("rule-config.schema.json", withInt(valid, "/parameters/progression/multipleFailedSetsThreshold", 1));
     }
 
     @Test
@@ -85,12 +101,76 @@ class ValidatedConfigValidationTest {
         Set<String> exerciseCodes = new HashSet<>();
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
-        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.2.0");
-        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.2.0");
+        assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.6.0");
+        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.7.1");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());
             template.path("days").forEach(day -> day.path("exercises").forEach(slot ->
                     assertThat(exerciseCodes).contains(slot.path("exerciseCode").asText())));
+        });
+    }
+
+    @Test
+    void professionalGymSplitsUseDistinctPatternsAndDirectArmWork() throws IOException {
+        JsonNode exerciseNodes = readValidated("exercises-v1.json").path("exercises");
+        Map<String, String> patterns = new java.util.LinkedHashMap<>();
+        exerciseNodes.forEach(exercise -> patterns.put(
+                exercise.path("code").asText(), exercise.path("movementPattern").asText()));
+
+        assertThat(patterns).hasSize(47).containsKeys(
+                "DUMBBELL_BICEPS_CURL", "DUMBBELL_HAMMER_CURL", "CABLE_BICEPS_CURL",
+                "CABLE_TRICEPS_PUSHDOWN", "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION",
+                "DUMBBELL_LYING_TRICEPS_EXTENSION", "DUMBBELL_LATERAL_RAISE",
+                "CABLE_FACE_PULL", "ONE_ARM_DUMBBELL_ROW", "DUMBBELL_SHRUG");
+
+        readValidated("plan-templates-v1.json").path("templates").forEach(template -> {
+            if (!Set.of("UPPER_LOWER_4_DAY_V1", "HYBRID_5_DAY_V1", "PUSH_PULL_LEGS_6_DAY_V1")
+                    .contains(template.path("code").asText())) {
+                return;
+            }
+            template.path("days").forEach(day -> {
+                List<String> dayPatterns = StreamSupport.stream(day.path("exercises").spliterator(), false)
+                        .map(slot -> patterns.get(slot.path("exerciseCode").asText()))
+                        .toList();
+                assertThat(dayPatterns).as(day.path("code").asText()).doesNotHaveDuplicates();
+                assertThat(day.path("exercises").size()).isBetween(4, 5);
+                String dayCode = day.path("code").asText();
+                if (dayCode.startsWith("PUSH")) {
+                    assertThat(dayPatterns).contains(
+                            "HORIZONTAL_PUSH", "VERTICAL_PUSH", "ELBOW_EXTENSION")
+                            .doesNotContain("SQUAT", "HINGE", "ELBOW_FLEXION");
+                } else if (dayCode.startsWith("PULL")) {
+                    assertThat(dayPatterns).contains(
+                            "HORIZONTAL_PULL", "VERTICAL_PULL", "ELBOW_FLEXION")
+                            .doesNotContain("SQUAT", "HINGE", "ELBOW_EXTENSION");
+                } else if (dayCode.startsWith("UPPER")) {
+                    assertThat(dayPatterns).contains(
+                            "HORIZONTAL_PUSH", "HORIZONTAL_PULL", "ELBOW_FLEXION", "ELBOW_EXTENSION")
+                            .doesNotContain("SQUAT", "HINGE");
+                }
+            });
+        });
+    }
+
+    @Test
+    void fullBodyGymTemplatesCoverDirectBicepsAndTricepsAcrossTheWeek() throws IOException {
+        JsonNode exerciseNodes = readValidated("exercises-v1.json").path("exercises");
+        Map<String, String> patterns = new java.util.LinkedHashMap<>();
+        exerciseNodes.forEach(exercise -> patterns.put(
+                exercise.path("code").asText(), exercise.path("movementPattern").asText()));
+
+        readValidated("plan-templates-v1.json").path("templates").forEach(template -> {
+            if (!Set.of("FULL_BODY_2_DAY_V1", "FULL_BODY_3_DAY_V1")
+                    .contains(template.path("code").asText())) {
+                return;
+            }
+            List<String> weeklyPatterns = StreamSupport.stream(template.path("days").spliterator(), false)
+                    .flatMap(day -> StreamSupport.stream(day.path("exercises").spliterator(), false))
+                    .map(slot -> patterns.get(slot.path("exerciseCode").asText()))
+                    .toList();
+            assertThat(weeklyPatterns)
+                    .as(template.path("code").asText())
+                    .contains("ELBOW_FLEXION", "ELBOW_EXTENSION");
         });
     }
 
@@ -104,13 +184,13 @@ class ValidatedConfigValidationTest {
     }
 
     @Test
-    void everyP0FrequencyAndEquipmentRangeHasATemplateThatFitsTheMinimumSessionDuration()
+    void everyP0FrequencyAndEquipmentRangeHasATemplateThatFitsTheFortyFiveMinuteSessionDuration()
             throws IOException {
         JsonNode templates = readValidated("plan-templates-v1.json").path("templates");
         JsonNode rules = readValidated("rule-config-v1.json");
         int secondsPerWorkSet = rules.at("/parameters/duration/secondsPerWorkSet").asInt();
         int secondsPerTransition = rules.at("/parameters/duration/secondsPerExerciseTransition").asInt();
-        int minimumSelectableMinutes = 30;
+        int selectedSessionMinutes = 45;
 
         for (int frequency = 2; frequency <= 6; frequency++) {
             for (boolean bodyweight : new boolean[] {false, true}) {
@@ -124,7 +204,7 @@ class ValidatedConfigValidationTest {
                                                 template.path("days").spliterator(), false)
                                         .allMatch(day -> estimatedSeconds(
                                                 day, secondsPerWorkSet, secondsPerTransition)
-                                                <= minimumSelectableMinutes * 60)))
+                                                <= selectedSessionMinutes * 60)))
                         .as("frequency=%s, equipment=%s", frequency, bodyweight ? "BODYWEIGHT" : "GYM")
                         .isTrue();
             }
@@ -158,6 +238,117 @@ class ValidatedConfigValidationTest {
     }
 
     @Test
+    void contralateralLimbRaiseKeepsAuthoritativeGluteRecoveryAndIsNotUsedInAdjacentDayTemplates()
+            throws IOException {
+        JsonNode catalog = readValidated("exercises-v1.json");
+        JsonNode exercise = StreamSupport.stream(catalog.path("exercises").spliterator(), false)
+                .filter(candidate -> "CONTRALATERAL_LIMB_RAISE".equals(candidate.path("code").asText()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(texts(exercise.path("primaryMuscles")))
+                .containsExactlyInAnyOrder("BACK", "GLUTES", "SHOULDERS");
+        assertThat(catalog.path("metadata").path("sourceReferences"))
+                .anyMatch(source -> "ACE_CONTRALATERAL_LIMB_RAISES".equals(source.path("id").asText())
+                        && "https://www.acefitness.org/resources/everyone/exercise-library/53/contralateral-limb-raises/"
+                                .equals(source.path("url").asText()));
+
+        readValidated("plan-templates-v1.json").path("templates").forEach(template -> {
+            if (template.path("code").asText().contains("BODYWEIGHT")
+                    && template.path("sessionsPerWeek").asInt() >= 4) {
+                template.path("days").forEach(day -> assertThat(day.path("exercises"))
+                        .noneMatch(slot -> "CONTRALATERAL_LIMB_RAISE"
+                                .equals(slot.path("exerciseCode").asText())));
+            }
+        });
+    }
+
+    @Test
+    void reviewedReplacementMatrixHasTwoToFourExactCandidatesOrAnExplicitReviewRequiredGap()
+            throws IOException {
+        JsonNode exercises = readValidated("exercises-v1.json").path("exercises");
+        Map<String, JsonNode> byCode = new java.util.LinkedHashMap<>();
+        exercises.forEach(exercise -> byCode.put(exercise.path("code").asText(), exercise));
+
+        byCode.values().stream().filter(exercise -> exercise.path("active").asBoolean()).forEach(source -> {
+            String sourceCode = source.path("code").asText();
+            List<JsonNode> declared = StreamSupport.stream(
+                            source.path("alternatives").spliterator(), false)
+                    .toList();
+            assertThat(declared).extracting(candidate -> candidate.path("exerciseCode").asText())
+                    .as(sourceCode + " declared replacement codes")
+                    .doesNotHaveDuplicates()
+                    .allMatch(byCode::containsKey);
+            assertThat(declared).extracting(candidate -> candidate.path("rank").asInt())
+                    .as(sourceCode + " replacement ranks")
+                    .doesNotHaveDuplicates();
+
+            List<JsonNode> compatible = declared.stream()
+                    .map(candidate -> byCode.get(candidate.path("exerciseCode").asText()))
+                    .filter(candidate -> exactReplacementEquivalent(source, candidate))
+                    .toList();
+            if (REVIEW_REQUIRED_REPLACEMENT_SEMANTICS.contains(sourceCode)) {
+                assertThat(compatible).as(sourceCode + " review-required semantic gap").hasSizeLessThan(2);
+            } else {
+                assertThat(declared).as(sourceCode + " reviewed declarations").hasSizeBetween(2, 4);
+                assertThat(compatible).as(sourceCode + " exact semantic candidates").hasSize(declared.size());
+            }
+        });
+
+        Map<String, Set<String>> equipmentByEnvironment = Map.of(
+                "HOME", Set.of(),
+                "GYM", Set.of("DUMBBELL", "BENCH", "CABLE", "MACHINE"));
+        equipmentByEnvironment.forEach((environment, availableEquipment) -> byCode.values().stream()
+                .filter(exercise -> exercise.path("active").asBoolean())
+                .filter(exercise -> supports(exercise, availableEquipment))
+                .forEach(source -> {
+                    String sourceCode = source.path("code").asText();
+                    long supportedCandidates = StreamSupport.stream(
+                                    source.path("alternatives").spliterator(), false)
+                            .map(candidate -> byCode.get(candidate.path("exerciseCode").asText()))
+                            .filter(candidate -> candidate != null
+                                    && candidate.path("active").asBoolean()
+                                    && supports(candidate, availableEquipment)
+                                    && exactReplacementEquivalent(source, candidate))
+                            .count();
+                    if (REVIEW_REQUIRED_ENVIRONMENT_GAPS.get(environment).contains(sourceCode)) {
+                        assertThat(supportedCandidates)
+                                .as(environment + "/" + sourceCode + " explicit review-required gap")
+                                .isLessThan(2);
+                    } else {
+                        assertThat(supportedCandidates)
+                                .as(environment + "/" + sourceCode + " reviewed replacement support")
+                                .isBetween(2L, 4L);
+                    }
+                }));
+    }
+
+    private static boolean exactReplacementEquivalent(JsonNode source, JsonNode candidate) {
+        return source.path("movementPattern").asText().equals(candidate.path("movementPattern").asText())
+                && source.path("difficulty").asText().equals(candidate.path("difficulty").asText())
+                && texts(source.path("primaryMuscles")).equals(texts(candidate.path("primaryMuscles")))
+                && validLoadMode(source.path("equipment"))
+                && validLoadMode(candidate.path("equipment"));
+    }
+
+    private static boolean supports(JsonNode exercise, Set<String> availableEquipment) {
+        return texts(exercise.path("equipment")).stream()
+                .allMatch(equipment -> "BODYWEIGHT".equals(equipment)
+                        || availableEquipment.contains(equipment));
+    }
+
+    private static boolean validLoadMode(JsonNode equipment) {
+        Set<String> values = texts(equipment);
+        return !values.isEmpty() && (values.equals(Set.of("BODYWEIGHT")) || !values.contains("BODYWEIGHT"));
+    }
+
+    private static Set<String> texts(JsonNode values) {
+        Set<String> result = new HashSet<>();
+        values.forEach(value -> result.add(value.asText()));
+        return Set.copyOf(result);
+    }
+
+    @Test
     void ruleConfigForbidsDemographicWeightGuessingAndKeepsWarmupsOutOfVolume() throws IOException {
         JsonNode rules = readValidated("rule-config-v1.json");
 
@@ -167,15 +358,60 @@ class ValidatedConfigValidationTest {
         assertThat(rules.at("/parameters/initialWeight/unknownResult").asText()).isEqualTo("NEEDS_CALIBRATION");
         assertThat(rules.at("/parameters/initialWeight/demographicEstimationAllowed").asBoolean()).isFalse();
         assertThat(rules.at("/parameters/warmup/countsTowardTrainingVolume").asBoolean()).isFalse();
+        assertThat(rules.at("/parameters/warmup/knownWorkWeightRatios")).hasSameSizeAs(
+                rules.at("/parameters/warmup/rampSetReps"));
+        assertThat(texts(rules.at("/parameters/warmup/eligibleLoadedCompoundMovementPatterns")))
+                .containsExactlyInAnyOrder(
+                        "SQUAT", "HINGE", "HORIZONTAL_PUSH", "HORIZONTAL_PULL",
+                        "VERTICAL_PUSH", "VERTICAL_PULL");
     }
 
     @Test
-    void sessionCompositionDoesNotTurnDurationIntoAFixedExerciseCount()
+    void progressionThresholdsAreVersionedConservativeProductRules() throws IOException {
+        JsonNode rules = readValidated("rule-config-v1.json");
+
+        assertThat(rules.at("/metadata/version").asText()).isEqualTo("1.6.0");
+        assertThat(rules.at("/parameters/progression/longTrainingGapDays").asInt()).isEqualTo(21);
+        assertThat(rules.at("/parameters/progression/multipleFailedSetsThreshold").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void sessionCompositionDefinesTheFortyFiveMinuteTargetAndCompleteWarmupBudget()
             throws IOException {
+        JsonNode rules = readValidated("rule-config-v1.json");
         JsonNode composition = readValidated("rule-config-v1.json").at("/parameters/sessionComposition");
-        assertThat(composition.has("targetExercisesByMinutes")).isFalse();
+        assertThat(composition.at("/targetExercisesByMinutes/0/sessionMinutes").asInt()).isEqualTo(45);
+        assertThat(composition.at("/targetExercisesByMinutes/0/minimumExercises").asInt()).isEqualTo(4);
+        assertThat(composition.at("/targetExercisesByMinutes/0/maximumExercises").asInt()).isEqualTo(5);
         assertThat(composition.has("experiencedExerciseBonus")).isFalse();
         assertThat(composition.path("accessoryWorkSets").asInt()).isEqualTo(2);
+        assertThat(rules.at("/parameters/balance/maximumMovementPatternOccurrencesPerSession").asInt())
+                .isEqualTo(1);
+        assertThat(rules.at("/parameters/duration/generalWarmupSeconds").asInt()).isEqualTo(180);
+        assertThat(rules.at("/parameters/duration/rampWarmupSetsPerSession").asInt()).isEqualTo(2);
+        assertThat(rules.at("/parameters/duration/rampWarmupSetsPerSession").asInt())
+                .isLessThanOrEqualTo(rules.at("/parameters/warmup/maximumRampSets").asInt());
+    }
+
+    @Test
+    void weeklyMovementTargetsKeepLoadedFullBodyPlansBalancedAndIncludeDirectArms()
+            throws IOException {
+        JsonNode targets = readValidated("rule-config-v1.json")
+                .at("/parameters/balance/weeklyMovementPatternTargets");
+
+        assertThat(targets).hasSize(2);
+        JsonNode threeDay = targets.get(1);
+        assertThat(threeDay.path("sessionsPerWeek").asInt()).isEqualTo(3);
+        Map<String, JsonNode> byPattern = new java.util.LinkedHashMap<>();
+        threeDay.path("targets").forEach(target ->
+                byPattern.put(target.path("movementPattern").asText(), target));
+        assertThat(byPattern.keySet()).contains(
+                "HORIZONTAL_PUSH", "VERTICAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PULL",
+                "ELBOW_FLEXION", "ELBOW_EXTENSION");
+        assertThat(byPattern.get("HORIZONTAL_PUSH").path("minimumSessions").asInt()).isEqualTo(2);
+        assertThat(byPattern.get("VERTICAL_PUSH").path("maximumSessions").asInt()).isEqualTo(1);
+        assertThat(byPattern.get("ELBOW_FLEXION").path("maximumSessions").asInt()).isEqualTo(2);
+        assertThat(byPattern.get("ELBOW_EXTENSION").path("maximumSessions").asInt()).isEqualTo(2);
     }
 
     private static int estimatedSeconds(JsonNode day, int secondsPerWorkSet, int secondsPerTransition) {

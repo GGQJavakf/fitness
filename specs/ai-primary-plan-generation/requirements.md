@@ -1,5 +1,15 @@
 # AI-primary plan generation requirements
 
+## Supersession note
+
+The exercise-count, online-plan-generation activation, and current-release onboarding free-text
+rules in this document are superseded by `../post-audit-remediation/requirements.md`. Online
+`PLAN_GENERATION` remains disabled until that purpose is explicitly approved; a 45-minute day now
+requires four or five exercises when safe candidates are available. The optional
+`additionalRequirements` API field remains only as a compatibility boundary. The current-release
+UI does not collect it because the deterministic composer does not apply unrestricted free text;
+users express supported preferences through structured preferred/excluded exercise controls.
+
 ## Scope
 
 Replace duration-to-exercise-count rule generation with an AI-primary workflow. The AI uses
@@ -22,15 +32,14 @@ fallback rule plan.
 - When the same duration is used with different goals, experience, or additional
   requirements, the AI shall be allowed to produce meaningfully different valid structures.
 
-### R2 — Duration is a budget, not an exercise-count mapping
+### R2 — Duration uses a versioned composition contract
 
-- While generating or validating a plan, the system shall treat session minutes as a maximum
-  time budget and shall not require a fixed exercise count for 30/45/60/75/90 minutes.
-- When a 45-minute AI proposal contains any valid count from one through the configured
-  maximum, the backend shall accept or reject it based on time, eligibility, volume,
-  recovery, and prescription constraints rather than a four-exercise target.
-- When a fallback plan is required, its exercise count shall emerge from template content,
-  goal prescriptions, safety constraints, and remaining time rather than a duration lookup.
+- While generating or validating a plan, the system shall treat session minutes as a complete
+  budget including general warm-up, ramp warm-up, work, rest, and transitions.
+- When a 45-minute proposal has at least four safe eligible exercises available, the backend
+  shall require four or five exercises and reject an underfilled proposal with actionable issues.
+- When fewer than four safe candidates exist, the system shall report the insufficiency and
+  shall not add unsafe duplicates merely to meet the count.
 
 ### R3 — Structured AI proposal and authoritative validation
 

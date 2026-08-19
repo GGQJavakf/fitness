@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.aifitness.assistant.FitnessAssistantApplication;
 import com.aifitness.assistant.identity.application.ResourceOwnershipGuard;
+import com.aifitness.assistant.identity.application.UserAccessRevocation;
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
+import com.aifitness.assistant.identity.application.WechatLoginService;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,7 +41,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 @SpringBootTest(
         classes = FitnessAssistantApplication.class,
-        properties = "fitness.auth.wechat.app-id=test-app-id")
+        properties = {
+            "fitness.auth.wechat.app-id=test-app-id",
+            "fitness.auth.wechat.trust-cloudbase-identity-headers=true"
+        })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(AuthEndpointIntegrationTest.IdentityTestConfiguration.class)
@@ -53,6 +58,12 @@ class AuthEndpointIntegrationTest {
 
     @Autowired
     private MutableClock identityTestClock;
+
+    @Autowired
+    private WechatLoginService loginService;
+
+    @Autowired
+    private UserAccessRevocation userAccessRevocation;
 
     @Test
     void testProfileExposesLoginRefreshAndLogoutWithoutCredentialLeakage() throws Exception {
@@ -97,6 +108,53 @@ class AuthEndpointIntegrationTest {
                         .content("{\"refreshToken\":\"unknown-refresh-token\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void revokedAccountTokensUseATerminalCodeWithoutChangingUnknownTokenResponses() throws Exception {
+        JsonNode session = login("terminal-revocation-user");
+        String accessToken = session.get("accessToken").asText();
+        String refreshToken = session.get("refreshToken").asText();
+        AuthenticatedUserId userId = loginService.authenticate(accessToken);
+
+        userAccessRevocation.revokeAllSessionsAndBlockLogin(userId, UUID.randomUUID());
+
+        mvc.perform(get("/api/v1/profile")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("ACCESS_REVOKED"));
+        mvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"" + refreshToken + "\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("ACCESS_REVOKED"));
+        mvc.perform(get("/api/v1/profile")
+                        .header("Authorization", "Bearer forged-terminal-looking-token"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"));
+    }
+
+    @Test
+    void repeatedAuthenticationCredentialIsRateLimitedWithASafeEnvelope() throws Exception {
+        String body = "{\"code\":\"replayed-rate-limit-code\"}";
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+        for (int attempt = 2; attempt <= 10; attempt++) {
+            mvc.perform(post("/api/v1/auth/wechat/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk());
+        }
+
+        String response = mvc.perform(post("/api/v1/auth/wechat/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.error.code").value("RATE_LIMITED"))
+                .andReturn().getResponse().getContentAsString();
+        assertThat(response).doesNotContain("replayed-rate-limit-code");
     }
 
     @Test
@@ -207,6 +265,53 @@ class AuthEndpointIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
     }
 
+    @Test
+    void authenticatedBindingFailuresUseTheDocumentedBadRequestEnvelope() throws Exception {
+        String accessToken = login("binding-errors-user").get("accessToken").asText();
+
+        mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.meta.requestId").isNotEmpty());
+        mvc.perform(get("/api/v1/test-owned-resources/not-a-uuid")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+        mvc.perform(post("/api/v1/test-owned-resources/binding")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "business-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"UNKNOWN\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+        mvc.perform(post("/api/v1/test-owned-resources/binding")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("Idempotency-Key", "business-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not-json}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void unexpectedFaultsUseRedactedCorrelatedInternalErrorEnvelope() throws Exception {
+        String accessToken = login("unexpected-fault-user").get("accessToken").asText();
+
+        String response = mvc.perform(get("/api/v1/test-owned-resources/unexpected-error")
+                        .header("Authorization", "Bearer " + accessToken)
+                        .header("X-Request-Id", "unexpected-fault-request"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"))
+                .andExpect(jsonPath("$.error.message").value("服务器内部错误"))
+                .andExpect(jsonPath("$.meta.requestId").value("unexpected-fault-request"))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(response).doesNotContain("database-password", "simulated persistence fault");
+    }
+
     private JsonNode login(String code) throws Exception {
         String json = mvc.perform(post("/api/v1/auth/wechat/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -261,6 +366,22 @@ class AuthEndpointIntegrationTest {
         Map<String, String> validationError(AuthenticatedUserId authenticatedUser) {
             throw new IllegalArgumentException("test business validation failure");
         }
+
+        @PostMapping("/binding")
+        Map<String, String> binding(
+                @org.springframework.web.bind.annotation.RequestHeader("Idempotency-Key") String idempotencyKey,
+                @org.springframework.web.bind.annotation.RequestBody BindingRequest request,
+                AuthenticatedUserId authenticatedUser) {
+            return Map.of("action", request.action().name(), "key", idempotencyKey);
+        }
+
+        @GetMapping("/unexpected-error")
+        Map<String, String> unexpectedError(AuthenticatedUserId authenticatedUser) {
+            throw new IllegalStateException("simulated persistence fault: database-password");
+        }
+
+        enum BindingAction { REPLACE }
+        record BindingRequest(BindingAction action) {}
     }
 
     static final class MutableClock extends Clock {

@@ -4,14 +4,18 @@ import com.aifitness.assistant.common.api.ApiResponse;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.progression.application.RecommendationService;
+import com.aifitness.assistant.progression.application.RecommendationRepository;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
+import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.MDC;
+import org.springframework.http.ResponseEntity;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,10 +39,18 @@ public final class RecommendationController {
     }
 
     @GetMapping
-    public ApiResponse<List<RecommendationData>> list(
+    public ResponseEntity<ApiResponse<List<RecommendationData>>> list(
             AuthenticatedUserId user,
-            @RequestParam Optional<ProgressionRecommendation.Status> status) {
-        return response(recommendations.list(user, status).stream().map(RecommendationData::from).toList());
+            @RequestParam Optional<ProgressionRecommendation.Status> status,
+            @RequestParam Optional<String> cursor,
+            @RequestParam(defaultValue = "20") int limit) {
+        RecommendationRepository.Page page = recommendations.page(
+                user, status, cursor.map(RecommendationController::decodeCursor), limit);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                .header("X-Has-More", Boolean.toString(page.hasMore()));
+        page.nextCursor().map(RecommendationController::encodeCursor)
+                .ifPresent(value -> builder.header("X-Next-Cursor", value));
+        return builder.body(response(page.items().stream().map(RecommendationData::from).toList()));
     }
 
     @PostMapping("/{id}/apply")
@@ -70,6 +82,31 @@ public final class RecommendationController {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) requestId = UUID.randomUUID().toString();
         return new ApiResponse<>(data, new ResponseMeta(requestId, clock.instant()));
+    }
+
+    private static String encodeCursor(RecommendationRepository.Cursor cursor) {
+        String value = cursor.createdAt() + "|" + cursor.id();
+        return Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(value.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static RecommendationRepository.Cursor decodeCursor(String encoded) {
+        if (encoded == null || encoded.isBlank() || encoded.length() > 256) {
+            throw new IllegalArgumentException("cursor is invalid");
+        }
+        try {
+            String value = new String(Base64.getUrlDecoder().decode(encoded), StandardCharsets.UTF_8);
+            String[] parts = value.split("\\|", -1);
+            if (parts.length != 2) throw new IllegalArgumentException("cursor is invalid");
+            RecommendationRepository.Cursor cursor = new RecommendationRepository.Cursor(
+                    Instant.parse(parts[0]), UUID.fromString(parts[1]));
+            if (!encodeCursor(cursor).equals(encoded)) {
+                throw new IllegalArgumentException("cursor is not canonical");
+            }
+            return cursor;
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("cursor is invalid");
+        }
     }
 
     public record ApplyRequest(int expectedVersion, WeightData acceptedWeight) {}

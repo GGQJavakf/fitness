@@ -19,7 +19,8 @@ public record WorkoutSession(
         Instant startedAt,
         Optional<Instant> completedAt,
         long version,
-        List<WorkoutExerciseSnapshot> exercises) {
+        List<WorkoutExerciseSnapshot> exercises,
+        Optional<WorkoutWarmupPrescription> warmupPrescription) {
 
     public WorkoutSession {
         Objects.requireNonNull(id, "session id must not be null");
@@ -42,6 +43,39 @@ public record WorkoutSession(
         if (exercises.isEmpty() || exercises.stream().anyMatch(item -> !item.sessionId().equals(id))) {
             throw new IllegalArgumentException("session must contain owned exercise snapshots");
         }
+        warmupPrescription = Objects.requireNonNull(
+                warmupPrescription, "warmup prescription must not be null");
+    }
+
+    public WorkoutSession(
+            UUID id,
+            UUID userId,
+            UUID planId,
+            UUID planVersionId,
+            int planVersionNumber,
+            UUID trainingDayId,
+            String trainingDayCode,
+            String clientSessionKey,
+            WorkoutStatus status,
+            Instant startedAt,
+            Optional<Instant> completedAt,
+            long version,
+            List<WorkoutExerciseSnapshot> exercises) {
+        this(
+                id,
+                userId,
+                planId,
+                planVersionId,
+                planVersionNumber,
+                trainingDayId,
+                trainingDayCode,
+                clientSessionKey,
+                status,
+                startedAt,
+                completedAt,
+                version,
+                exercises,
+                Optional.empty());
     }
 
     public WorkoutSession transitionTo(WorkoutStatus target, Instant changedAt) {
@@ -53,7 +87,7 @@ public record WorkoutSession(
         Optional<Instant> completion = target.terminal() ? Optional.of(changedAt) : Optional.empty();
         return new WorkoutSession(
                 id, userId, planId, planVersionId, planVersionNumber, trainingDayId, trainingDayCode,
-                clientSessionKey, target, startedAt, completion, version + 1, exercises);
+                clientSessionKey, target, startedAt, completion, version + 1, exercises, warmupPrescription);
     }
 
     public boolean hasSameSource(UUID expectedPlanId, int expectedVersion, String expectedDayCode) {
@@ -68,7 +102,7 @@ public record WorkoutSession(
         }
         return new WorkoutSession(
                 id, userId, planId, planVersionId, planVersionNumber, trainingDayId, trainingDayCode,
-                clientSessionKey, status, startedAt, completedAt, version + 1, exercises);
+                clientSessionKey, status, startedAt, completedAt, version + 1, exercises, warmupPrescription);
     }
 
     private static String required(String value, String name) {

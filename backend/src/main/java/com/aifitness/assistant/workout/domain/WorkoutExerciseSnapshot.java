@@ -67,6 +67,37 @@ public record WorkoutExerciseSnapshot(
                 throw new IllegalArgumentException("P0 workout snapshots only support KG");
             }
         }
+
+        /** Retargets an immutable prescription when a replacement changes its load mode. */
+        public Prescription forReplacement(
+                Set<String> sourceEquipment, Set<String> replacementEquipment) {
+            Set<String> source = validEquipment(sourceEquipment, "source equipment");
+            Set<String> replacement = validEquipment(replacementEquipment, "replacement equipment");
+            if (isBodyweight(replacement)) {
+                return new Prescription(
+                        workSets, repMin, repMax, restSeconds,
+                        "BODYWEIGHT", Optional.empty(), unit);
+            }
+            if (isBodyweight(source) || !source.equals(replacement)) {
+                return new Prescription(
+                        workSets, repMin, repMax, restSeconds,
+                        "NEEDS_CALIBRATION", Optional.empty(), unit);
+            }
+            return this;
+        }
+
+        private static Set<String> validEquipment(Set<String> value, String name) {
+            Set<String> equipment = Set.copyOf(Objects.requireNonNull(value, name + " must not be null"));
+            if (equipment.isEmpty()
+                    || (equipment.contains("BODYWEIGHT") && equipment.size() != 1)) {
+                throw new IllegalArgumentException(name + " has an invalid load mode");
+            }
+            return equipment;
+        }
+
+        private static boolean isBodyweight(Set<String> equipment) {
+            return equipment.size() == 1 && equipment.contains("BODYWEIGHT");
+        }
     }
 
     public enum Status {

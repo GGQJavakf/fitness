@@ -1,11 +1,12 @@
 import { Button, Input, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import {
   privacyActionErrorMessage,
   privacyCategoryLabel,
   type PrivacyExportResource,
 } from '../../../application/privacy'
+import { LocalUserDataCleanupError } from '../../../application/localPrivacyLifecycle'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import MainNavigation from '../../components/main-navigation'
 
@@ -21,6 +22,7 @@ export default function MyPage() {
   const [showDeletion, setShowDeletion] = useState(false)
   const [exportedResources, setExportedResources] = useState<readonly PrivacyExportResource[]>([])
   const [exportExpiresAt, setExportExpiresAt] = useState('')
+  const actionInFlight = useRef(false)
 
   useEffect(() => {
     if (!exportExpiresAt) return undefined
@@ -33,6 +35,8 @@ export default function MyPage() {
   }, [exportExpiresAt])
 
   async function exportData(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
     setBusy(true)
     setMessage('')
     try {
@@ -43,11 +47,14 @@ export default function MyPage() {
     } catch (error: unknown) {
       setMessage(privacyActionErrorMessage(error, '数据导出失败，请稍后重试'))
     } finally {
+      actionInFlight.current = false
       setBusy(false)
     }
   }
 
   async function requestDeletion(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
     setBusy(true)
     setMessage('')
     try {
@@ -57,17 +64,61 @@ export default function MyPage() {
     } catch (error: unknown) {
       setMessage(privacyActionErrorMessage(error, '删除申请提交失败，请稍后重试'))
     } finally {
+      actionInFlight.current = false
       setBusy(false)
     }
   }
 
   async function refreshStatus(): Promise<void> {
-    if (!requestId) return
+    if (!requestId || actionInFlight.current) return
+    actionInFlight.current = true
+    setBusy(true)
     try {
       const result = await application.privacy.getDeletionStatus(requestId)
       setMessage(`当前申请状态：${result.statusLabel}。${result.retentionNotice}`)
     } catch (error: unknown) {
       setMessage(privacyActionErrorMessage(error, '暂时无法读取申请状态'))
+    } finally {
+      actionInFlight.current = false
+      setBusy(false)
+    }
+  }
+
+  async function logout(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
+    setBusy(true)
+    setMessage('')
+    setExportedResources([])
+    setExportExpiresAt('')
+    try {
+      await application.account.logout()
+    } catch (error: unknown) {
+      setMessage(error instanceof LocalUserDataCleanupError
+        ? '本机数据未能完全清理，请重试退出登录后再使用其他账号'
+        : '退出登录未完成，请稍后重试')
+    } finally {
+      actionInFlight.current = false
+      setBusy(false)
+    }
+  }
+
+  async function switchAccount(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
+    setBusy(true)
+    setMessage('')
+    setExportedResources([])
+    setExportExpiresAt('')
+    try {
+      await application.account.switchAccount()
+    } catch (error: unknown) {
+      setMessage(error instanceof LocalUserDataCleanupError
+        ? '本机数据未能完全清理，已停止切换账号，请重试'
+        : '旧账号本机数据已清理，但新账号登录失败，请重试')
+    } finally {
+      actionInFlight.current = false
+      setBusy(false)
     }
   }
 
@@ -154,6 +205,15 @@ export default function MyPage() {
       <View className='profile-boundary'>
         <Text className='profile-boundary__title'>健康与服务边界</Text>
         <Text className='profile-boundary__description'>提供一般健身训练建议，不替代医疗诊断、治疗或康复服务。</Text>
+      </View>
+
+      <View className='surface-card account-actions'>
+        <Text className='section-title'>账号</Text>
+        <Text className='subtitle'>退出或切换账号时，会先清理本机中的会话、未完成训练与同步队列。</Text>
+        <View className='account-actions__buttons'>
+          <Button className='secondary-action' disabled={busy} onClick={() => void logout()}>退出登录</Button>
+          <Button className='secondary-action' disabled={busy} onClick={() => void switchAccount()}>切换账号</Button>
+        </View>
       </View>
 
       <Button className='deletion-disclosure' onClick={() => setShowDeletion((value) => !value)}>

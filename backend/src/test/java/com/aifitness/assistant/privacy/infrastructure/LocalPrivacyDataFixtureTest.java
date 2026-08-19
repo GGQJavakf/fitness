@@ -35,9 +35,9 @@ class LocalPrivacyDataFixtureTest {
         fixture.execute(command);
 
         assertThatThrownBy(() -> sessions.authenticate(tokens.accessToken(), retryAt))
-                .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class);
+                .isInstanceOf(WechatLoginService.AccessRevokedException.class);
         assertThatThrownBy(() -> sessions.refresh(tokens.refreshToken(), retryAt))
-                .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class);
+                .isInstanceOf(WechatLoginService.AccessRevokedException.class);
         assertThatThrownBy(() -> sessions.issue(user, retryAt))
                 .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class);
     }

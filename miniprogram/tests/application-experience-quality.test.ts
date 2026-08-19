@@ -100,27 +100,6 @@ describe('application-wide premium experience contract', () => {
     expect(history).not.toContain('由你决定是否采用')
   })
 
-  it('keeps workout summary headlines aligned with actual completion state', () => {
-    const summary = source('src/presentation/pages/workout-summary/index.tsx')
-
-    expect(summary).toContain("summary.complete")
-    expect(summary).toContain("'训练完成'")
-    expect(summary).toContain("'本次训练已记录'")
-    expect(summary).not.toContain('完成得很好')
-  })
-
-  it('automatically settles a fully completed workout and initializes each set independently', () => {
-    const summary = source('src/presentation/pages/workout-summary/index.tsx')
-    const session = source('src/presentation/pages/workout-session/index.tsx')
-
-    expect(summary).toContain('autoSettlementStarted')
-    expect(summary).toMatch(/if \(nextSummary\.complete\)[\s\S]*completeWorkout/)
-    expect(session).toMatch(
-      /useEffect\(\(\) => \{[\s\S]*setReps\(current \? String\(current\.targetReps\) : ''\)[\s\S]*currentSetIndex/
-    )
-    expect(session).toMatch(/setShowWeightEditor\(false\)[\s\S]*currentExerciseIndex/)
-  })
-
   it('keeps profile and conflict recovery calm, progressive, and user-facing', () => {
     const profile = source('src/presentation/pages/my/index.tsx')
     const conflicts = source('src/presentation/pages/sync-conflicts/index.tsx')

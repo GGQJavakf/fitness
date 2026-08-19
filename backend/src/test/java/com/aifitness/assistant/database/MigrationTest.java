@@ -7,7 +7,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 
 import com.mysql.cj.jdbc.MysqlDataSource;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.aifitness.assistant.common.domain.RuleReference;
+import com.aifitness.assistant.testsupport.ExternalMysqlTls;
+import com.aifitness.assistant.testsupport.ExternalMysqlDatabaseTarget;
+import com.aifitness.assistant.testsupport.ExternalTestSecret;
+import com.aifitness.assistant.testsupport.ExternalMysqlValidationMarker;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.identity.domain.UserIdentity;
 import com.aifitness.assistant.identity.infrastructure.JdbcIdentityRepository;
@@ -28,6 +34,7 @@ import com.aifitness.assistant.profile.infrastructure.JdbcProfileRepository;
 import com.aifitness.assistant.progression.domain.ProgressionDecision;
 import com.aifitness.assistant.progression.domain.ProgressionEngine;
 import com.aifitness.assistant.progression.domain.EquipmentRoundingPolicy;
+import com.aifitness.assistant.progression.domain.ProgressionInput;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
 import com.aifitness.assistant.progression.application.EffectiveSetSelector;
 import com.aifitness.assistant.progression.infrastructure.JdbcExerciseTrendQuery;
@@ -44,29 +51,35 @@ import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
+import com.aifitness.assistant.workout.domain.WorkoutWarmupPrescription;
 import com.aifitness.assistant.workout.domain.WorkoutSet;
 import com.aifitness.assistant.workout.domain.SyncConflict;
 import com.aifitness.assistant.workout.infrastructure.JdbcSyncConflictRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSessionRepository;
+import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutHistoryRepository;
 import com.aifitness.assistant.workout.infrastructure.JdbcWorkoutSetRepository;
 import com.aifitness.assistant.rules.domain.RuleEvaluationInput;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -76,21 +89,48 @@ import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.MySQLContainer;
 
 class MigrationTest {
 
-    private static final String JDBC_URL_PROPERTY = "fitness.test.mysql.jdbc-url";
-    private static final String USERNAME_PROPERTY = "fitness.test.mysql.username";
-    private static final String PASSWORD_PROPERTY = "fitness.test.mysql.password";
-    private static final String EXTERNAL_DATABASE_NAME = "fitness_m0";
+    private static final String JDBC_URL_ENVIRONMENT = "FITNESS_TEST_MYSQL_JDBC_URL";
+    private static final String USERNAME_ENVIRONMENT = "FITNESS_TEST_MYSQL_USERNAME";
+    private static final String PASSWORD_ENVIRONMENT = "FITNESS_TEST_MYSQL_PASSWORD";
+    private static final String PASSWORD_FILE_ENVIRONMENT = "FITNESS_TEST_MYSQL_PASSWORD_FILE";
+    private static final String ALLOW_REMOTE_PROPERTY = "fitness.test.mysql.allow-remote";
+    private static final String ALLOW_UNVERIFIED_TLS_PROPERTY =
+            "fitness.test.mysql.allow-unverified-tls";
+    private static final String ALLOW_PINNED_CA_PROPERTY = "fitness.test.mysql.allow-pinned-ca";
+    private static final String TRUST_STORE_ENVIRONMENT = "FITNESS_TEST_MYSQL_TRUST_STORE";
+    private static final String TRUST_STORE_TYPE_ENVIRONMENT = "FITNESS_TEST_MYSQL_TRUST_STORE_TYPE";
+    private static final String TRUST_STORE_PASSWORD_ENVIRONMENT = "FITNESS_TEST_MYSQL_TRUST_STORE_PASSWORD";
+    private static final String TRUST_STORE_PASSWORD_FILE_ENVIRONMENT =
+            "FITNESS_TEST_MYSQL_TRUST_STORE_PASSWORD_FILE";
+    private static final String EXTERNAL_DATABASE_NAME_ERROR =
+            "External test database must use an approved disposable name";
+    private static final String VERIFICATION_RUN_ID_PROPERTY = "fitness.verification.run-id";
+    private static final String VALIDATION_MARKER_PROPERTY = "fitness.verification.marker";
 
-    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4");
+    static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.0.44");
 
     private static DataSource dataSource;
     private static Flyway flyway;
+    private static LegacyWorkoutSetUpgradeFixture legacyWorkoutSetUpgradeFixture;
+    private static String externalValidationJdbcUrl;
+    private static Level previousFlywayLogLevel;
+    private static boolean flywayLogLevelOverridden;
+
+    @BeforeAll
+    static void clearPreviousExternalValidationMarker() {
+        String markerPath = System.getProperty(VALIDATION_MARKER_PROPERTY);
+        if (markerPath != null && !markerPath.isBlank()) {
+            ExternalMysqlValidationMarker.clear(markerPath);
+        }
+    }
 
     @Test
     void externalMysqlConfigurationRequiresJdbcUrlAndUsername() {
@@ -115,11 +155,132 @@ class MigrationTest {
 
     @Test
     void externalMysqlConfigurationRejectsNonLoopbackHosts() {
-        assertThatIllegalArgumentException()
-                .isThrownBy(() -> externalDataSource(
-                        "jdbc:mysql://database.internal:33306/fitness_m0", "root", "secret-marker"))
-                .withMessage("External test database host must be loopback")
-                .withMessageNotContaining("secret-marker");
+        List.of("database.internal", "127.attacker.example", "127.0.0.1.evil", "127.0.0.999")
+                .forEach(host -> {
+                    Throwable failure = catchThrowable(() -> externalDataSource(
+                            "jdbc:mysql://" + host + ":33306/fitness_m0",
+                            "root",
+                            "secret-marker"));
+                    assertThat(failure)
+                            .isInstanceOf(IllegalArgumentException.class)
+                            .hasMessageNotContaining("secret-marker");
+                });
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsMultiHostAndMissingPortForms() {
+        for (String jdbcUrl : List.of(
+                "jdbc:mysql://approved.internal:3306,other.internal:3307/fitness_m0",
+                "jdbc:mysql://approved.internal/fitness_m0",
+                "jdbc:mysql://address=(host=approved.internal)(port=3306)/fitness_m0")) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> externalDataSource(
+                            jdbcUrl, "root", "secret-marker", true))
+                    .withMessage("External MySQL JDBC URL must target exactly one host and port")
+                    .withMessageNotContaining("secret-marker");
+        }
+    }
+
+    @Test
+    void externalMysqlConfigurationAllowsRemoteOnlyWithExplicitOptIn() {
+        assertThat(((MysqlDataSource) externalDataSource(
+                        "jdbc:mysql://192.0.2.10:33306/fitness_m0",
+                        "root",
+                        "secret-marker",
+                        true)).getUrl())
+                .isEqualTo("jdbc:mysql://192.0.2.10:33306/fitness_m0?sslMode=VERIFY_IDENTITY");
+    }
+
+    @Test
+    void externalMysqlConfigurationAllowsOnlyStrictlyNamedDisposableSchemas() {
+        assertThat(((MysqlDataSource) externalDataSource(
+                        "jdbc:mysql://192.0.2.10:33306/fitness_verify_20260815a1b2",
+                        "root",
+                        "secret-marker",
+                        true)).getUrl())
+                .isEqualTo(
+                        "jdbc:mysql://192.0.2.10:33306/fitness_verify_20260815a1b2"
+                                + "?sslMode=VERIFY_IDENTITY");
+
+        for (String database : List.of(
+                "fitness_verify_short",
+                "fitness_verify_20260815-A1B2",
+                "fitness_verify_20260815a1b2_extra_suffix_that_is_too_long",
+                "production")) {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> externalDataSource(
+                            "jdbc:mysql://192.0.2.10:33306/" + database,
+                            "root",
+                            "secret-marker",
+                            true))
+                    .withMessage("External test database must use an approved disposable name")
+                    .withMessageNotContaining("secret-marker");
+        }
+    }
+
+    @Test
+    void externalMysqlConfigurationUsesPinnedCaOnlyWithExplicitCompleteConfiguration()
+            throws IOException, SQLException {
+        var trustStore = java.nio.file.Files.createTempFile("fitness-mysql-validation-", ".p12");
+        try {
+            MysqlDataSource dataSource = (MysqlDataSource) externalDataSource(
+                    "jdbc:mysql://192.0.2.10:33306/fitness_m0",
+                    "root",
+                    "secret-marker",
+                    true,
+                    true,
+                    trustStore.toString(),
+                    "PKCS12",
+                    "trust-store-secret-marker");
+
+            assertThat(dataSource.getUrl())
+                    .isEqualTo("jdbc:mysql://192.0.2.10:33306/fitness_m0?sslMode=VERIFY_CA");
+            assertThat(dataSource.getFallbackToSystemTrustStore()).isFalse();
+            assertThat(dataSource.getTrustCertificateKeyStorePassword())
+                    .isEqualTo("trust-store-secret-marker");
+        } finally {
+            java.nio.file.Files.deleteIfExists(trustStore);
+        }
+    }
+
+    @Test
+    void externalMysqlConfigurationUsesEncryptedOnlyModeOnlyWithExplicitOptIn() {
+        MysqlDataSource dataSource = (MysqlDataSource) externalDataSource(
+                "jdbc:mysql://192.0.2.10:33306/fitness_m0",
+                "root",
+                "secret-marker",
+                true,
+                true,
+                false,
+                null,
+                null,
+                null);
+
+        assertThat(dataSource.getUrl())
+                .isEqualTo("jdbc:mysql://192.0.2.10:33306/fitness_m0?sslMode=REQUIRED");
+    }
+
+    @Test
+    void externalMysqlConfigurationRejectsConflictingTlsOptIns() throws IOException {
+        var trustStore = java.nio.file.Files.createTempFile("fitness-mysql-validation-", ".p12");
+        try {
+            assertThatIllegalArgumentException()
+                    .isThrownBy(() -> externalDataSource(
+                            "jdbc:mysql://192.0.2.10:33306/fitness_m0",
+                            "root",
+                            "secret-marker",
+                            true,
+                            true,
+                            true,
+                            trustStore.toString(),
+                            "PKCS12",
+                            "trust-store-secret-marker"))
+                    .withMessage("External MySQL TLS modes are mutually exclusive")
+                    .withMessageNotContaining("secret-marker")
+                    .withMessageNotContaining("trust-store-secret-marker");
+        } finally {
+            java.nio.file.Files.deleteIfExists(trustStore);
+        }
     }
 
     @Test
@@ -127,7 +288,7 @@ class MigrationTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> externalDataSource(
                         "jdbc:mysql://127.0.0.1:33306/mysql", "root", "secret-marker"))
-                .withMessage("External test database must be named fitness_m0")
+                .withMessage(EXTERNAL_DATABASE_NAME_ERROR)
                 .withMessageNotContaining("secret-marker");
     }
 
@@ -179,13 +340,15 @@ class MigrationTest {
     }
 
     @Test
-    void externalMysqlServerMustBeMysql84() {
+    void externalMysqlServerMustBeMysql8() {
+        validateExternalServerVersion("MySQL", 8, 0);
+        validateExternalServerVersion("MySQL", 8, 4);
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> validateMysql84Server("MariaDB", 8, 4))
-                .withMessage("External test database server must be MySQL 8.4");
+                .isThrownBy(() -> validateExternalServerVersion("MariaDB", 8, 0))
+                .withMessage("External test database server must be MySQL 8");
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> validateMysql84Server("MySQL", 8, 0))
-                .withMessage("External test database server must be MySQL 8.4");
+                .isThrownBy(() -> validateExternalServerVersion("MySQL", 9, 0))
+                .withMessage("External test database server must be MySQL 8");
     }
 
     @Test
@@ -205,7 +368,16 @@ class MigrationTest {
                 "db/migration/V012__workout_set_idempotency.sql",
                 "db/migration/V013__sync_conflict_resolution.sql",
                 "db/migration/V014__workout_exercise_replacement_overlay.sql",
-                "db/migration/V015__progression_recommendation_lifecycle.sql"))
+                "db/migration/V015__progression_recommendation_lifecycle.sql",
+                "db/migration/V016__progression_decision_idempotency.sql",
+                "db/migration/V017__workout_completion_outbox.sql",
+                "db/migration/V018__shared_privacy_operational_state.sql",
+                "db/migration/V019__workout_set_logical_void.sql",
+                "db/migration/V020__workout_set_conflict_corrections.sql",
+                "db/migration/V021__shared_auth_and_plan_warning_state.sql",
+                "db/migration/V022__workout_set_safety_flag.sql",
+                "db/migration/V023__backfill_workout_set_idempotency.sql",
+                "db/migration/V024__workout_recovery_confirmation.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -299,6 +471,58 @@ class MigrationTest {
                 "accepted_weight DECIMAL(10,2)",
                 "ck_progression_recommendation_decision_metadata",
                 "uq_progression_recommendation_user_idempotency");
+        assertThat(readMigration("V016__progression_decision_idempotency.sql")).contains(
+                "progression_decision_idempotency",
+                "payload_fingerprint CHAR(64)",
+                "uq_progression_decision_user_operation_key",
+                "idx_progression_recommendation_user_created_id");
+        assertThat(readMigration("V017__workout_completion_outbox.sql")).contains(
+                "workout_completion_outbox",
+                "uq_workout_completion_outbox_session_event",
+                "claim_token BINARY(16)",
+                "idx_workout_completion_outbox_claim");
+        assertThat(readMigration("V018__shared_privacy_operational_state.sql")).contains(
+                "privacy_reauthentication_proof",
+                "proof_digest VARBINARY(32)",
+                "privacy_rate_limit_bucket",
+                "PRIMARY KEY (user_id, action, bucket_start)");
+        assertThat(readMigration("V019__workout_set_logical_void.sql")).contains(
+                "CREATE TABLE workout_set_void",
+                "uq_workout_set_void_set",
+                "uq_workout_set_void_user_idempotency",
+                "trg_workout_set_void_immutable_update",
+                "trg_workout_set_void_immutable_delete");
+        assertThat(readMigration("V020__workout_set_conflict_corrections.sql")).contains(
+                "NEW.server_revision <> OLD.server_revision + 1",
+                "workout_set_revision revision_fact",
+                "revision_fact.revision_no = NEW.server_revision",
+                "workout set correction requires revision audit");
+        assertThat(readMigration("V022__workout_set_safety_flag.sql")).contains(
+                "ADD COLUMN safety_flag VARCHAR(32) NULL",
+                "ck_workout_set_safety_flag",
+                "'PAIN', 'INJURY', 'CHEST_DISCOMFORT', 'DIZZINESS', 'SEVERE_UNWELL'",
+                "NOT (NEW.safety_flag <=> OLD.safety_flag)",
+                "NEW.server_revision <> OLD.server_revision + 1",
+                "workout_set_revision revision_fact",
+                "revision_fact.revision_no = NEW.server_revision",
+                "workout set correction requires revision audit");
+        assertThat(readMigration("V023__backfill_workout_set_idempotency.sql")).contains(
+                "ROW_NUMBER() OVER",
+                "ORDER BY snapshot.exercise_order, wset.set_order, wset.id",
+                "legacy-workout-set-idempotency-v1|",
+                "MODIFY COLUMN client_operation_seq BIGINT UNSIGNED NOT NULL",
+                "MODIFY COLUMN payload_digest BINARY(32) NOT NULL",
+                "MODIFY COLUMN applied_session_version BIGINT UNSIGNED NOT NULL",
+                "ck_workout_set_client_operation_seq CHECK (client_operation_seq >= 1)",
+                "NOT (NEW.safety_flag <=> OLD.safety_flag)",
+                "workout set correction requires revision audit");
+        assertThat(readMigration("V024__workout_recovery_confirmation.sql")).contains(
+                "CREATE TABLE workout_recovery_confirmation",
+                "token_digest VARBINARY(32) NOT NULL",
+                "assessment_fingerprint VARBINARY(32) NOT NULL",
+                "client_session_key VARCHAR(128) NOT NULL",
+                "PRIMARY KEY (token_digest)",
+                "consumed_at IS NULL OR consumed_at >= issued_at");
     }
 
     @Test
@@ -309,7 +533,40 @@ class MigrationTest {
                 .extracting(Object::toString)
                 .containsExactly(
                         "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                        "013", "014", "015");
+                        "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024");
+    }
+
+    @Test
+    void legacyWorkoutSetRowsUpgradeFromV011AndRemainJdbcReplayable() throws Exception {
+        migrateEmptyMysqlDatabase();
+        LegacyWorkoutSetUpgradeFixture fixture = Objects.requireNonNull(legacyWorkoutSetUpgradeFixture);
+        JdbcWorkoutSetRepository repository = new JdbcWorkoutSetRepository(
+                dataSource, new ObjectMapper().findAndRegisterModules());
+
+        List<WorkoutSet> migrated = repository.findBySession(
+                UUID.fromString(fixture.userId()), UUID.fromString(fixture.sessionId()));
+
+        assertThat(migrated).extracting(WorkoutSet::clientSetKey)
+                .containsExactly("legacy-set-1", "legacy-set-2");
+        assertThat(migrated).extracting(WorkoutSet::clientOperationSeq)
+                .containsExactly(1L, 2L);
+        assertThat(migrated).extracting(WorkoutSet::payloadDigest)
+                .containsExactly(legacyWorkoutSetDigest(fixture.firstSetId()),
+                        legacyWorkoutSetDigest(fixture.secondSetId()));
+        assertThat(repository.save(
+                UUID.fromString(fixture.userId()), migrated.getFirst(), Long.MAX_VALUE))
+                .satisfies(replay -> {
+                    assertThat(replay.duplicate()).isTrue();
+                    assertThat(replay.sessionVersion()).isEqualTo(2);
+                });
+        assertThat(queryOne("""
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'workout_set'
+                  AND column_name IN ('client_operation_seq', 'payload_digest', 'applied_session_version')
+                  AND is_nullable = 'NO'
+                """)).isEqualTo("3");
     }
 
     @Test
@@ -374,7 +631,7 @@ class MigrationTest {
         assertThat(queryOne("SELECT COUNT(*) FROM exercise WHERE id="
                 + binary(exerciseId.toString()))).isEqualTo("1");
         assertThat(queryOne("SELECT COUNT(*) FROM plan_template_version "
-                + "WHERE template_code='FULL_BODY_3_DAY_V1' AND version='1.0.0'"))
+                + "WHERE template_code='FULL_BODY_3_DAY_V1'"))
                 .isEqualTo("1");
         PlanDraft initial = planDraft("GOBLET_SQUAT", 90);
         PlanVersionService.PlanPolicy policy = new PlanVersionService.PlanPolicy() {
@@ -518,8 +775,14 @@ class MigrationTest {
         sessions.revokeAllSessionsAndBlockLogin(user, UUID.randomUUID());
         assertThatThrownBy(() -> sessions.authenticate(refreshed.accessToken(), now.plusSeconds(4)))
                 .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
-                        .AuthenticationRequiredException.class);
+                        .AccessRevokedException.class);
+        assertThatThrownBy(() -> sessions.refresh(refreshed.refreshToken(), now.plusSeconds(4)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AccessRevokedException.class);
         assertThatThrownBy(() -> sessions.issue(user, now.plusSeconds(4)))
+                .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
+                        .AuthenticationRequiredException.class);
+        assertThatThrownBy(() -> sessions.authenticate("unknown-access-token", now.plusSeconds(4)))
                 .isInstanceOf(com.aifitness.assistant.identity.application.WechatLoginService
                         .AuthenticationRequiredException.class);
         assertThat(queryOne("SELECT status FROM user_account WHERE id="
@@ -668,7 +931,7 @@ class MigrationTest {
         ProgressionEngine.EnginePolicy enginePolicy = new ProgressionEngine.EnginePolicy(
                 "double-progression-v1", new BigDecimal("0.05"));
         EquipmentRoundingPolicy equipmentPolicy = new EquipmentRoundingPolicy(
-                "KG", List.of(new BigDecimal("2.5")));
+                "KG", List.of(new BigDecimal("40"), new BigDecimal("42.5")));
         ProgressionDecision generated = new ProgressionEngine().evaluate(
                 signals, current, enginePolicy, equipmentPolicy);
         String snapshotJson = mapper.writeValueAsString(Map.of(
@@ -696,9 +959,12 @@ class MigrationTest {
         var storedSnapshot = mapper.readTree(persisted.inputSnapshotJson());
         RuleEvaluationInput.Progression replaySignals = mapper.treeToValue(
                 storedSnapshot.get("signals"), RuleEvaluationInput.Progression.class);
+        List<BigDecimal> replayEquipmentLevels = new java.util.ArrayList<>();
+        storedSnapshot.withArray("equipmentStepsKg")
+                .forEach(level -> replayEquipmentLevels.add(level.decimalValue()));
         ProgressionDecision replayed = new ProgressionEngine().evaluate(
                 replaySignals, persisted.currentPrescription(), enginePolicy,
-                new EquipmentRoundingPolicy("KG", List.of(new BigDecimal("2.5"))));
+                new EquipmentRoundingPolicy("KG", replayEquipmentLevels));
         assertThat(replayed.decision()).isEqualTo(persisted.decision());
         assertThat(replayed.reasonCode().name()).isEqualTo(persisted.reasonCode());
         assertThat(replayed.recommendedPrescription()).isEqualTo(persisted.recommendedPrescription());
@@ -738,11 +1004,21 @@ class MigrationTest {
         execute("UPDATE workout_session SET status = 'COMPLETED', completed_at = '2026-07-24 09:00:00' WHERE id = "
                 + binary(sessionId));
         insertTrendSet(snapshotId, "work-1", "WORK", 1, "40.0", 10, "COMPLETED", null);
-        insertTrendSet(snapshotId, "work-2", "WORK", 2, "42.5", 8, "COMPLETED", null);
+        String voidedSetId = insertTrendSet(
+                snapshotId, "work-2", "WORK", 2, "42.5", 8, "COMPLETED", null);
         insertTrendSet(snapshotId, "warmup", "WARMUP", 3, "20.0", 12, "COMPLETED", null);
         insertTrendSet(snapshotId, "extra", "EXTRA", 4, "50.0", 5, "COMPLETED", null);
         insertTrendSet(snapshotId, "anomaly", "WORK", 5, "100.0", 20, "COMPLETED", "CONFIRMED_EXCLUDED");
         insertTrendSet(snapshotId, "failed", "WORK", 6, "45.0", 0, "FAILED", null);
+        insertTrendSet(
+                snapshotId, "safety", "WORK", 7, "80.0", 12, "COMPLETED", null, "PAIN");
+        execute("""
+                INSERT INTO workout_set_void
+                    (id, workout_set_id, session_id, user_id, idempotency_key, payload_digest,
+                     reason, applied_session_version, voided_at)
+                VALUES (%s, %s, %s, %s, 'trend-void-key', UNHEX(REPEAT('3', 64)),
+                        'USER_REQUESTED', 1, '2026-07-24 08:45:00')
+                """.formatted(binary(newId()), binary(voidedSetId), binary(sessionId), binary(userId)));
 
         String abortedSessionId = createSession(plan, userId);
         String abortedSnapshotId = newId();
@@ -764,9 +1040,9 @@ class MigrationTest {
 
         assertThat(trend.points()).singleElement().satisfies(point -> {
             assertThat(point.sessionId()).isEqualTo(UUID.fromString(sessionId));
-            assertThat(point.topWeightKg()).isEqualByComparingTo("42.5");
-            assertThat(point.totalReps()).isEqualTo(18);
-            assertThat(point.workSetCount()).isEqualTo(2);
+            assertThat(point.topWeightKg()).isEqualByComparingTo("40.0");
+            assertThat(point.totalReps()).isEqualTo(10);
+            assertThat(point.workSetCount()).isEqualTo(1);
         });
 
         WorkoutExerciseSnapshot currentExercise = new WorkoutExerciseSnapshot(
@@ -778,10 +1054,17 @@ class MigrationTest {
                 new AuthenticatedUserId(UUID.fromString(userId)), currentExercise, List.of());
         assertThat(historicalFacts).hasSize(6).allSatisfy(fact -> {
             assertThat(fact.sessionId()).isEqualTo(UUID.fromString(sessionId));
-            assertThat(fact.exerciseId()).isEqualTo(UUID.fromString(plan.planExerciseId()));
+            assertThat(fact.exerciseId()).isEqualTo(UUID.nameUUIDFromBytes(
+                    "ai-fitness-exercise:GOBLET_SQUAT".getBytes(StandardCharsets.UTF_8)));
+            assertThat(fact.exerciseId()).isNotEqualTo(UUID.fromString(plan.planExerciseId()));
             assertThat(fact.payloadDigest()).hasSize(64);
         });
         assertThat(historicalFacts).filteredOn(EffectiveSetSelector.RawSetFact::anomalous).hasSize(1);
+        assertThat(historicalFacts)
+                .filteredOn(fact -> fact.safetyFlag().isPresent())
+                .singleElement()
+                .satisfies(fact -> assertThat(fact.safetyFlag().orElseThrow())
+                        .isEqualTo(ProgressionInput.SafetyFlag.PAIN));
     }
 
     @Test
@@ -834,7 +1117,23 @@ class MigrationTest {
                 sessionId, userId, UUID.fromString(plan.planId()), UUID.fromString(plan.versionId()), 1,
                 UUID.fromString(plan.dayId()), "DAY_1", "jdbc-session-key", WorkoutStatus.CREATED,
                 java.time.Instant.parse("2026-07-24T08:00:00Z"), java.util.Optional.empty(), 0,
-                List.of(snapshot));
+                List.of(snapshot),
+                Optional.of(new WorkoutWarmupPrescription(
+                        "workout-warmup-prescription-v1",
+                        "1.3.0",
+                        new WorkoutWarmupPrescription.GeneralWarmup(1, 180),
+                        Optional.of(new WorkoutWarmupPrescription.RampWarmup(
+                                snapshot.id(),
+                                1,
+                                WorkoutWarmupPrescription.RampStatus.READY,
+                                Optional.of("DUMBBELL"),
+                                List.of(
+                                        new WorkoutWarmupPrescription.RampSet(new BigDecimal("10"), 10),
+                                        new WorkoutWarmupPrescription.RampSet(new BigDecimal("15"), 6)),
+                                Optional.empty(),
+                                Optional.empty())),
+                        false,
+                        false)));
 
         assertThat(repository.create(created)).isEqualTo(created);
         assertThat(repository.create(created)).isEqualTo(created);
@@ -872,7 +1171,8 @@ class MigrationTest {
         assertThat(duplicateSet.sessionVersion()).isEqualTo(firstSet.sessionVersion());
         assertThat(duplicateSet.duplicate()).isTrue();
         assertThat(queryOne("SELECT COUNT(*) FROM workout_set WHERE payload_digest IS NOT NULL"
-                + " AND applied_session_version=2")).isEqualTo("1");
+                + " AND applied_session_version=2"
+                + " AND client_set_key='jdbc-set-key-001'")).isEqualTo("1");
         WorkoutSet conflicting = new WorkoutSet(
                 UUID.randomUUID(), sessionId, snapshot.id(), "jdbc-set-key-001", 1,
                 WorkoutSet.SetType.WORK, 1, workoutSet.target(),
@@ -881,6 +1181,44 @@ class MigrationTest {
                 java.util.Optional.empty(), "1".repeat(64));
         assertThatThrownBy(() -> sets.save(userId, conflicting, 2))
                 .isInstanceOf(WorkoutSessionService.IdempotencyConflictException.class);
+
+        var voided = sets.appendVoid(
+                userId, sessionId, workoutSet.id(), "jdbc-set-void-001", "2".repeat(64), 2,
+                UUID.randomUUID(), java.time.Instant.parse("2026-07-24T08:04:00Z"));
+        assertThat(voided.sessionVersion()).isEqualTo(3);
+        assertThat(voided.duplicate()).isFalse();
+        assertThat(sets.appendVoid(
+                userId, sessionId, workoutSet.id(), "jdbc-set-void-001", "2".repeat(64), 2,
+                UUID.randomUUID(), java.time.Instant.parse("2026-07-24T08:04:01Z")))
+                .satisfies(retry -> {
+                    assertThat(retry.voidFact()).isEqualTo(voided.voidFact());
+                    assertThat(retry.sessionVersion()).isEqualTo(3);
+                    assertThat(retry.duplicate()).isTrue();
+                });
+        assertThat(sets.findBySession(userId, sessionId)).isEmpty();
+        assertThat(sets.findById(userId, sessionId, workoutSet.id())).contains(workoutSet);
+        assertThat(sets.findVoid(userId, sessionId, workoutSet.id())).contains(voided.voidFact());
+        assertThat(queryOne("SELECT COUNT(*) FROM workout_set WHERE id=" + binary(workoutSet.id().toString())))
+                .isEqualTo("1");
+        assertThat(queryOne("SELECT COUNT(*) FROM workout_set_void WHERE workout_set_id="
+                + binary(workoutSet.id().toString()))).isEqualTo("1");
+
+        execute("""
+                UPDATE workout_session
+                SET status = 'COMPLETED', completed_at = '2026-07-24 08:05:00.000000', sync_version = 3
+                WHERE id = %s AND user_id = %s
+                """.formatted(binary(sessionId.toString()), binary(userId.toString())));
+        var history = new JdbcWorkoutHistoryRepository(dataSource).findHistory(
+                userId, Optional.empty(), Optional.empty(), 50);
+        assertThat(history).singleElement().satisfies(item -> {
+            assertThat(item.sessionId()).isEqualTo(sessionId);
+            assertThat(item.trainingDayCode()).isEqualTo("DAY_1");
+            assertThat(item.trainingDayName()).isEqualTo("Day 1");
+            assertThat(item.completedWorkSets()).isZero();
+            assertThat(item.completedVolumeKg()).isEqualByComparingTo("0");
+            assertThat(item.completedReps()).isZero();
+            assertThat(item.usesExternalLoad()).isFalse();
+        });
 
         java.time.Clock conflictClock = java.time.Clock.fixed(
                 java.time.Instant.parse("2026-07-24T08:04:00Z"), java.time.ZoneOffset.UTC);
@@ -900,6 +1238,129 @@ class MigrationTest {
         assertThatThrownBy(() -> conflicts.resolve(
                 userId, open.id(), SyncConflict.Resolution.KEEP_LOCAL, 0))
                 .isInstanceOf(WorkoutSessionService.VersionConflictException.class);
+    }
+
+    @Test
+    void jdbcWorkoutReplacementPersistsAndReloadsTheEffectivePrescription() throws Exception {
+        migrateEmptyMysqlDatabase();
+        UUID userId = UUID.fromString(createUser());
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId.toString(), exerciseId);
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s"
+                .formatted(binary(plan.versionId()), binary(plan.planId())));
+
+        JdbcWorkoutSessionRepository repository =
+                new JdbcWorkoutSessionRepository(dataSource, new ObjectMapper());
+        UUID sessionId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        WorkoutExerciseSnapshot source = new WorkoutExerciseSnapshot(
+                snapshotId, sessionId, UUID.fromString(plan.planExerciseId()), 1,
+                "DUMBBELL_PRESS", "哑铃推举", "content-v1", Set.of("DUMBBELL"),
+                new WorkoutExerciseSnapshot.Prescription(
+                        3, 8, 12, 90, "KNOWN", Optional.of(new BigDecimal("18")), "KG"),
+                WorkoutExerciseSnapshot.Status.PENDING);
+        WorkoutSession created = new WorkoutSession(
+                sessionId, userId, UUID.fromString(plan.planId()), UUID.fromString(plan.versionId()), 1,
+                UUID.fromString(plan.dayId()), "DAY_1", "jdbc-replacement-" + sessionId,
+                WorkoutStatus.CREATED, Instant.parse("2026-07-24T09:00:00Z"), Optional.empty(), 0,
+                List.of(source));
+        repository.create(created);
+        repository.update(created.transitionTo(
+                WorkoutStatus.IN_PROGRESS, Instant.parse("2026-07-24T09:01:00Z")), 0);
+
+        WorkoutExerciseSnapshot replacement = new WorkoutExerciseSnapshot(
+                snapshotId, sessionId, source.sourcePlanExerciseId(), 1,
+                "PUSH_UP", "俯卧撑", "content-v2", Set.of("BODYWEIGHT"),
+                source.prescription().forReplacement(source.equipment(), Set.of("BODYWEIGHT")),
+                WorkoutExerciseSnapshot.Status.REPLACED);
+        WorkoutSession replaced = repository.replaceExercise(
+                userId, sessionId, snapshotId, 1, replacement);
+
+        assertThat(replaced.version()).isEqualTo(2);
+        assertThat(replaced.exercises()).singleElement().satisfies(exercise -> {
+            assertThat(exercise.exerciseCode()).isEqualTo("PUSH_UP");
+            assertThat(exercise.prescription().weightStatus()).isEqualTo("BODYWEIGHT");
+            assertThat(exercise.prescription().targetWeightKg()).isEmpty();
+            assertThat(exercise.prescription().workSets()).isEqualTo(3);
+            assertThat(exercise.prescription().repMin()).isEqualTo(8);
+            assertThat(exercise.prescription().repMax()).isEqualTo(12);
+            assertThat(exercise.prescription().restSeconds()).isEqualTo(90);
+        });
+        assertThat(repository.findByIdAndUser(sessionId, userId)).contains(replaced);
+        assertThat(queryOne("SELECT JSON_UNQUOTE(JSON_EXTRACT(replacement_snapshot_json, '$.prescription.weightStatus'))"
+                + " FROM workout_exercise_snapshot WHERE id=" + binary(snapshotId.toString())))
+                .isEqualTo("BODYWEIGHT");
+        assertThat(queryOne("SELECT JSON_EXTRACT(replacement_snapshot_json, '$.prescription.targetWeightKg')"
+                + " FROM workout_exercise_snapshot WHERE id=" + binary(snapshotId.toString())))
+                .isNull();
+
+        execute("""
+                UPDATE workout_exercise_snapshot
+                SET replacement_snapshot_json = JSON_OBJECT(
+                    'exerciseCode', 'PUSH_UP', 'exerciseName', '俯卧撑',
+                    'contentVersion', 'content-v1', 'equipment', JSON_ARRAY('BODYWEIGHT')),
+                    replacement_revision = replacement_revision + 1
+                WHERE id = %s
+                """.formatted(binary(snapshotId.toString())));
+        WorkoutExerciseSnapshot.Prescription legacyPrescription = repository
+                .findByIdAndUser(sessionId, userId).orElseThrow()
+                .exercises().getFirst().prescription();
+        assertThat(legacyPrescription.weightStatus()).isEqualTo("BODYWEIGHT");
+        assertThat(legacyPrescription.targetWeightKg()).isEmpty();
+
+        assertJdbcReplacementPrescription(
+                repository, userId, plan, Set.of("DUMBBELL"), Set.of("DUMBBELL"),
+                "KNOWN", Optional.of(new BigDecimal("18")), "KNOWN", Optional.of(new BigDecimal("18")));
+        assertJdbcReplacementPrescription(
+                repository, userId, plan, Set.of("BODYWEIGHT"), Set.of("DUMBBELL"),
+                "BODYWEIGHT", Optional.empty(), "NEEDS_CALIBRATION", Optional.empty());
+        assertJdbcReplacementPrescription(
+                repository, userId, plan, Set.of("DUMBBELL"), Set.of("CABLE"),
+                "KNOWN", Optional.of(new BigDecimal("18")), "NEEDS_CALIBRATION", Optional.empty());
+    }
+
+    private static void assertJdbcReplacementPrescription(
+            JdbcWorkoutSessionRepository repository,
+            UUID userId,
+            PlanFixture plan,
+            Set<String> sourceEquipment,
+            Set<String> replacementEquipment,
+            String sourceWeightStatus,
+            Optional<BigDecimal> sourceTargetWeight,
+            String expectedWeightStatus,
+            Optional<BigDecimal> expectedTargetWeight) {
+        UUID sessionId = UUID.randomUUID();
+        UUID snapshotId = UUID.randomUUID();
+        WorkoutExerciseSnapshot.Prescription sourcePrescription =
+                new WorkoutExerciseSnapshot.Prescription(
+                        3, 8, 12, 90, sourceWeightStatus, sourceTargetWeight, "KG");
+        WorkoutExerciseSnapshot source = new WorkoutExerciseSnapshot(
+                snapshotId, sessionId, UUID.fromString(plan.planExerciseId()), 1,
+                "SOURCE_" + snapshotId.toString().substring(0, 8), "原动作", "content-v1",
+                sourceEquipment, sourcePrescription, WorkoutExerciseSnapshot.Status.PENDING);
+        WorkoutSession created = new WorkoutSession(
+                sessionId, userId, UUID.fromString(plan.planId()), UUID.fromString(plan.versionId()), 1,
+                UUID.fromString(plan.dayId()), "DAY_1", "jdbc-replacement-" + sessionId,
+                WorkoutStatus.CREATED, Instant.parse("2026-07-24T10:00:00Z"), Optional.empty(), 0,
+                List.of(source));
+        repository.create(created);
+        repository.update(created.transitionTo(
+                WorkoutStatus.IN_PROGRESS, Instant.parse("2026-07-24T10:01:00Z")), 0);
+        WorkoutExerciseSnapshot replacement = new WorkoutExerciseSnapshot(
+                snapshotId, sessionId, source.sourcePlanExerciseId(), 1,
+                "REPLACEMENT_" + snapshotId.toString().substring(0, 8), "替代动作", "content-v2",
+                replacementEquipment,
+                sourcePrescription.forReplacement(sourceEquipment, replacementEquipment),
+                WorkoutExerciseSnapshot.Status.REPLACED);
+
+        WorkoutExerciseSnapshot persisted = repository.replaceExercise(
+                userId, sessionId, snapshotId, 1, replacement).exercises().getFirst();
+
+        assertThat(persisted.prescription().weightStatus()).isEqualTo(expectedWeightStatus);
+        assertThat(persisted.prescription().targetWeightKg()).isEqualTo(expectedTargetWeight);
+        assertThat(repository.findByIdAndUser(sessionId, userId).orElseThrow()
+                .exercises().getFirst().prescription()).isEqualTo(persisted.prescription());
     }
 
     private static PlanDraft planDraft(String exerciseCode, int restSeconds) {
@@ -1010,9 +1471,11 @@ class MigrationTest {
 
         String snapshotId = newId();
         execute(snapshotInsert(snapshotId, sessionId, plan));
-        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(snapshotId)));
+        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, payload_digest, applied_session_version) VALUES (%s, %s, 'set-key', 1, 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0, UNHEX(SHA2('set-key-1', 256)), 1)".formatted(binary(newId()), binary(snapshotId)));
         assertRejected(1062, "uq_workout_set_client_key", () ->
-                execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 2, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(newId()), binary(snapshotId))));
+                execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, payload_digest, applied_session_version) VALUES (%s, %s, 'set-key', 2, 'WORKING', 2, JSON_OBJECT(), 'KG', 'PENDING', 0, UNHEX(SHA2('set-key-2', 256)), 2)".formatted(binary(newId()), binary(snapshotId))));
+        assertRejected(3819, "ck_workout_set_client_operation_seq", () ->
+                execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, payload_digest, applied_session_version) VALUES (%s, %s, 'zero-operation-seq', 0, 'WORKING', 2, JSON_OBJECT(), 'KG', 'PENDING', 0, UNHEX(SHA2('zero-operation-seq', 256)), 2)".formatted(binary(newId()), binary(snapshotId))));
         execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId)));
         assertRejected(1062, "uq_progression_recommendation_source", () ->
                 execute("INSERT INTO progression_recommendation (id, user_id, exercise_id, source_session_id, decision, current_json, recommended_json, reason_code, input_snapshot_json, algorithm_version, user_decision, created_at) VALUES (%s, %s, %s, %s, 'INCREASE', JSON_OBJECT(), JSON_OBJECT(), 'TARGET_REPS_MET', JSON_OBJECT(), 'v1', 'PENDING', UTC_TIMESTAMP(6))".formatted(binary(newId()), binary(userId), binary(exerciseId), binary(sessionId))));
@@ -1058,10 +1521,28 @@ class MigrationTest {
                 execute("UPDATE workout_exercise_snapshot SET exercise_snapshot_json = JSON_OBJECT('changed', true) WHERE id = %s".formatted(binary(snapshotId))));
 
         String setId = newId();
-        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'set-key', 'WORKING', 1, JSON_OBJECT('reps', 8), 'KG', 'PENDING', 0)".formatted(binary(setId), binary(snapshotId)));
+        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, payload_digest, applied_session_version) VALUES (%s, %s, 'set-key', 1, 'WORKING', 1, JSON_OBJECT('reps', 8), 'KG', 'PENDING', 0, UNHEX(SHA2('set-key', 256)), 1)".formatted(binary(setId), binary(snapshotId)));
         assertRejected("45000", "workout set facts are immutable", () ->
                 execute("UPDATE workout_set SET target_json = JSON_OBJECT('reps', 10) WHERE id = %s".formatted(binary(setId))));
-        execute("UPDATE workout_set SET actual_reps = 8, completion_status = 'COMPLETED', server_revision = 1 WHERE id = %s".formatted(binary(setId)));
+        assertRejected("45000", "workout set correction requires revision audit", () ->
+                execute("UPDATE workout_set SET actual_reps = 8, completion_status = 'COMPLETED', server_revision = 1, payload_digest = UNHEX(SHA2('corrected-set', 256)), applied_session_version = 1 WHERE id = %s"
+                        .formatted(binary(setId))));
+        execute("INSERT INTO workout_set_revision (id, workout_set_id, revision_no, before_json, after_json, reason, created_at) VALUES (%s, %s, 1, JSON_OBJECT('actualReps', NULL), JSON_OBJECT('actualReps', 8), 'SYNC_CONFLICT_KEEP_LOCAL', UTC_TIMESTAMP(6))"
+                .formatted(binary(newId()), binary(setId)));
+        execute("UPDATE workout_set SET actual_reps = 8, completion_status = 'COMPLETED', server_revision = 1, payload_digest = UNHEX(SHA2('corrected-set', 256)), applied_session_version = 1 WHERE id = %s"
+                .formatted(binary(setId)));
+        assertRejected("45000", "workout set correction requires revision audit", () ->
+                execute("UPDATE workout_set SET safety_flag = 'PAIN', server_revision = 2 WHERE id = %s"
+                        .formatted(binary(setId))));
+        execute("INSERT INTO workout_set_revision (id, workout_set_id, revision_no, before_json, after_json, reason, created_at) VALUES (%s, %s, 2, JSON_OBJECT('safetyFlag', NULL), JSON_OBJECT('safetyFlag', 'PAIN'), 'SYNC_CONFLICT_KEEP_LOCAL', UTC_TIMESTAMP(6))"
+                .formatted(binary(newId()), binary(setId)));
+        execute("UPDATE workout_set SET safety_flag = 'PAIN', server_revision = 2, payload_digest = UNHEX(SHA2('corrected-set-with-pain', 256)), applied_session_version = 2 WHERE id = %s"
+                .formatted(binary(setId)));
+        assertThat(queryOne("SELECT safety_flag FROM workout_set WHERE id = %s".formatted(binary(setId))))
+                .isEqualTo("PAIN");
+        assertRejected(3819, "ck_workout_set_safety_flag", () ->
+                execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, safety_flag, payload_digest, applied_session_version) VALUES (%s, %s, 'invalid-safety-set', 2, 'WORKING', 2, JSON_OBJECT('reps', 8), 'KG', 'FAILED', 0, 'DISCOMFORT', UNHEX(SHA2('invalid-safety-set', 256)), 2)"
+                        .formatted(binary(newId()), binary(snapshotId))));
 
         PlanFixture otherPlan = createPlanFixture(userId, exerciseId);
         seal(otherPlan);
@@ -1122,9 +1603,22 @@ class MigrationTest {
         String setSnapshotId = newId();
         execute(snapshotInsert(setSnapshotId, setSessionId, setPlan));
         String setId = newId();
-        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, set_type, set_order, target_json, unit, completion_status, server_revision) VALUES (%s, %s, 'delete-set', 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0)".formatted(binary(setId), binary(setSnapshotId)));
+        execute("INSERT INTO workout_set (id, session_exercise_id, client_set_key, client_operation_seq, set_type, set_order, target_json, unit, completion_status, server_revision, payload_digest, applied_session_version) VALUES (%s, %s, 'delete-set', 1, 'WORKING', 1, JSON_OBJECT(), 'KG', 'PENDING', 0, UNHEX(SHA2('delete-set', 256)), 1)".formatted(binary(setId), binary(setSnapshotId)));
         assertRejected("45000", "workout set history is immutable", () ->
                 execute("DELETE FROM workout_set WHERE id = %s".formatted(binary(setId))));
+        String voidId = newId();
+        execute("""
+                INSERT INTO workout_set_void
+                    (id, workout_set_id, session_id, user_id, idempotency_key, payload_digest,
+                     reason, applied_session_version, voided_at)
+                VALUES (%s, %s, %s, %s, 'migration-void-key', UNHEX(REPEAT('0', 64)),
+                        'USER_REQUESTED', 1, UTC_TIMESTAMP(6))
+                """.formatted(binary(voidId), binary(setId), binary(setSessionId), binary(userId)));
+        assertRejected("45000", "workout set void facts are immutable", () ->
+                execute("UPDATE workout_set_void SET reason = 'USER_REQUESTED' WHERE id = %s"
+                        .formatted(binary(voidId))));
+        assertRejected("45000", "workout set void facts are immutable", () ->
+                execute("DELETE FROM workout_set_void WHERE id = %s".formatted(binary(voidId))));
 
         PlanFixture recommendationPlan = sealedPlan(userId, exerciseId);
         String recommendationSessionId = createSession(recommendationPlan, userId);
@@ -1145,33 +1639,165 @@ class MigrationTest {
             return;
         }
         dataSource = selectDataSource();
+        Flyway preIdempotency = Flyway.configure()
+                .dataSource(dataSource)
+                .locations("classpath:db/migration")
+                .target("011")
+                .load();
+        assertThat(preIdempotency.migrate().migrationsExecuted).isEqualTo(11);
+        try {
+            legacyWorkoutSetUpgradeFixture = insertLegacyWorkoutSetsBeforeV012();
+        } catch (Exception exception) {
+            throw new IllegalStateException("legacy workout set upgrade fixture cannot be created", exception);
+        }
         flyway = Flyway.configure()
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(15);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(13);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
+        if (externalValidationJdbcUrl != null) {
+            try (Connection connection = dataSource.getConnection()) {
+                ExternalMysqlValidationMarker.write(
+                        System.getProperty(VALIDATION_MARKER_PROPERTY),
+                        System.getProperty(VERIFICATION_RUN_ID_PROPERTY),
+                        externalValidationJdbcUrl,
+                        connection);
+            } catch (SQLException ignored) {
+                throw new IllegalArgumentException("External MySQL validation marker cannot be created");
+            }
+        }
+    }
+
+    private static LegacyWorkoutSetUpgradeFixture insertLegacyWorkoutSetsBeforeV012() throws Exception {
+        String userId = createUser();
+        String exerciseId = createExercise();
+        PlanFixture plan = createPlanFixture(userId, exerciseId);
+        seal(plan);
+        execute("UPDATE training_plan SET active_version_id = %s WHERE id = %s"
+                .formatted(binary(plan.versionId()), binary(plan.planId())));
+        String sessionId = createSession(plan, userId);
+        String snapshotId = newId();
+        execute(snapshotInsert(snapshotId, sessionId, plan));
+        String firstSetId = newId();
+        String secondSetId = newId();
+        execute(legacyWorkoutSetInsert(secondSetId, snapshotId, "legacy-set-2", 2));
+        execute(legacyWorkoutSetInsert(firstSetId, snapshotId, "legacy-set-1", 1));
+        execute("UPDATE workout_session SET status = 'COMPLETED', completed_at = '2026-07-24 08:30:00', sync_version = 2 WHERE id = %s"
+                .formatted(binary(sessionId)));
+        return new LegacyWorkoutSetUpgradeFixture(
+                userId, sessionId, firstSetId, secondSetId);
+    }
+
+    private static String legacyWorkoutSetInsert(
+            String setId, String snapshotId, String clientSetKey, int setOrder) {
+        return """
+                INSERT INTO workout_set
+                    (id, session_exercise_id, client_set_key, set_type, set_order, target_json,
+                     actual_weight, unit, actual_reps, remaining_reps, completion_status,
+                     completed_at, server_revision, anomaly_status)
+                VALUES (%s, %s, '%s', 'WORK', %s,
+                        JSON_OBJECT('weight', 40, 'unit', 'KG', 'reps', 8),
+                        40, 'KG', 8, 2, 'COMPLETED', '2026-07-24 08:30:00', 0, NULL)
+                """.formatted(binary(setId), binary(snapshotId), clientSetKey, setOrder);
+    }
+
+    private static String legacyWorkoutSetDigest(String setId) throws Exception {
+        String stableIdentity = "legacy-workout-set-idempotency-v1|" + setId.replace("-", "");
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(stableIdentity.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static DataSource selectDataSource() {
-        String externalJdbcUrl = System.getProperty(JDBC_URL_PROPERTY);
+        String externalJdbcUrl = System.getenv(JDBC_URL_ENVIRONMENT);
         if (externalJdbcUrl != null) {
+            suppressExternalFlywayTopologyLogs();
+            ExternalMysqlValidationMarker.clear(System.getProperty(VALIDATION_MARKER_PROPERTY));
             DataSource externalDataSource = externalDataSource(
                     externalJdbcUrl,
-                    System.getProperty(USERNAME_PROPERTY),
-                    System.getProperty(PASSWORD_PROPERTY));
+                    System.getenv(USERNAME_ENVIRONMENT),
+                    externalPassword(),
+                    Boolean.getBoolean(ALLOW_REMOTE_PROPERTY),
+                    Boolean.getBoolean(ALLOW_UNVERIFIED_TLS_PROPERTY),
+                    Boolean.getBoolean(ALLOW_PINNED_CA_PROPERTY),
+                    System.getenv(TRUST_STORE_ENVIRONMENT),
+                    System.getenv(TRUST_STORE_TYPE_ENVIRONMENT),
+                    externalTrustStorePassword());
             validateExternalDatabase(externalDataSource);
+            externalValidationJdbcUrl = ((MysqlDataSource) externalDataSource).getUrl();
             return externalDataSource;
         }
 
         Assumptions.assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
-                "Docker is required only when no external MySQL 8.4 test database is configured");
+                "Docker is required only when no external MySQL 8.0 test database is configured");
         MYSQL.start();
         return mysqlDataSource(MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
     }
 
     private static DataSource externalDataSource(String jdbcUrl, String username, String password) {
+        return externalDataSource(jdbcUrl, username, password, false);
+    }
+
+    private static String externalPassword() {
+        return ExternalTestSecret.read(
+                System.getenv(PASSWORD_ENVIRONMENT),
+                System.getenv(PASSWORD_FILE_ENVIRONMENT),
+                "External MySQL password");
+    }
+
+    private static void suppressExternalFlywayTopologyLogs() {
+        if (flywayLogLevelOverridden) return;
+        Logger flywayLogger = (Logger) LoggerFactory.getLogger("org.flywaydb");
+        previousFlywayLogLevel = flywayLogger.getLevel();
+        flywayLogger.setLevel(Level.WARN);
+        flywayLogLevelOverridden = true;
+    }
+
+    private static String externalTrustStorePassword() {
+        return ExternalTestSecret.read(
+                System.getenv(TRUST_STORE_PASSWORD_ENVIRONMENT),
+                System.getenv(TRUST_STORE_PASSWORD_FILE_ENVIRONMENT),
+                "External MySQL trust store password");
+    }
+
+    private static DataSource externalDataSource(
+            String jdbcUrl, String username, String password, boolean allowRemote) {
+        return externalDataSource(
+                jdbcUrl, username, password, allowRemote, false, false, null, null, null);
+    }
+
+    private static DataSource externalDataSource(
+            String jdbcUrl,
+            String username,
+            String password,
+            boolean allowRemote,
+            boolean allowPinnedCa,
+            String trustStorePath,
+            String trustStoreType,
+            String trustStorePassword) {
+        return externalDataSource(
+                jdbcUrl,
+                username,
+                password,
+                allowRemote,
+                false,
+                allowPinnedCa,
+                trustStorePath,
+                trustStoreType,
+                trustStorePassword);
+    }
+
+    private static DataSource externalDataSource(
+            String jdbcUrl,
+            String username,
+            String password,
+            boolean allowRemote,
+            boolean allowUnverifiedTls,
+            boolean allowPinnedCa,
+            String trustStorePath,
+            String trustStoreType,
+            String trustStorePassword) {
         if (jdbcUrl == null || jdbcUrl.isBlank()) {
             throw new IllegalArgumentException("External MySQL JDBC URL must be configured");
         }
@@ -1192,18 +1818,44 @@ class MigrationTest {
             throw new IllegalArgumentException(
                     "External MySQL JDBC URL must not include user-info, query, or fragment");
         }
-        if (!isLoopbackHost(uri.getHost())) {
+        if (uri.getHost() == null || uri.getPort() < 1 || uri.getPort() > 65535) {
+            throw new IllegalArgumentException(
+                    "External MySQL JDBC URL must target exactly one host and port");
+        }
+        boolean loopback = isLoopbackHost(uri.getHost());
+        if (!allowRemote && !loopback) {
             throw new IllegalArgumentException("External test database host must be loopback");
         }
-        if (!("/" + EXTERNAL_DATABASE_NAME).equals(uri.getPath())) {
-            throw new IllegalArgumentException("External test database must be named fitness_m0");
+        if (!loopback && !isIpLiteral(uri.getHost())) {
+            throw new IllegalArgumentException("External test database remote host must be an IP literal");
         }
-        return mysqlDataSource(jdbcUrl, username, password);
+        ExternalMysqlDatabaseTarget.requireAllowed(uri, EXTERNAL_DATABASE_NAME_ERROR);
+        if (allowUnverifiedTls && allowPinnedCa) {
+            throw new IllegalArgumentException("External MySQL TLS modes are mutually exclusive");
+        }
+        ExternalMysqlTls.Configuration tls = loopback
+                ? null
+                : allowUnverifiedTls
+                        ? ExternalMysqlTls.encryptedWithoutIdentityVerification(jdbcUrl)
+                        : allowPinnedCa
+                        ? ExternalMysqlTls.pinnedCa(
+                                jdbcUrl, trustStorePath, trustStoreType, trustStorePassword)
+                        : ExternalMysqlTls.verifiedIdentity(jdbcUrl);
+        return mysqlDataSource(jdbcUrl, username, password, tls);
     }
 
     private static DataSource mysqlDataSource(String jdbcUrl, String username, String password) {
+        return mysqlDataSource(jdbcUrl, username, password, null);
+    }
+
+    private static DataSource mysqlDataSource(
+            String jdbcUrl,
+            String username,
+            String password,
+            ExternalMysqlTls.Configuration tls) {
         MysqlDataSource mysqlDataSource = new MysqlDataSource();
-        mysqlDataSource.setURL(jdbcUrl);
+        if (tls == null) mysqlDataSource.setURL(jdbcUrl);
+        else tls.configure(mysqlDataSource);
         mysqlDataSource.setUser(username);
         mysqlDataSource.setPassword(password == null ? "" : password);
         return mysqlDataSource;
@@ -1214,11 +1866,15 @@ class MigrationTest {
             return false;
         }
         String normalizedHost = host.toLowerCase(Locale.ROOT);
-        if (normalizedHost.equals("localhost")
-                || normalizedHost.equals("::1")
-                || normalizedHost.equals("[::1]")) {
-            return true;
+        if (normalizedHost.equals("localhost")) {
+            try {
+                return java.util.Arrays.stream(java.net.InetAddress.getAllByName(normalizedHost))
+                        .allMatch(java.net.InetAddress::isLoopbackAddress);
+            } catch (java.net.UnknownHostException exception) {
+                return false;
+            }
         }
+        if (normalizedHost.equals("::1") || normalizedHost.equals("[::1]")) return true;
         String[] octets = normalizedHost.split("\\.", -1);
         if (octets.length != 4 || !octets[0].equals("127")) {
             return false;
@@ -1236,15 +1892,45 @@ class MigrationTest {
         return true;
     }
 
+    private static boolean isIpLiteral(String host) {
+        if (host == null || host.isBlank() || host.contains("%")) return false;
+        String[] octets = host.split("\\.", -1);
+        if (octets.length == 4) {
+            for (String octet : octets) {
+                if (octet.isEmpty() || !octet.chars().allMatch(Character::isDigit)) return false;
+                int value;
+                try {
+                    value = Integer.parseInt(octet);
+                } catch (NumberFormatException ignored) {
+                    return false;
+                }
+                if (value < 0 || value > 255) return false;
+            }
+            return true;
+        }
+        if (!host.contains(":")) return false;
+        try {
+            return java.net.InetAddress.getByName(host) instanceof java.net.Inet6Address;
+        } catch (java.net.UnknownHostException ignored) {
+            return false;
+        }
+    }
+
     private static void validateExternalDatabase(DataSource externalDataSource) {
         try (Connection connection = externalDataSource.getConnection()) {
             DatabaseMetaData metadata = connection.getMetaData();
-            validateMysql84Server(
+            validateExternalServerVersion(
                     metadata.getDatabaseProductName(),
                     metadata.getDatabaseMajorVersion(),
                     metadata.getDatabaseMinorVersion());
-            if (!EXTERNAL_DATABASE_NAME.equals(connection.getCatalog())) {
-                throw new IllegalArgumentException("External test database must be named fitness_m0");
+            String expectedDatabase = ExternalMysqlDatabaseTarget.requireAllowed(
+                    URI.create(((MysqlDataSource) externalDataSource).getUrl().substring("jdbc:".length())),
+                    EXTERNAL_DATABASE_NAME_ERROR);
+            if (!expectedDatabase.equals(connection.getCatalog())) {
+                throw new IllegalArgumentException(EXTERNAL_DATABASE_NAME_ERROR);
+            }
+            if (requiresEncryptedTls(externalDataSource)) {
+                assertEncryptedConnection(connection);
             }
             try (var statement = connection.createStatement();
                  ResultSet tables = statement.executeQuery(
@@ -1258,9 +1944,30 @@ class MigrationTest {
         }
     }
 
-    private static void validateMysql84Server(String productName, int majorVersion, int minorVersion) {
-        if (!"MySQL".equalsIgnoreCase(productName) || majorVersion != 8 || minorVersion != 4) {
-            throw new IllegalArgumentException("External test database server must be MySQL 8.4");
+    private static void validateExternalServerVersion(
+            String productName,
+            int majorVersion,
+            int minorVersion) {
+        if (!"MySQL".equalsIgnoreCase(productName) || majorVersion != 8) {
+            throw new IllegalArgumentException("External test database server must be MySQL 8");
+        }
+    }
+
+    private static boolean requiresEncryptedTls(DataSource dataSource) {
+        return dataSource instanceof MysqlDataSource mysqlDataSource
+                && mysqlDataSource.getUrl() != null
+                && (mysqlDataSource.getUrl().endsWith("?sslMode=VERIFY_IDENTITY")
+                        || mysqlDataSource.getUrl().endsWith("?sslMode=VERIFY_CA")
+                        || mysqlDataSource.getUrl().endsWith("?sslMode=REQUIRED"));
+    }
+
+    private static void assertEncryptedConnection(Connection connection) throws SQLException {
+        try (var statement = connection.createStatement();
+                ResultSet status = statement.executeQuery("SHOW SESSION STATUS LIKE 'Ssl_cipher'")) {
+            if (!status.next() || status.getString(2) == null || status.getString(2).isBlank()) {
+                throw new IllegalArgumentException(
+                        "External test database connection must use TLS");
+            }
         }
     }
 
@@ -1270,7 +1977,7 @@ class MigrationTest {
         }
     }
 
-    private static void insertTrendSet(
+    private static String insertTrendSet(
             String snapshotId,
             String clientKey,
             String setType,
@@ -1279,16 +1986,35 @@ class MigrationTest {
             int reps,
             String status,
             String anomalyStatus) throws Exception {
+        return insertTrendSet(
+                snapshotId, clientKey, setType, setOrder, weight, reps, status, anomalyStatus, null);
+    }
+
+    private static String insertTrendSet(
+            String snapshotId,
+            String clientKey,
+            String setType,
+            int setOrder,
+            String weight,
+            int reps,
+            String status,
+            String anomalyStatus,
+            String safetyFlag) throws Exception {
         String anomaly = anomalyStatus == null ? "NULL" : "'" + anomalyStatus + "'";
+        String safety = safetyFlag == null ? "NULL" : "'" + safetyFlag + "'";
         String completedAt = status.equals("COMPLETED") ? "'2026-07-24 08:30:00'" : "NULL";
+        String setId = newId();
         execute("""
                 INSERT INTO workout_set
-                    (id, session_exercise_id, client_set_key, set_type, set_order, target_json,
+                    (id, session_exercise_id, client_set_key, client_operation_seq,
+                     set_type, set_order, target_json,
                      actual_weight, unit, actual_reps, completion_status, completed_at,
-                     server_revision, anomaly_status)
-                VALUES (%s, %s, '%s', '%s', %s, JSON_OBJECT(), %s, 'KG', %s, '%s', %s, 0, %s)
-                """.formatted(binary(newId()), binary(snapshotId), clientKey, setType, setOrder,
-                weight, reps, status, completedAt, anomaly));
+                     server_revision, safety_flag, anomaly_status, payload_digest, applied_session_version)
+                VALUES (%s, %s, '%s', %s, '%s', %s, JSON_OBJECT(), %s, 'KG', %s, '%s', %s,
+                        0, %s, %s, UNHEX(SHA2('%s', 256)), %s)
+                """.formatted(binary(setId), binary(snapshotId), clientKey, setOrder, setType, setOrder,
+                weight, reps, status, completedAt, safety, anomaly, clientKey, setOrder));
+        return setId;
     }
 
     private static String createUser() throws Exception {
@@ -1428,12 +2154,24 @@ class MigrationTest {
     }
 
     @AfterAll
-    static void stopMysqlContainer() {
+    static void stopMysqlContainerAndRestoreLogging() {
         if (MYSQL.isRunning()) {
             MYSQL.stop();
+        }
+        if (flywayLogLevelOverridden) {
+            ((Logger) LoggerFactory.getLogger("org.flywaydb"))
+                    .setLevel(previousFlywayLogLevel);
+            flywayLogLevelOverridden = false;
         }
     }
 
     private record PlanFixture(String planId, String versionId, String dayId, String planExerciseId) {
+    }
+
+    private record LegacyWorkoutSetUpgradeFixture(
+            String userId,
+            String sessionId,
+            String firstSetId,
+            String secondSetId) {
     }
 }

@@ -30,8 +30,18 @@ export interface ExerciseTrendData {
   readonly points: readonly ExerciseTrendPoint[]
 }
 
+export interface ProgressionRecommendationPage {
+  readonly items: readonly ProgressionRecommendationData[]
+  readonly nextCursor?: string
+  readonly hasMore: boolean
+}
+
 export interface ProgressionPort {
-  listRecommendations(status?: RecommendationStatus): Promise<readonly ProgressionRecommendationData[]>
+  listRecommendations(
+    status?: RecommendationStatus,
+    cursor?: string,
+    limit?: number,
+  ): Promise<ProgressionRecommendationPage>
   applyRecommendation(
     id: string,
     expectedVersion: number,
@@ -122,6 +132,21 @@ export function createRecommendationActionGate(): RecommendationActionGate {
       active.delete(recommendationId)
     },
   }
+}
+
+export function progressionApplyIdempotencyKey(
+  recommendationId: string,
+  acceptedWeightKg: number,
+  expectedVersion: number,
+): string {
+  if (!recommendationId.trim()) throw new Error('recommendation id is required')
+  if (!Number.isFinite(acceptedWeightKg) || acceptedWeightKg < 0) {
+    throw new Error('accepted weight must be non-negative')
+  }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+    throw new Error('expected plan version must be positive')
+  }
+  return `progression-${recommendationId}-${acceptedWeightKg}-v${expectedVersion}`
 }
 
 export function toExerciseTrendRows(points: readonly ExerciseTrendPoint[]): ExerciseTrendRow[] {

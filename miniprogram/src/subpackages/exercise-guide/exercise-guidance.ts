@@ -48,6 +48,10 @@ const coachingByMovementPattern: Readonly<Record<string, CoachingCues>> = {
     breathingCues: ['下蹲时吸气并收紧躯干，起身发力时呼气'],
     commonMistakes: ['膝盖向内扣或脚跟离地', '为了追求深度而塌腰'],
   },
+  CALF_RAISE: {
+    breathingCues: ['脚跟抬起时缓慢呼气，有控制地放下时吸气'],
+    commonMistakes: ['借助弹跳快速起落', '脚踝向内或向外塌，失去前脚掌支撑'],
+  },
   HINGE: {
     breathingCues: ['送髋前吸气收紧躯干，站起接近完成时呼气'],
     commonMistakes: ['弓背下探或把动作做成深蹲', '负重离身体过远'],

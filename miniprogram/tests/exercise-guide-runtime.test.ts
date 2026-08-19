@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createElement } from 'react'
 import TestRenderer, { act, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { resolveExerciseGuide } from '../src/subpackages/exercise-guide/components/exercise-motion-guide/assets'
 import { resolveExerciseGuidance } from '../src/subpackages/exercise-guide/exercise-guidance'
@@ -14,8 +14,21 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
+const application = vi.hoisted(() => ({
+  routeParameter: vi.fn(),
+  getExercise: vi.fn(),
+  navigation: { back: vi.fn() },
+}))
+
+vi.mock('../src/platform/weapp/compositionRoot', () => ({
+  getWeappApplication: () => application,
+}))
+
 const { default: ExerciseMotionGuide } = await import(
   '../src/subpackages/exercise-guide/components/exercise-motion-guide'
+)
+const { default: ExerciseDetailPage } = await import(
+  '../src/subpackages/exercise-guide/pages/detail'
 )
 
 const repositoryRoot = resolve(import.meta.dirname, '..', '..')
@@ -60,6 +73,10 @@ function renderedText(renderer: ReactTestRenderer): string {
 }
 
 describe('exercise static breakdown runtime behavior', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('resolves every catalog action and provides breathing and common-error guidance', () => {
     for (const exercise of activeExercises()) {
       const guide = resolveExerciseGuide(exercise.imageRef, exercise.code)
@@ -87,6 +104,14 @@ describe('exercise static breakdown runtime behavior', () => {
     })
     expect(resolveExerciseGuide('asset://exercise-guides/missing.jpg', 'UNKNOWN'))
       .toBeUndefined()
+
+    expect(resolveExerciseGuidance('STANDING_WALL_CALF_RAISE')).toMatchObject({
+      breathingCues: [expect.stringContaining('脚跟抬起')],
+      commonMistakes: [
+        expect.stringContaining('弹跳'),
+        expect.stringContaining('脚踝'),
+      ],
+    })
   })
 
   it('switches a stage with one click and resets to the first stage for a new action', () => {
@@ -169,5 +194,85 @@ describe('exercise static breakdown runtime behavior', () => {
       expect(text).toContain('请继续按下方动作步骤练习')
       expect(renderer.root.findAllByProps({ className: 'motion-guide__image' })).toHaveLength(0)
     }
+  })
+
+  it('renders a newly added exercise with localized muscles, safety cues, and a working back action', async () => {
+    application.routeParameter.mockReturnValue('STANDING_WALL_CALF_RAISE')
+    application.getExercise.mockResolvedValue({
+      code: 'STANDING_WALL_CALF_RAISE',
+      name: '扶墙站姿提踵',
+      movementPattern: 'CALF_RAISE',
+      primaryMuscles: ['CALVES'],
+      secondaryMuscles: [],
+      equipmentTypes: ['BODYWEIGHT'],
+      difficulty: 'BEGINNER',
+      plainLanguage: '双手轻扶墙面并抬起脚跟，主要练小腿。',
+      instructions: ['双脚平行站稳。', '缓慢抬起脚跟后有控制地放下。'],
+      safetyCues: ['扶稳墙面，不要快速弹跳。'],
+      image: {
+        primaryRef: 'asset://exercise-guides/standing-wall-calf-raise-01-setup.jpg',
+        fallbackRef: 'asset://exercise-guides/standing-wall-calf-raise-01-setup.jpg',
+      },
+    })
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(ExerciseDetailPage))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (!renderer) throw new Error('exercise detail did not render')
+
+    const text = renderedText(renderer)
+    expect(application.getExercise).toHaveBeenCalledWith('STANDING_WALL_CALF_RAISE')
+    expect(text).toContain('扶墙站姿提踵')
+    expect(text).toContain('小腿')
+    expect(text).not.toContain('CALVES')
+    expect(text).toContain('扶稳墙面，不要快速弹跳')
+    expect(renderer.root.findAllByProps({ className: 'motion-guide__image' })).toHaveLength(1)
+
+    act(() => renderer!.root.find(
+      (node) => node.type === 'button' && node.props.children === '返回训练'
+    ).props.onClick())
+    expect(application.navigation.back).toHaveBeenCalledOnce()
+  })
+
+  it('retries a failed detail request and renders the recovered action without leaving the page', async () => {
+    application.routeParameter.mockReturnValue('GLUTE_BRIDGE_EXERCISE')
+    application.getExercise
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce({
+        code: 'GLUTE_BRIDGE_EXERCISE',
+        name: '臀桥',
+        movementPattern: 'HINGE',
+        primaryMuscles: ['GLUTES'],
+        secondaryMuscles: ['HAMSTRINGS'],
+        equipmentTypes: ['BODYWEIGHT'],
+        difficulty: 'BEGINNER',
+        plainLanguage: '仰卧屈膝后抬起髋部。',
+        instructions: ['脚掌压稳。', '臀部发力抬起。'],
+        safetyCues: ['避免过度反弓腰部。'],
+        image: {
+          primaryRef: 'asset://exercise-guides/glute-bridge-exercise-01-setup.jpg',
+          fallbackRef: 'asset://exercise-guides/glute-bridge-exercise-01-setup.jpg',
+        },
+      })
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(ExerciseDetailPage))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    if (!renderer) throw new Error('exercise detail did not render')
+
+    expect(renderedText(renderer)).toContain('动作说明暂时无法读取')
+    await act(async () => {
+      renderer!.root.find(
+        (node) => node.type === 'button' && node.props.children === '重新加载'
+      ).props.onClick()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(application.getExercise).toHaveBeenCalledTimes(2)
+    expect(application.getExercise).toHaveBeenLastCalledWith('GLUTE_BRIDGE_EXERCISE')
+    expect(renderedText(renderer)).toContain('臀桥')
+    expect(renderedText(renderer)).not.toContain('动作说明暂时无法读取')
   })
 })

@@ -43,7 +43,7 @@ export default function ExerciseMotionGuide({
         guide
           ? guide.kind === 'STATIC_COVER'
             ? `${exerciseName}合规静态封面`
-            : `${exerciseName}静态动作分解`
+            : `${exerciseName}动作步骤插画`
           : `${exerciseName}文字动作指导`
       }
     >
@@ -110,7 +110,7 @@ export default function ExerciseMotionGuide({
           {guide
             ? guide.kind === 'STATIC_COVER'
               ? `合规静态封面 · ${exerciseName}`
-              : `动作示例 · ${exerciseName}`
+              : `步骤插画 · ${exerciseName}`
             : `文字动作指导 · ${exerciseName}`}
         </Text>
         <Text className='motion-guide__note'>

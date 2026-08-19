@@ -7,6 +7,7 @@ import type {
   PlanValidationData,
   PlanValidationDraft,
   PlanExerciseOption,
+  PlanExerciseReplacementOption,
   PlanDayOption,
   PlanVersionResultData,
   RuleReference,
@@ -24,6 +25,7 @@ import type {
   ExerciseTrendData,
   ProgressionPort,
   ProgressionRecommendationData,
+  ProgressionRecommendationPage,
   RecommendationStatus,
 } from '../../application/progression'
 import type { SyncWorkoutOperation, SyncWorkoutOperationResult, WorkoutOperationSyncPort } from '../../application/ports/WorkoutOperationSyncPort'
@@ -33,12 +35,28 @@ import type {
   PrivacyPort,
 } from '../../application/privacy'
 import type { ApiErrorResponse, ApiResponse } from './generated'
-import type { WorkoutHistoryPage, WorkoutHistoryPort } from '../../application/history'
+import type { WorkoutHistoryPage, WorkoutHistoryPort, WorkoutSessionSummary } from '../../application/history'
 import type { WorkoutCompletionPort, WorkoutCompletionResult, WorkoutCompletionType } from '../../application/ports/WorkoutCompletionPort'
 import type { ExerciseReplacementCandidate, ReplacedWorkoutSession, WorkoutReplacementPort } from '../../application/ports/WorkoutReplacementPort'
 import type { components } from './schema.generated'
 import type { AiGeneratedContent } from '../../application/ai'
 import type { ExerciseContent, ExercisePreferenceProfile } from '../../application/content'
+import type {
+  WorkoutRecoveryAssessment,
+  WorkoutRecoveryCheckRequest,
+  WorkoutRecoveryPort,
+} from '../../application/ports/WorkoutRecoveryPort'
+import type {
+  RecoverableActiveWorkout,
+  RecoverableWorkoutSet,
+  WorkoutSessionStartPort,
+  StartWorkoutSessionRequest,
+} from '../../application/ports/WorkoutSessionStartPort'
+import {
+  ActiveWorkoutExistsError,
+  WorkoutStartTerminalReplayError,
+  WorkoutRecoveryConfirmationRequiredError,
+} from '../../application/errors'
 
 type HttpMethod = 'GET' | 'POST' | 'PUT'
 
@@ -52,6 +70,7 @@ export interface TransportRequest {
 export interface TransportResponse<T> {
   statusCode: number
   data: T
+  headers?: Readonly<Record<string, string>>
 }
 
 export interface TransportPort {
@@ -64,6 +83,8 @@ export interface SessionAccessPort {
   clear(): Promise<void>
 }
 
+export type AuthenticationFailureCode = 'AUTHENTICATION_REQUIRED' | 'ACCESS_REVOKED'
+
 type UserProfileResponse = components['schemas']['UserProfileResponse']
 type EquipmentProfileResponse = components['schemas']['EquipmentProfileResponse']
 type PreferenceProfileResponse = components['schemas']['PreferenceProfileResponse']
@@ -72,29 +93,33 @@ type ValidationResponse = components['schemas']['PlanValidationResponse']
 type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
 type PlanExerciseOptionListResponse = components['schemas']['PlanExerciseOptionListResponse']
+type PlanExerciseReplacementOptionListResponse = components['schemas']['PlanExerciseReplacementOptionListResponse']
 type PlanDayOptionListResponse = components['schemas']['PlanDayOptionListResponse']
 type PrivacyExportResponse = components['schemas']['PrivacyExportResponse']
 type DeletionRequestResponse = components['schemas']['DeletionRequestResponse']
 type ReauthenticationProofResponse = components['schemas']['ReauthenticationProofResponse']
 type SyncConflictData = components['schemas']['SyncConflictData']
 type SyncConflictListResponse = components['schemas']['SyncConflictListResponse']
-type SyncConflictResponse = components['schemas']['SyncConflictResponse']
+type SyncConflictResolutionData = components['schemas']['SyncConflictResolutionData']
+type SyncConflictResolutionResponse = components['schemas']['SyncConflictResolutionResponse']
 type WorkoutSessionData = components['schemas']['WorkoutSessionData']
 type WorkoutSessionResponse = components['schemas']['WorkoutSessionResponse']
 type SyncWorkoutOperationsResponse = components['schemas']['SyncWorkoutOperationsResponse']
 type WorkoutHistoryResponse = components['schemas']['WorkoutHistoryResponse']
+type WorkoutSessionSummaryResponse = components['schemas']['WorkoutSessionSummaryResponse']
 type WorkoutCompletionResponse = components['schemas']['WorkoutCompletionResponse']
 type ExerciseReplacementResponse = components['schemas']['ExerciseReplacementResponse']
 type ProgressionRecommendationListResponse = components['schemas']['ProgressionRecommendationListResponse']
 type ProgressionRecommendationResponse = components['schemas']['ProgressionRecommendationResponse']
 type ExerciseTrendResponse = components['schemas']['ExerciseTrendResponse']
+type WorkoutRecoveryCheckResponse = components['schemas']['WorkoutRecoveryCheckResponse']
 type AiGeneratedContentResponse = components['schemas']['AiGeneratedContentResponse']
 type ContractPrivacyExportData = components['schemas']['PrivacyExportData']
 type ContractDeletionRequestData = components['schemas']['DeletionRequestData']
 type ExerciseListResponse = components['schemas']['ExerciseListResponse']
 type ExerciseDetailResponse = components['schemas']['ExerciseDetailResponse']
 
-export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort {
+export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort, WorkoutRecoveryPort, WorkoutSessionStartPort {
   private readonly baseUrl: string
   private refreshInFlight: Promise<Session> | null = null
   private readonly rotatedSessions = new Map<string, Session>()
@@ -103,7 +128,9 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     baseUrl: string,
     private readonly transport: TransportPort,
     private readonly sessions: SessionAccessPort,
-    private readonly onAuthenticationExpired?: () => Promise<void> | void,
+    private readonly onAuthenticationFailure?: (
+      code: AuthenticationFailureCode,
+    ) => Promise<void> | void,
   ) {
     this.baseUrl = normalizeBaseUrl(baseUrl)
   }
@@ -118,6 +145,14 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     const session = requireData(response.data)
     this.rotatedSessions.clear()
     return session
+  }
+
+  async logout(): Promise<void> {
+    await this.request<ApiResponse<Record<string, never>>>(
+      '/api/v1/auth/logout',
+      'POST',
+    )
+    this.rotatedSessions.clear()
   }
 
   async getProfileVersion(): Promise<number | null> {
@@ -270,6 +305,20 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return requireData(response.data).items
   }
 
+  async listPlanExerciseReplacements(
+    planId: string,
+    dayCode: string,
+    sourceExerciseCode: string,
+  ): Promise<readonly PlanExerciseReplacementOption[]> {
+    const response = await this.request<PlanExerciseReplacementOptionListResponse>(
+      `/api/v1/plans/${encodeURIComponent(planId)}/exercise-replacements`
+        + `?dayCode=${encodeURIComponent(dayCode)}`
+        + `&sourceExerciseCode=${encodeURIComponent(sourceExerciseCode)}`,
+      'GET',
+    )
+    return requireData(response.data).items
+  }
+
   async exportData(reauthenticationProof: string): Promise<PrivacyExportData> {
     const response = await this.request<PrivacyExportResponse>(
       '/api/v1/privacy/export',
@@ -334,13 +383,42 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return response.data
   }
 
-  async listRecommendations(status?: RecommendationStatus): Promise<readonly ProgressionRecommendationData[]> {
-    const query = status ? `?status=${encodeURIComponent(status)}` : ''
-    const response = await this.request<ProgressionRecommendationListResponse>(
-      `/api/v1/progression-recommendations${query}`,
+  async getWorkoutSessionSummary(sessionId: string): Promise<WorkoutSessionSummary> {
+    const response = await this.request<WorkoutSessionSummaryResponse>(
+      `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}/summary`,
       'GET',
     )
     return requireData(response.data)
+  }
+
+  async listRecommendations(
+    status?: RecommendationStatus,
+    cursor?: string,
+    limit = 20,
+  ): Promise<ProgressionRecommendationPage> {
+    const parameters: string[] = []
+    if (status) parameters.push(`status=${encodeURIComponent(status)}`)
+    if (cursor) parameters.push(`cursor=${encodeURIComponent(cursor)}`)
+    parameters.push(`limit=${encodeURIComponent(String(limit))}`)
+    const response = await this.requestWithMetadata<ProgressionRecommendationListResponse>(
+      `/api/v1/progression-recommendations?${parameters.join('&')}`,
+      'GET',
+    )
+    const items = requireData(response.data.data)
+    const hasMoreHeader = response.headers?.['x-has-more']
+    if (hasMoreHeader !== 'true' && hasMoreHeader !== 'false') {
+      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    }
+    const nextCursor = response.headers?.['x-next-cursor']
+    if ((hasMoreHeader === 'true' && !nextCursor)
+      || (hasMoreHeader === 'false' && nextCursor !== undefined)) {
+      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    }
+    return {
+      items,
+      hasMore: hasMoreHeader === 'true',
+      ...(nextCursor ? { nextCursor } : {}),
+    }
   }
 
   async applyRecommendation(
@@ -406,9 +484,13 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return response.data as WorkoutCompletionResult
   }
 
-  async listExerciseReplacements(sourceCode: string): Promise<readonly ExerciseReplacementCandidate[]> {
+  async listExerciseReplacements(
+    sessionId: string, snapshotId: string, sourceCode: string,
+  ): Promise<readonly ExerciseReplacementCandidate[]> {
     const response = await this.request<ExerciseReplacementResponse>(
-      `/api/v1/exercises/${encodeURIComponent(sourceCode)}/replacements`, 'GET',
+      `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}`
+        + `/exercises/${encodeURIComponent(snapshotId)}/replacements`,
+      'GET',
     )
     return response.data.items
   }
@@ -420,11 +502,15 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}/exercises/${encodeURIComponent(snapshotId)}`,
       'PUT', { action: 'REPLACE', replacementExerciseId: replacementCode, expectedVersion },
     )
-    return response.data
+    const session = parseWorkoutSession(response.data)
+    if (!session) {
+      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    }
+    return session
   }
 
   async startWorkoutSession(
-    request: components['schemas']['StartWorkoutSessionRequest'],
+    request: StartWorkoutSessionRequest,
   ): Promise<WorkoutSessionData> {
     const response = await this.request<WorkoutSessionResponse>(
       '/api/v1/workout-sessions',
@@ -446,6 +532,31 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     return activated.data
   }
 
+  async activateWorkoutSession(
+    sessionId: string,
+    expectedVersion: number,
+  ): Promise<WorkoutSessionData> {
+    const activated = await this.request<WorkoutSessionResponse>(
+      `/api/v1/workout-sessions/${encodeURIComponent(sessionId)}/status`,
+      'PUT',
+      { status: 'IN_PROGRESS', expectedVersion },
+    )
+    return activated.data
+  }
+
+  async checkWorkoutRecovery(
+    request: WorkoutRecoveryCheckRequest,
+  ): Promise<WorkoutRecoveryAssessment> {
+    const query = `planId=${encodeURIComponent(request.planId)}`
+      + `&planVersionNo=${encodeURIComponent(String(request.planVersionNo))}`
+      + `&trainingDayCode=${encodeURIComponent(request.trainingDayCode)}`
+    const response = await this.request<WorkoutRecoveryCheckResponse>(
+      `/api/v1/workout-recovery-checks?${query}`,
+      'GET',
+    )
+    return requireData(response.data)
+  }
+
   async syncWorkoutOperations(operations: readonly SyncWorkoutOperation[]): Promise<readonly SyncWorkoutOperationResult[]> {
     const response = await this.request<SyncWorkoutOperationsResponse>(
       '/api/v1/sync/workout-operations',
@@ -458,8 +569,8 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
   async resolveSyncConflict(
     conflictId: string,
     request: components['schemas']['ResolveSyncConflictRequest'],
-  ): Promise<SyncConflictData> {
-    const response = await this.request<SyncConflictResponse>(
+  ): Promise<SyncConflictResolutionData> {
+    const response = await this.request<SyncConflictResolutionResponse>(
       `/api/v1/sync/conflicts/${encodeURIComponent(conflictId)}/resolve`,
       'POST',
       request,
@@ -488,6 +599,22 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     authenticated = true,
     extraHeaders: Record<string, string> = {},
   ): Promise<Response> {
+    return (await this.requestWithMetadata<Response>(
+      path,
+      method,
+      body,
+      authenticated,
+      extraHeaders,
+    )).data
+  }
+
+  private async requestWithMetadata<Response>(
+    path: string,
+    method: HttpMethod,
+    body?: unknown,
+    authenticated = true,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<TransportResponse<Response>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...extraHeaders,
@@ -519,6 +646,9 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     }
 
     if (authenticated && response.statusCode === 401 && session) {
+      if (terminalAuthenticationCode(response.data)) {
+        throw await this.mapError(response.statusCode, response.data)
+      }
       const recovered = await this.recoverSession(session)
       headers.Authorization = `Bearer ${recovered.accessToken}`
       try {
@@ -536,7 +666,7 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
-      return response.data as Response
+      return response as TransportResponse<Response>
     }
     throw await this.mapError(response.statusCode, response.data)
   }
@@ -592,11 +722,44 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
 
   private async mapError(statusCode: number, payload: unknown): Promise<ApplicationError> {
     const apiError = isApiErrorResponse(payload) ? payload.error : undefined
-    const code = mapErrorCode(statusCode, apiError?.code)
+    const serverCode: string | undefined = apiError?.code
+    if (statusCode === 409 && apiError && serverCode === 'RECOVERY_CONFIRMATION_REQUIRED') {
+      const challenge = parseRecoveryConfirmationChallenge(apiError.details)
+      if (!challenge) {
+        return new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+      }
+      return new WorkoutRecoveryConfirmationRequiredError(
+        challenge.assessment,
+        challenge.confirmationToken,
+        challenge.confirmationExpiresAt,
+      )
+    }
+    if (statusCode === 409 && apiError && serverCode === 'ACTIVE_WORKOUT_EXISTS') {
+      const activeWorkout = parseActiveWorkout(apiError.details)
+      if (!activeWorkout) {
+        return new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+      }
+      return new ActiveWorkoutExistsError(activeWorkout)
+    }
+    if (statusCode === 409 && apiError && serverCode === 'WORKOUT_START_ALREADY_TERMINAL') {
+      const terminalSession = parseTerminalWorkout(apiError.details)
+      if (!terminalSession) {
+        return new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+      }
+      return new WorkoutStartTerminalReplayError(terminalSession)
+    }
+    const code = mapErrorCode(statusCode, serverCode)
     if (code === 'AUTHENTICATION_REQUIRED') {
       this.rotatedSessions.clear()
       await this.sessions.clear()
-      await this.onAuthenticationExpired?.()
+      await this.onAuthenticationFailure?.(code)
+    } else if (code === 'ACCESS_REVOKED') {
+      this.rotatedSessions.clear()
+      if (this.onAuthenticationFailure) {
+        await this.onAuthenticationFailure(code)
+      } else {
+        await this.sessions.clear()
+      }
     }
     return new ApplicationError(code, applicationErrorMessage(code), {
       retryable: apiError?.retryable ?? statusCode >= 500,
@@ -645,6 +808,11 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
     && typeof (value as { error?: unknown }).error === 'object'
 }
 
+function terminalAuthenticationCode(value: unknown): 'ACCESS_REVOKED' | undefined {
+  if (!isApiErrorResponse(value)) return undefined
+  return value.error.code === 'ACCESS_REVOKED' ? value.error.code : undefined
+}
+
 function isSessionResponse(value: unknown): Session | null {
   if (typeof value !== 'object' || value === null || !('data' in value)) return null
   const data = (value as { data?: unknown }).data
@@ -659,17 +827,22 @@ function isSessionResponse(value: unknown): Session | null {
 
 function mapErrorCode(
   statusCode: number,
-  serverCode?: components['schemas']['ErrorCode'],
+  serverCode?: string,
 ): ApplicationError['code'] {
   switch (serverCode) {
     case 'AUTHENTICATION_REQUIRED': return 'AUTHENTICATION_REQUIRED'
+    case 'ACCESS_REVOKED': return 'ACCESS_REVOKED'
     case 'REAUTHENTICATION_REQUIRED': return 'REAUTHENTICATION_REQUIRED'
     case 'ACCESS_DENIED': return 'ACCESS_DENIED'
     case 'RESOURCE_NOT_FOUND': return 'RESOURCE_NOT_FOUND'
     case 'VERSION_CONFLICT': return 'VERSION_CONFLICT'
     case 'VALIDATION_FAILED': return 'VALIDATION_FAILED'
     case 'PLAN_VALIDATION_FAILED': return 'PLAN_VALIDATION_FAILED'
+    case 'INSUFFICIENT_REPLACEMENTS': return 'INSUFFICIENT_REPLACEMENTS'
     case 'RATE_LIMITED': return 'RATE_LIMITED'
+    case 'ACTIVE_WORKOUT_EXISTS': return 'ACTIVE_WORKOUT_EXISTS'
+    case 'WORKOUT_START_ALREADY_TERMINAL': return 'WORKOUT_START_ALREADY_TERMINAL'
+    case 'WORKOUT_NOT_TERMINAL': return 'WORKOUT_NOT_TERMINAL'
     case 'INTERNAL_ERROR': return 'INTERNAL_ERROR'
     default:
       if (statusCode === 401) return 'AUTHENTICATION_REQUIRED'
@@ -680,4 +853,184 @@ function mapErrorCode(
       if (statusCode >= 400 && statusCode < 500) return 'VALIDATION_FAILED'
       return 'INTERNAL_ERROR'
   }
+}
+
+function parseRecoveryConfirmationChallenge(value: unknown): {
+  assessment: WorkoutRecoveryAssessment
+  confirmationToken: string
+  confirmationExpiresAt: string
+} | null {
+  if (!isRecord(value)) return null
+  const assessment = value.assessment
+  const confirmationToken = value.confirmationToken
+  const confirmationExpiresAt = value.confirmationExpiresAt
+  if (!isWorkoutRecoveryAssessment(assessment)
+    || typeof confirmationToken !== 'string' || confirmationToken.length === 0
+    || typeof confirmationExpiresAt !== 'string' || confirmationExpiresAt.length === 0) {
+    return null
+  }
+  return { assessment, confirmationToken, confirmationExpiresAt }
+}
+
+function parseActiveWorkout(value: unknown): RecoverableActiveWorkout | null {
+  if (!isRecord(value) || !isRecord(value.activeSession) || !Array.isArray(value.sets)) return null
+  const session = parseWorkoutSession(value.activeSession)
+  if (!session) return null
+  const exerciseIds = new Set(session.exercises.map((exercise) => exercise.id))
+  const setsValid = value.sets.every((set) => isRecord(set)
+    && isUuid(set.setId)
+    && isUuid(set.sessionExerciseId) && exerciseIds.has(set.sessionExerciseId)
+    && isBoundedText(set.clientSetKey, 8, 128)
+    && isPositiveInteger(set.clientOperationSeq)
+    && ['WARMUP', 'WORK', 'EXTRA'].includes(String(set.setType))
+    && isPositiveInteger(set.setOrder)
+    && isRecord(set.target) && isRecord(set.target.weight)
+    && isNonNegativeNumber(set.target.weight.value) && set.target.weight.unit === 'KG'
+    && isPositiveInteger(set.target.reps)
+    && isRecord(set.actual) && isRecord(set.actual.weight)
+    && isNonNegativeNumber(set.actual.weight.value) && set.actual.weight.unit === 'KG'
+    && isNonNegativeInteger(set.actual.reps)
+    && (set.remainingReps == null || isNonNegativeInteger(set.remainingReps))
+    && ['COMPLETED', 'FAILED', 'SKIPPED'].includes(String(set.completionStatus))
+    && (set.completionStatus === 'COMPLETED'
+      ? isUtcDateTime(set.completedAt)
+      : set.completedAt == null)
+    && isNonNegativeInteger(set.serverRevision)
+    && isNonNegativeInteger(set.sessionVersion) && Number(set.sessionVersion) <= Number(session.version)
+    && (set.safetyFlag == null || ['PAIN', 'INJURY', 'CHEST_DISCOMFORT', 'DIZZINESS', 'SEVERE_UNWELL']
+      .includes(String(set.safetyFlag)))
+    && (set.anomalyStatus == null || set.anomalyStatus === 'CONFIRMED_EXCLUDED')
+    && set.syncStatus === 'APPLIED')
+  if (exerciseIds.size !== session.exercises.length || !setsValid) return null
+  const sets = value.sets.map((set) => {
+    const source = set as Record<string, unknown>
+    return {
+      ...source,
+      remainingReps: source.remainingReps ?? undefined,
+      completedAt: source.completedAt ?? undefined,
+      safetyFlag: source.safetyFlag ?? undefined,
+      anomalyStatus: source.anomalyStatus ?? undefined,
+    } as unknown as RecoverableWorkoutSet
+  })
+  return {
+    session: session as RecoverableActiveWorkout['session'],
+    sets,
+  }
+}
+
+function parseWorkoutSession(value: unknown): WorkoutSessionData | null {
+  if (!isRecord(value)) return null
+  const session = value
+  if (!isUuid(session.id)
+    || !isUuid(session.planId)
+    || !isUuid(session.planVersionId)
+    || !isBoundedText(session.clientSessionKey, 8, 128)
+    || !isPositiveInteger(session.planVersionNo)
+    || !isBoundedText(session.planDayId, 1, 128)
+    || !isBoundedText(session.trainingDayCode, 1, 128)
+    || !isUtcDateTime(session.startedAt)
+    || !isNonNegativeInteger(session.version)
+    || !['CREATED', 'IN_PROGRESS', 'PAUSED', 'COMPLETING'].includes(String(session.status))
+    || !Array.isArray(session.exercises) || session.exercises.length === 0) return null
+  const exercisesValid = session.exercises.every((exercise) => isRecord(exercise)
+    && isUuid(exercise.id)
+    && isPositiveInteger(exercise.order)
+    && isBoundedText(exercise.exerciseCode, 1, 128)
+    && isBoundedText(exercise.exerciseName, 1, 256)
+    && isBoundedText(exercise.contentVersion, 1, 128)
+    && Array.isArray(exercise.equipment)
+    && exercise.equipment.every((item) => isBoundedText(item, 1, 128))
+    && ['PENDING', 'ACTIVE', 'COMPLETED', 'SKIPPED', 'ABORTED', 'REPLACED']
+      .includes(String(exercise.status))
+    && isRecord(exercise.prescription)
+    && isNonNegativeInteger(exercise.prescription.workSets)
+    && isNonNegativeInteger(exercise.prescription.repMin)
+    && isNonNegativeInteger(exercise.prescription.repMax)
+    && Number(exercise.prescription.repMax) >= Number(exercise.prescription.repMin)
+    && isNonNegativeInteger(exercise.prescription.restSeconds)
+    && ['KNOWN', 'NEEDS_CALIBRATION', 'BODYWEIGHT'].includes(String(exercise.prescription.weightStatus))
+    && isOptionalNonNegativeNumber(exercise.prescription.targetWeightKg)
+    && exercise.prescription.unit === 'KG')
+  if (!exercisesValid) return null
+  const exercises = session.exercises.map((exercise) => {
+    const source = exercise as Record<string, unknown>
+    const prescription = source.prescription as Record<string, unknown>
+    return {
+      ...source,
+      prescription: {
+        ...prescription,
+        targetWeightKg: prescription.targetWeightKg ?? undefined,
+      },
+    }
+  })
+  return { ...session, exercises } as unknown as WorkoutSessionData
+}
+
+function parseTerminalWorkout(value: unknown): {
+  id: string
+  clientSessionKey: string
+  status: 'COMPLETED' | 'ABORTED'
+  version: number
+} | null {
+  if (!isRecord(value) || !isRecord(value.terminalSession)) return null
+  const session = value.terminalSession
+  if (typeof session.id !== 'string'
+    || typeof session.clientSessionKey !== 'string' || session.clientSessionKey.length < 8
+    || !['COMPLETED', 'ABORTED'].includes(String(session.status))
+    || !Number.isSafeInteger(session.version) || Number(session.version) < 0) return null
+  return {
+    id: session.id,
+    clientSessionKey: session.clientSessionKey,
+    status: session.status as 'COMPLETED' | 'ABORTED',
+    version: Number(session.version),
+  }
+}
+
+function isWorkoutRecoveryAssessment(value: unknown): value is WorkoutRecoveryAssessment {
+  if (!isRecord(value)
+    || value.decision !== 'CONFIRMATION_REQUIRED'
+    || typeof value.policyVersion !== 'string'
+    || typeof value.checkedAt !== 'string'
+    || !Number.isInteger(value.minimumRecoveryHours)
+    || !Array.isArray(value.affectedMuscles)) return false
+  return value.affectedMuscles.every((affected) => isRecord(affected)
+    && typeof affected.muscleGroup === 'string'
+    && Number.isInteger(affected.elapsedHours)
+    && Number.isInteger(affected.minimumRecoveryHours)
+    && typeof affected.lastCompletedAt === 'string')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isUuid(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+}
+
+function isBoundedText(value: unknown, minimum: number, maximum: number): value is string {
+  return typeof value === 'string' && value.trim().length >= minimum && value.length <= maximum
+}
+
+function isPositiveInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && Number(value) > 0
+}
+
+function isNonNegativeInteger(value: unknown): boolean {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+}
+
+function isNonNegativeNumber(value: unknown): boolean {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function isOptionalNonNegativeNumber(value: unknown): boolean {
+  return value == null || isNonNegativeNumber(value)
+}
+
+function isUtcDateTime(value: unknown): value is string {
+  return typeof value === 'string'
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(value)
+    && Number.isFinite(Date.parse(value))
 }

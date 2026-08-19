@@ -5,6 +5,7 @@ import type {
   PlanCandidateGenerationData,
   PlanValidationDraft,
   PlanExerciseOption,
+  PlanExerciseReplacementOption,
   PlanDayOption,
 } from './models'
 import {
@@ -34,14 +35,16 @@ import {
   createOnboardingState,
   saveProfileAndGenerateCandidate,
   type CandidateViewModel,
+  type OnboardingAdjustmentRoute,
   type OnboardingDraft,
   type OnboardingPersistencePort,
   type OnboardingState,
 } from './onboarding'
 
 export interface FitnessApplication {
+  clearUserState(): void
   completeOnboarding(draft: OnboardingDraft): Promise<CandidateViewModel>
-  resumeOnboarding(route?: 'ONBOARDING_EQUIPMENT'): OnboardingState
+  resumeOnboarding(route?: OnboardingAdjustmentRoute): OnboardingState
   getCandidate(): CandidateViewModel | null
   activateCandidate(): Promise<ActivePlanData>
   openCandidateEditor(): PlanEditorState
@@ -61,6 +64,10 @@ export interface FitnessApplication {
   confirmEditorWarnings(): PlanEditorState
   previewRebalance(): Promise<PlanEditorState>
   listPlanExerciseOptions(dayCode: string): Promise<readonly PlanExerciseOption[]>
+  listPlanExerciseReplacements(
+    dayCode: string,
+    sourceExerciseCode: string,
+  ): Promise<readonly PlanExerciseReplacementOption[]>
   addPlanExercise(dayCode: string, option: PlanExerciseOption): PlanEditorState
   removePlanExercise(dayCode: string, exerciseCode: string): PlanEditorState
   replacePlanExercise(dayCode: string, exerciseCode: string, option: PlanExerciseOption): PlanEditorState
@@ -85,6 +92,8 @@ export function createFitnessApplication(
   let editorSessionId = 0
   let editorCandidateId: string | null = null
   let onboardingCompletion: Promise<CandidateViewModel> | null = null
+  let pendingOnboardingRoute: OnboardingAdjustmentRoute | null = null
+  let userStateGeneration = 0
 
   function requireEditor(): PlanEditorState {
     if (!editor) {
@@ -154,16 +163,35 @@ export function createFitnessApplication(
   }
 
   return {
+    clearUserState() {
+      userStateGeneration += 1
+      candidateData = null
+      onboardingDraft = null
+      activePlan = null
+      editor = null
+      activatedCandidateId = null
+      candidateActivations.clear()
+      editorSessionId += 1
+      editorCandidateId = null
+      onboardingCompletion = null
+      pendingOnboardingRoute = null
+    },
+
     async completeOnboarding(draft) {
       if (onboardingCompletion) return onboardingCompletion
+      const completionGeneration = userStateGeneration
       const submittedDraft = cloneOnboardingDraft(draft)
       const submission = (async () => {
-        onboardingDraft = submittedDraft
-        candidateData = await saveProfileAndGenerateCandidate(
+        onboardingDraft = { ...submittedDraft, aiConsentGranted: false }
+        const generated = await saveProfileAndGenerateCandidate(
           onboardingPort,
           submittedDraft,
           aiPlanGenerator,
         )
+        if (completionGeneration !== userStateGeneration) {
+          throw new ApplicationError('AUTHENTICATION_REQUIRED', '账号已退出，本次建档结果未保留')
+        }
+        candidateData = generated
         editorSessionId += 1
         editorCandidateId = null
         return buildCandidateViewModel(candidateData)
@@ -176,13 +204,18 @@ export function createFitnessApplication(
       }
     },
 
-    resumeOnboarding() {
+    resumeOnboarding(route) {
       const initial = createOnboardingState()
       if (!onboardingDraft) return initial
+      if (route) pendingOnboardingRoute = route
+      const effectiveRoute = route ?? pendingOnboardingRoute
+      if (!route) pendingOnboardingRoute = null
+      const step = effectiveRoute === 'ONBOARDING_SCHEDULE' ? 'SCHEDULE' : 'LOCATION_AND_EQUIPMENT'
+      const stepIndex = step === 'SCHEDULE' ? 2 : 3
       return {
         ...initial,
-        stepIndex: 3,
-        step: 'LOCATION_AND_EQUIPMENT',
+        stepIndex,
+        step,
         draft: cloneOnboardingDraft(onboardingDraft),
       }
     },
@@ -217,7 +250,12 @@ export function createFitnessApplication(
     },
 
     async loadActivePlan() {
-      activePlan = await planPort.getActivePlan()
+      const loadGeneration = userStateGeneration
+      const loaded = await planPort.getActivePlan()
+      if (loadGeneration !== userStateGeneration) {
+        throw new ApplicationError('AUTHENTICATION_REQUIRED', '账号已退出，本次计划结果未保留')
+      }
+      activePlan = loaded
       return activePlan
     },
 
@@ -349,6 +387,14 @@ export function createFitnessApplication(
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再调整动作结构')
       }
       return planPort.listExerciseOptions(state.planId, dayCode)
+    },
+
+    async listPlanExerciseReplacements(dayCode, sourceExerciseCode) {
+      const state = requireEditor()
+      if (!state.planId || !planPort.listPlanExerciseReplacements) {
+        throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再替换动作')
+      }
+      return planPort.listPlanExerciseReplacements(state.planId, dayCode, sourceExerciseCode)
     },
 
     addPlanExercise(dayCode, option) {

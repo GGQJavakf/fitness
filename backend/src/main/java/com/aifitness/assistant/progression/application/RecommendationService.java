@@ -6,6 +6,9 @@ import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import com.aifitness.assistant.progression.domain.ProgressionDecision;
 import com.aifitness.assistant.progression.domain.ProgressionRecommendation;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
@@ -66,6 +69,22 @@ public final class RecommendationService {
         return recommendations.listByUser(user.value(), status == null ? Optional.empty() : status);
     }
 
+    public RecommendationRepository.Page page(
+            AuthenticatedUserId user,
+            Optional<ProgressionRecommendation.Status> status,
+            Optional<RecommendationRepository.Cursor> cursor,
+            int limit) {
+        requireUser(user);
+        if (limit < 1 || limit > 100) {
+            throw new IllegalArgumentException("limit must be between 1 and 100");
+        }
+        return recommendations.pageByUser(
+                user.value(),
+                status == null ? Optional.empty() : status,
+                cursor == null ? Optional.empty() : cursor,
+                limit);
+    }
+
     public ProgressionRecommendation apply(
             AuthenticatedUserId user,
             UUID id,
@@ -76,7 +95,15 @@ public final class RecommendationService {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new IllegalArgumentException("idempotency key must not be blank");
         }
+        if (idempotencyKey.length() > 128) {
+            throw new IllegalArgumentException("idempotency key must not exceed 128 characters");
+        }
+        Objects.requireNonNull(acceptedWeightKg, "accepted weight must not be null");
+        String fingerprint = fingerprint(id, expectedVersion, acceptedWeightKg);
         return recommendations.inTransaction(() -> {
+            RecommendationRepository.DecisionClaim claim = recommendations.claimDecision(
+                    user.value(), "APPLY", idempotencyKey, fingerprint);
+            if (claim.replay().isPresent()) return claim.replay().orElseThrow();
             ProgressionRecommendation recommendation = pending(user, id);
             BigDecimal validatedWeight = recommendation.validateAcceptedWeight(acceptedWeightKg);
             try {
@@ -85,6 +112,8 @@ public final class RecommendationService {
                 ProgressionRecommendation applied = recommendation.apply(
                         validatedWeight, version.planId(), version.id());
                 ProgressionRecommendation saved = recommendations.updatePending(applied, Optional.of(idempotencyKey));
+                recommendations.completeDecision(
+                        user.value(), "APPLY", idempotencyKey, fingerprint, saved.id());
                 recommendations.appendOutbox(saved.id(), "PROGRESSION_RECOMMENDATION_" + saved.status().name());
                 return saved;
             } catch (PlanVersionService.LockedProgressionFieldException exception) {
@@ -115,6 +144,17 @@ public final class RecommendationService {
         Objects.requireNonNull(user, "authenticated user must not be null");
     }
 
+    private static String fingerprint(UUID recommendationId, int expectedVersion, BigDecimal acceptedWeightKg) {
+        String canonical = recommendationId + "|" + expectedVersion + "|"
+                + acceptedWeightKg.stripTrailingZeros().toPlainString();
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
     private static Optional<ProgressionRecommendation.RoundingEvidence> roundingEvidence(
             ProgressionDecision decision) {
         if (decision.rawRecommendedWeight().isEmpty()) return Optional.empty();
@@ -126,4 +166,5 @@ public final class RecommendationService {
     public static final class RecommendationNotFoundException extends RuntimeException {}
     public static final class RecommendationAlreadyDecidedException extends RuntimeException {}
     public static final class LockedWeightException extends RuntimeException {}
+    public static final class IdempotencyKeyReusedException extends RuntimeException {}
 }

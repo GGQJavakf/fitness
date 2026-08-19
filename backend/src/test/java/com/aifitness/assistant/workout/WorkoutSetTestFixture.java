@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 final class WorkoutSetTestFixture {
     static final UUID USER_ID = new UUID(0, 1);
@@ -25,10 +26,11 @@ final class WorkoutSetTestFixture {
         var sessions = new InMemoryWorkoutSessionRepository();
         sessions.create(activeSession());
         var sets = new InMemoryWorkoutSetRepository(sessions);
+        AtomicLong ids = new AtomicLong(100);
         var service = new WorkoutSetService(
                 sets, WorkoutSetService.InputPolicy.conservativeDefaults(),
                 Clock.fixed(Instant.parse("2026-07-24T08:00:00Z"), ZoneOffset.UTC),
-                () -> new UUID(0, 100));
+                () -> new UUID(0, ids.getAndIncrement()));
         return new Fixture(service, sets, sessions);
     }
 

@@ -12,9 +12,18 @@ import java.util.Set;
 
 public record PlanDraft(
         String templateCode,
+        TrainingSplit trainingSplit,
         String name,
         List<Day> days,
         Map<String, FieldLock.Status> locks) {
+
+    public PlanDraft(
+            String templateCode,
+            String name,
+            List<Day> days,
+            Map<String, FieldLock.Status> locks) {
+        this(templateCode, inferTrainingSplit(templateCode), name, days, locks);
+    }
 
     public PlanDraft {
         templateCode = requireText(templateCode, "templateCode");
@@ -115,7 +124,7 @@ public record PlanDraft(
         if (!found) {
             throw new IllegalArgumentException("exercise does not exist in plan");
         }
-        return new PlanDraft(templateCode, name, updatedDays, locks);
+        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
     }
 
     public PlanDraft preserveLockedValues(PlanDraft base, Map<String, FieldLock.Status> requestedLocks) {
@@ -139,7 +148,7 @@ public record PlanDraft(
             });
         }
 
-        PlanDraft result = new PlanDraft(templateCode, name, days, mergedLocks);
+        PlanDraft result = new PlanDraft(templateCode, trainingSplit, name, days, mergedLocks);
         for (Map.Entry<String, FieldLock.Status> entry : base.locks().entrySet()) {
             FieldLock.Status requested = requestedLocks == null ? null : requestedLocks.get(entry.getKey());
             if (requested == FieldLock.Status.UNLOCKED) {
@@ -178,7 +187,7 @@ public record PlanDraft(
         if (!found) {
             throw new IllegalArgumentException("locked weight does not exist in candidate plan");
         }
-        return new PlanDraft(templateCode, name, updatedDays, locks);
+        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
     }
 
     private PlanDraft withValue(String fieldPath, int value) {
@@ -204,7 +213,7 @@ public record PlanDraft(
         if (!found) {
             throw new IllegalArgumentException("locked field does not exist in candidate plan");
         }
-        return new PlanDraft(templateCode, name, updatedDays, locks);
+        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
     }
 
     public record Day(String code, String name, List<Exercise> exercises) {
@@ -286,6 +295,20 @@ public record PlanDraft(
         KNOWN,
         NEEDS_CALIBRATION,
         BODYWEIGHT
+    }
+
+    public enum TrainingSplit {
+        UPPER_LOWER,
+        PUSH_PULL_LEGS,
+        BODY_PART_FIVE_DAY
+    }
+
+    public static TrainingSplit inferTrainingSplit(String templateCode) {
+        if (templateCode == null) return null;
+        if (templateCode.startsWith("UPPER_LOWER_")) return TrainingSplit.UPPER_LOWER;
+        if (templateCode.startsWith("PUSH_PULL_LEGS_")) return TrainingSplit.PUSH_PULL_LEGS;
+        if (templateCode.startsWith("BODY_PART_")) return TrainingSplit.BODY_PART_FIVE_DAY;
+        return null;
     }
 
     private record Path(String dayCode, String exerciseCode, String field) {

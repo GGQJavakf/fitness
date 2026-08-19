@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { DEVICE_BUILD_API_BASE_URL_ENVIRONMENT_KEY } from '../../scripts/release-environment.mjs'
+
 import {
   buildDeviceApiBaseUrl,
   miniprogramBuildEnvironment,
   missingRequiredEnvironment,
+  normalizeDeviceApiBaseUrl,
   resolveNpmInvocation,
   selectDeviceHost
 } from '../scripts/device-preflight.mjs'
@@ -50,8 +53,15 @@ describe('device preflight', () => {
     })).toEqual(['FITNESS_DB_URL', 'FITNESS_DB_USERNAME'])
   })
 
-  it('builds a device API URL without a trailing slash', () => {
-    expect(buildDeviceApiBaseUrl('10.0.210.95', 8080)).toBe('http://10.0.210.95:8080')
+  it('builds a HTTPS device API URL without a trailing slash', () => {
+    expect(buildDeviceApiBaseUrl('10.0.210.95', 8443)).toBe('https://10.0.210.95:8443')
+  })
+
+  it('normalizes an explicit HTTPS origin and rejects insecure or credential-bearing URLs', () => {
+    expect(normalizeDeviceApiBaseUrl('https://fitness.example.test/')).toBe('https://fitness.example.test')
+    expect(() => normalizeDeviceApiBaseUrl('http://10.0.210.95:8080')).toThrow(/must use HTTPS/)
+    expect(() => normalizeDeviceApiBaseUrl('https://user:secret@fitness.example.test')).toThrow(/must not contain credentials/)
+    expect(() => normalizeDeviceApiBaseUrl('https://fitness.example.test/base')).toThrow(/without a path/)
   })
 
   it('does not pass backend credentials into the miniprogram build', () => {
@@ -62,9 +72,10 @@ describe('device preflight', () => {
       FITNESS_DB_URL: 'database-url',
       FITNESS_DB_USERNAME: 'database-user',
       FITNESS_DB_PASSWORD: 'database-password'
-    }, 'http://10.0.210.95:8080')).toEqual({
+    }, 'https://10.0.210.95:8443')).toEqual({
       PATH: 'tool-path',
-      TARO_APP_API_BASE_URL: 'http://10.0.210.95:8080'
+      TARO_APP_API_BASE_URL: 'https://10.0.210.95:8443',
+      [DEVICE_BUILD_API_BASE_URL_ENVIRONMENT_KEY]: 'https://10.0.210.95:8443'
     })
   })
 

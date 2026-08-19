@@ -20,7 +20,7 @@
     "parameters": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["planLimits", "prescription", "rest", "warmup", "initialWeight", "duration", "balance", "sessionComposition", "goalPrescriptions", "equipmentIncrements", "safety"],
+      "required": ["planLimits", "prescription", "rest", "warmup", "initialWeight", "duration", "balance", "sessionComposition", "progression", "goalPrescriptions", "equipmentIncrements", "safety"],
       "properties": {
         "planLimits": {
           "type": "object",
@@ -57,7 +57,7 @@
         "warmup": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["maximumRampSets", "knownWorkWeightRatios", "unknownWeightResult", "countsTowardTrainingVolume"],
+          "required": ["maximumRampSets", "knownWorkWeightRatios", "rampSetReps", "eligibleLoadedCompoundMovementPatterns", "unknownWeightResult", "countsTowardTrainingVolume"],
           "properties": {
             "maximumRampSets": { "type": "integer", "minimum": 1, "maximum": 4 },
             "knownWorkWeightRatios": {
@@ -65,6 +65,18 @@
               "minItems": 2,
               "maxItems": 4,
               "items": { "type": "number", "minimum": 0.4, "maximum": 0.9 }
+            },
+            "rampSetReps": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": { "type": "integer", "minimum": 1, "maximum": 30 }
+            },
+            "eligibleLoadedCompoundMovementPatterns": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "enum": ["SQUAT", "HINGE", "HORIZONTAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PUSH", "VERTICAL_PULL"] }
             },
             "unknownWeightResult": { "const": "CALIBRATION_STEPS_ONLY" },
             "countsTowardTrainingVolume": { "const": false }
@@ -85,32 +97,86 @@
         "duration": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["secondsPerWorkSet", "secondsPerWarmupSet", "secondsPerExerciseTransition"],
+          "required": ["secondsPerWorkSet", "secondsPerWarmupSet", "secondsPerExerciseTransition", "generalWarmupSeconds", "rampWarmupSetsPerSession"],
           "properties": {
             "secondsPerWorkSet": { "type": "integer", "minimum": 20, "maximum": 90 },
             "secondsPerWarmupSet": { "type": "integer", "minimum": 15, "maximum": 60 },
-            "secondsPerExerciseTransition": { "type": "integer", "minimum": 15, "maximum": 180 }
+            "secondsPerExerciseTransition": { "type": "integer", "minimum": 15, "maximum": 180 },
+            "generalWarmupSeconds": { "type": "integer", "minimum": 60, "maximum": 900 },
+            "rampWarmupSetsPerSession": { "type": "integer", "minimum": 1, "maximum": 4 }
           }
         },
         "balance": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["maximumMovementPatternOccurrencesPerSession", "maximumWorkSetsPerPrimaryMusclePerSession", "minimumRecoveryHoursBetweenPrimaryMuscleSessions"],
+          "required": ["maximumMovementPatternOccurrencesPerSession", "maximumWorkSetsPerPrimaryMusclePerSession", "minimumRecoveryHoursBetweenPrimaryMuscleSessions", "weeklyMovementPatternTargets"],
           "properties": {
-            "maximumMovementPatternOccurrencesPerSession": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "maximumMovementPatternOccurrencesPerSession": { "type": "integer", "minimum": 1, "maximum": 4 },
             "maximumWorkSetsPerPrimaryMusclePerSession": { "type": "integer", "minimum": 4, "maximum": 20 },
-            "minimumRecoveryHoursBetweenPrimaryMuscleSessions": { "type": "integer", "minimum": 24, "maximum": 96 }
+            "minimumRecoveryHoursBetweenPrimaryMuscleSessions": { "type": "integer", "minimum": 24, "maximum": 96 },
+            "weeklyMovementPatternTargets": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["sessionsPerWeek", "targets"],
+                "properties": {
+                  "sessionsPerWeek": { "type": "integer", "minimum": 2, "maximum": 3 },
+                  "targets": {
+                    "type": "array",
+                    "minItems": 6,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["movementPattern", "minimumSessions", "maximumSessions"],
+                      "properties": {
+                        "movementPattern": { "enum": ["SQUAT", "HINGE", "HORIZONTAL_PUSH", "VERTICAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PULL", "ELBOW_FLEXION", "ELBOW_EXTENSION"] },
+                        "minimumSessions": { "type": "integer", "minimum": 1, "maximum": 3 },
+                        "maximumSessions": { "type": "integer", "minimum": 1, "maximum": 3 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "sessionComposition": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["accessoryWorkSets", "accessoryRepMin", "accessoryRepMax", "accessoryRestSeconds"],
+          "required": ["accessoryWorkSets", "accessoryRepMin", "accessoryRepMax", "accessoryRestSeconds", "targetExercisesByMinutes"],
           "properties": {
             "accessoryWorkSets": { "type": "integer", "minimum": 1, "maximum": 4 },
             "accessoryRepMin": { "type": "integer", "minimum": 5, "maximum": 15 },
             "accessoryRepMax": { "type": "integer", "minimum": 8, "maximum": 20 },
-            "accessoryRestSeconds": { "type": "integer", "minimum": 45, "maximum": 180 }
+            "accessoryRestSeconds": { "type": "integer", "minimum": 45, "maximum": 180 },
+            "targetExercisesByMinutes": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["sessionMinutes", "minimumExercises", "maximumExercises"],
+                "properties": {
+                  "sessionMinutes": { "type": "integer", "minimum": 30, "maximum": 120 },
+                  "minimumExercises": { "type": "integer", "minimum": 1, "maximum": 10 },
+                  "maximumExercises": { "type": "integer", "minimum": 1, "maximum": 10 }
+                }
+              }
+            }
+          }
+        },
+        "progression": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["longTrainingGapDays", "multipleFailedSetsThreshold"],
+          "properties": {
+            "longTrainingGapDays": { "type": "integer", "minimum": 7, "maximum": 90 },
+            "multipleFailedSetsThreshold": { "type": "integer", "minimum": 2, "maximum": 10 }
           }
         },
         "goalPrescriptions": {
@@ -207,7 +273,7 @@
       "properties": {
         "schemaVersion": { "const": "1.0.0" },
         "kind": { "const": "RULE_CONFIG" },
-        "version": { "const": "1.2.0" },
+        "version": { "const": "1.6.0" },
         "status": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] },
         "generatedAt": { "type": "string", "format": "date-time" },
         "promptConstraints": { "type": "array", "minItems": 4, "uniqueItems": true, "items": { "type": "string", "minLength": 8 } },

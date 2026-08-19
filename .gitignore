@@ -24,8 +24,13 @@ application-local.yml
 # Logs and coverage
 *.log
 coverage/
+artifacts/
 
 # Local generation and language caches
 .tmp/
 __pycache__/
 *.py[cod]
+
+# Exercise-guide review renders are reproducible local inspection outputs.
+# Runtime static JPEGs and approved assets-source keyframes remain trackable.
+miniprogram/assets-source/exercise-guides/previews/

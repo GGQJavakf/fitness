@@ -1,12 +1,14 @@
 package com.aifitness.assistant.identity.infrastructure;
 
 import com.aifitness.assistant.identity.application.IdentityRepository;
+import com.aifitness.assistant.identity.application.AuthenticationAttemptLimiter;
 import com.aifitness.assistant.identity.application.SessionStore;
 import com.aifitness.assistant.identity.application.SubjectProtector;
 import com.aifitness.assistant.identity.application.UserAccessRevocation;
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
 import com.aifitness.assistant.identity.application.WechatIdentityResolver;
 import com.aifitness.assistant.identity.application.WechatLoginService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.http.HttpClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -27,6 +29,7 @@ public class ExperienceIdentityConfiguration {
 
     @Bean
     WechatIdentityProvider experienceWechatIdentityProvider(
+            ObjectMapper objectMapper,
             @Value("${fitness.auth.wechat.app-id}") String appId,
             @Value("${fitness.auth.wechat.app-secret}") String appSecret) {
         HttpClient httpClient = HttpClient.newBuilder()
@@ -36,7 +39,7 @@ public class ExperienceIdentityConfiguration {
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
         requestFactory.setReadTimeout(READ_TIMEOUT);
         RestClient client = RestClient.builder().requestFactory(requestFactory).build();
-        return new WechatCodeSessionIdentityProvider(client, appId, appSecret);
+        return new WechatCodeSessionIdentityProvider(client, objectMapper, appId, appSecret);
     }
 
     @Bean
@@ -60,6 +63,11 @@ public class ExperienceIdentityConfiguration {
     }
 
     @Bean
+    AuthenticationAttemptLimiter experienceAuthenticationAttemptLimiter(DataSource dataSource) {
+        return new JdbcAuthenticationAttemptLimiter(dataSource, 10, 600, Duration.ofMinutes(1));
+    }
+
+    @Bean
     WechatIdentityResolver experienceWechatIdentityResolver(
             WechatIdentityProvider provider,
             SubjectProtector protector,
@@ -80,8 +88,9 @@ public class ExperienceIdentityConfiguration {
             SubjectProtector protector,
             IdentityRepository identities,
             SessionStore sessions,
-            Clock experienceIdentityClock) {
+            Clock experienceIdentityClock,
+            AuthenticationAttemptLimiter attemptLimiter) {
         return new WechatLoginService(
-                provider, protector, identities, sessions, experienceIdentityClock);
+                provider, protector, identities, sessions, experienceIdentityClock, attemptLimiter);
     }
 }

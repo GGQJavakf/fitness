@@ -1,18 +1,26 @@
 package com.aifitness.assistant.workout.api;
 
 import com.aifitness.assistant.common.api.ApiResponse;
+import com.aifitness.assistant.common.api.ApiError;
+import com.aifitness.assistant.common.api.ApiErrorResponse;
+import com.aifitness.assistant.common.api.ErrorCode;
+import com.aifitness.assistant.common.api.ErrorMeta;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutSessionStartService;
 import com.aifitness.assistant.workout.application.WorkoutCompletionService;
 import com.aifitness.assistant.workout.application.ExerciseReplacementService;
 import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
+import com.aifitness.assistant.workout.domain.WorkoutWarmupPrescription;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Clock;
 import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -34,30 +42,76 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile({"local", "test", "staging-experience"})
 public final class WorkoutSessionController {
     private final WorkoutSessionService sessions;
+    private final WorkoutSessionStartService starts;
     private final WorkoutCompletionService completion;
     private final ExerciseReplacementService replacements;
     private final Clock clock;
 
     public WorkoutSessionController(
-            WorkoutSessionService sessions, WorkoutCompletionService completion,
+            WorkoutSessionService sessions, WorkoutSessionStartService starts, WorkoutCompletionService completion,
             ExerciseReplacementService replacements, Clock clock) {
         this.sessions = sessions;
+        this.starts = starts;
         this.completion = completion;
         this.replacements = replacements;
         this.clock = clock;
     }
 
     @PostMapping
-    public ResponseEntity<ApiResponse<SessionData>> start(
+    public ResponseEntity<?> start(
             AuthenticatedUserId user,
             @RequestHeader("Idempotency-Key") String idempotencyKey,
             @RequestBody StartRequest request) {
         if (request == null || !idempotencyKey.equals(request.clientSessionKey())) {
             throw new IllegalArgumentException("Idempotency-Key must match clientSessionKey");
         }
-        WorkoutSession session = sessions.start(user, new WorkoutSessionService.StartCommand(
-                request.clientSessionKey(), request.planId(), request.planVersionNo(), request.planDayId()));
-        return ResponseEntity.status(HttpStatus.CREATED).body(response(SessionData.from(session)));
+        String trainingDayCode = request.resolvedTrainingDayCode();
+        WorkoutSessionStartService.StartResult result = starts.start(
+                user,
+                new WorkoutSessionService.StartCommand(
+                        request.clientSessionKey(), request.planId(), request.planVersionNo(), trainingDayCode),
+                Optional.ofNullable(request.recoveryConfirmationToken()));
+        if (result instanceof WorkoutSessionStartService.Started started) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(response(SessionData.from(started.session())));
+        }
+        if (result instanceof WorkoutSessionStartService.ActiveWorkoutExists active) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                    new ApiError(
+                            ErrorCode.ACTIVE_WORKOUT_EXISTS,
+                            "存在尚未结束的训练，请先继续或结束该训练",
+                            List.of(),
+                            Map.of(
+                                    "activeSession", SessionData.from(active.session()),
+                                    "sets", active.sets().stream()
+                                            .map(set -> WorkoutSetController.SetData.from(
+                                                    set, active.session().version()))
+                                            .toList()),
+                            false),
+                    new ErrorMeta(requestId())));
+        }
+        if (result instanceof WorkoutSessionStartService.TerminalReplay terminal) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                    new ApiError(
+                            ErrorCode.WORKOUT_START_ALREADY_TERMINAL,
+                            "上次使用该启动键的训练已经结束，请重新开始",
+                            List.of(),
+                            Map.of("terminalSession", SessionData.from(terminal.session())),
+                            false),
+                    new ErrorMeta(requestId())));
+        }
+        WorkoutSessionStartService.ConfirmationRequired warning =
+                (WorkoutSessionStartService.ConfirmationRequired) result;
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(
+                new ApiError(
+                        ErrorCode.RECOVERY_CONFIRMATION_REQUIRED,
+                        "主要肌群恢复时间不足，需要明确确认后继续",
+                        List.of(),
+                        Map.of(
+                                "assessment", WorkoutRecoveryController.RecoveryCheckData.from(warning.assessment()),
+                                "confirmationToken", warning.confirmationToken(),
+                                "confirmationExpiresAt", warning.confirmationExpiresAt()),
+                        false),
+                new ErrorMeta(requestId())));
     }
 
     @GetMapping("/{id}")
@@ -72,6 +126,9 @@ public final class WorkoutSessionController {
             @RequestBody StatusRequest request) {
         if (request == null || request.status() == null || request.expectedVersion() < 0) {
             throw new IllegalArgumentException("status and expectedVersion are required");
+        }
+        if (request.status() == WorkoutStatus.COMPLETING || request.status() == WorkoutStatus.COMPLETED) {
+            throw new IllegalArgumentException("completion must use the authoritative completion endpoint");
         }
         return response(SessionData.from(
                 sessions.transition(user, id, request.status(), request.expectedVersion())));
@@ -108,15 +165,31 @@ public final class WorkoutSessionController {
     }
 
     private <T> ApiResponse<T> response(T data) {
+        return new ApiResponse<>(data, new ResponseMeta(requestId(), clock.instant()));
+    }
+
+    private static String requestId() {
         String requestId = MDC.get("requestId");
-        if (requestId == null || requestId.isBlank()) {
-            requestId = UUID.randomUUID().toString();
-        }
-        return new ApiResponse<>(data, new ResponseMeta(requestId, clock.instant()));
+        return requestId == null || requestId.isBlank() ? UUID.randomUUID().toString() : requestId;
     }
 
     public record StartRequest(
-            String clientSessionKey, UUID planId, int planVersionNo, String planDayId) {}
+            String clientSessionKey,
+            UUID planId,
+            int planVersionNo,
+            String planDayId,
+            String trainingDayCode,
+            String recoveryConfirmationToken) {
+        String resolvedTrainingDayCode() {
+            if (planDayId == null || planDayId.isBlank()) {
+                throw new IllegalArgumentException("planDayId is required for compatibility");
+            }
+            if (trainingDayCode != null && !trainingDayCode.isBlank() && !planDayId.equals(trainingDayCode)) {
+                throw new IllegalArgumentException("planDayId and trainingDayCode must identify the same day");
+            }
+            return trainingDayCode == null || trainingDayCode.isBlank() ? planDayId : trainingDayCode;
+        }
+    }
 
     public record StatusRequest(WorkoutStatus status, long expectedVersion) {}
 
@@ -127,7 +200,7 @@ public final class WorkoutSessionController {
             SessionData session, int completedWorkSets, boolean complete,
             boolean automaticProgressionEligible) {}
 
-    public enum ExerciseAction { SKIP, REPLACE, COMPLETE }
+    public enum ExerciseAction { REPLACE }
     public record ExerciseUpdateRequest(
             ExerciseAction action, String replacementExerciseId, long expectedVersion) {}
 
@@ -136,17 +209,70 @@ public final class WorkoutSessionController {
             UUID planId,
             UUID planVersionId,
             int planVersionNo,
+            String clientSessionKey,
             String planDayId,
+            String trainingDayCode,
             WorkoutStatus status,
             Instant startedAt,
             Optional<Instant> completedAt,
             long version,
-            List<ExerciseData> exercises) {
+            List<ExerciseData> exercises,
+            Optional<WarmupPrescriptionData> warmupPrescription) {
         static SessionData from(WorkoutSession session) {
             return new SessionData(
                     session.id(), session.planId(), session.planVersionId(), session.planVersionNumber(),
-                    session.trainingDayCode(), session.status(), session.startedAt(), session.completedAt(),
-                    session.version(), session.exercises().stream().map(ExerciseData::from).toList());
+                    session.clientSessionKey(),
+                    session.trainingDayCode(), session.trainingDayCode(), session.status(),
+                    session.startedAt(), session.completedAt(),
+                    session.version(), session.exercises().stream().map(ExerciseData::from).toList(),
+                    session.warmupPrescription().map(WarmupPrescriptionData::from));
+        }
+    }
+
+    public record WarmupPrescriptionData(
+            String schemaVersion,
+            String ruleVersion,
+            GeneralWarmupData generalWarmup,
+            Optional<RampWarmupData> rampWarmup,
+            boolean countsTowardTrainingVolume,
+            boolean countsTowardProgression) {
+        static WarmupPrescriptionData from(WorkoutWarmupPrescription value) {
+            return new WarmupPrescriptionData(
+                    value.schemaVersion(),
+                    value.ruleVersion(),
+                    new GeneralWarmupData(
+                            value.generalWarmup().occurrences(), value.generalWarmup().durationSeconds()),
+                    value.rampWarmup().map(RampWarmupData::from),
+                    value.countsTowardTrainingVolume(),
+                    value.countsTowardProgression());
+        }
+    }
+
+    public record GeneralWarmupData(int occurrences, int durationSeconds) {}
+
+    public record RampWarmupData(
+            UUID exerciseId,
+            int exerciseOrder,
+            WorkoutWarmupPrescription.RampStatus status,
+            Optional<String> equipmentType,
+            List<RampSetData> sets,
+            Optional<String> calibrationCode,
+            Optional<String> calibrationMessage) {
+        static RampWarmupData from(WorkoutWarmupPrescription.RampWarmup value) {
+            return new RampWarmupData(
+                    value.exerciseId(),
+                    value.exerciseOrder(),
+                    value.status(),
+                    value.equipmentType(),
+                    value.sets().stream().map(RampSetData::from).toList(),
+                    value.calibrationCode(),
+                    value.calibrationMessage());
+        }
+    }
+
+    public record RampSetData(BigDecimal weightKg, int reps) {
+        static RampSetData from(WorkoutWarmupPrescription.RampSet value) {
+            return new RampSetData(value.weightKg(), value.reps());
         }
     }
 
@@ -167,6 +293,7 @@ public final class WorkoutSessionController {
         }
     }
 
+    @JsonInclude(JsonInclude.Include.NON_ABSENT)
     public record PrescriptionData(
             int workSets, int repMin, int repMax, int restSeconds, String weightStatus,
             Optional<BigDecimal> targetWeightKg, String unit) {

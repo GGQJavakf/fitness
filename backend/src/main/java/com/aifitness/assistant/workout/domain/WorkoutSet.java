@@ -20,8 +20,31 @@ public record WorkoutSet(
         CompletionStatus completionStatus,
         Optional<Instant> completedAt,
         long serverRevision,
+        Optional<SafetyFlag> safetyFlag,
         Optional<AnomalyStatus> anomalyStatus,
         String payloadDigest) {
+
+    /** Backward-compatible constructor for persisted and test facts created before safety flags existed. */
+    public WorkoutSet(
+            UUID id,
+            UUID sessionId,
+            UUID sessionExerciseId,
+            String clientSetKey,
+            long clientOperationSeq,
+            SetType setType,
+            int setOrder,
+            Performance target,
+            Performance actual,
+            Integer remainingReps,
+            CompletionStatus completionStatus,
+            Optional<Instant> completedAt,
+            long serverRevision,
+            Optional<AnomalyStatus> anomalyStatus,
+            String payloadDigest) {
+        this(id, sessionId, sessionExerciseId, clientSetKey, clientOperationSeq, setType, setOrder,
+                target, actual, remainingReps, completionStatus, completedAt, serverRevision,
+                Optional.empty(), anomalyStatus, payloadDigest);
+    }
 
     public WorkoutSet {
         Objects.requireNonNull(id, "set id must not be null");
@@ -44,6 +67,7 @@ public record WorkoutSet(
         if ((completionStatus == CompletionStatus.COMPLETED) != completedAt.isPresent()) {
             throw new IllegalArgumentException("completed set and completion time must agree");
         }
+        safetyFlag = Objects.requireNonNull(safetyFlag, "safetyFlag must not be null");
         anomalyStatus = Objects.requireNonNull(anomalyStatus, "anomalyStatus must not be null");
         if (payloadDigest == null || !payloadDigest.matches("[0-9a-f]{64}")) {
             throw new IllegalArgumentException("payload digest must be a SHA-256 hex value");
@@ -68,5 +92,6 @@ public record WorkoutSet(
 
     public enum SetType { WARMUP, WORK, EXTRA }
     public enum CompletionStatus { PLANNED, COMPLETED, FAILED, SKIPPED }
+    public enum SafetyFlag { PAIN, INJURY, CHEST_DISCOMFORT, DIZZINESS, SEVERE_UNWELL }
     public enum AnomalyStatus { CONFIRMED_EXCLUDED }
 }

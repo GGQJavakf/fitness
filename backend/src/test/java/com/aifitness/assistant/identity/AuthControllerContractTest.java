@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.aifitness.assistant.identity.api.AuthController;
 import com.aifitness.assistant.identity.application.WechatLoginService;
+import com.aifitness.assistant.identity.application.WechatIdentityProvider;
 import com.aifitness.assistant.identity.infrastructure.InMemoryIdentityRepository;
 import com.aifitness.assistant.identity.infrastructure.InMemorySessionStore;
 import com.aifitness.assistant.identity.infrastructure.LocalWechatIdentityProvider;
@@ -38,7 +39,9 @@ class AuthControllerContractTest {
                 new InMemoryIdentityRepository(),
                 new InMemorySessionStore(),
                 clock);
-        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service, clock, "test-app-id")).build();
+        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service, clock, "test-app-id", false))
+                .setControllerAdvice(new com.aifitness.assistant.identity.api.AuthExceptionHandler())
+                .build();
     }
 
     @Test
@@ -61,6 +64,46 @@ class AuthControllerContractTest {
         assertThat(json)
                 .doesNotContain(oneTimeCode)
                 .doesNotContain("subject", "providerToken", "userId");
+    }
+
+    @Test
+    void cloudBaseIdentityHeadersAreRejectedUnlessTheVerifiedIngressPolicyIsExplicitlyEnabled()
+            throws Exception {
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .header("X-WX-OPENID", "forged-openid")
+                        .header("X-WX-APPID", "test-app-id")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"valid-fallback-code\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void providerTransportFailuresRemainRetryableWithoutLeakingCredentials() throws Exception {
+        Clock clock = Clock.fixed(Instant.parse("2026-07-24T01:00:00Z"), ZoneOffset.UTC);
+        WechatIdentityProvider unavailableProvider = code -> {
+            throw new WechatIdentityProvider.ProviderUnavailableException();
+        };
+        WechatLoginService service = new WechatLoginService(
+                unavailableProvider,
+                new Sha256SubjectProtector(),
+                new InMemoryIdentityRepository(),
+                new InMemorySessionStore(),
+                clock);
+        MockMvc unavailableMvc = MockMvcBuilders
+                .standaloneSetup(new AuthController(service, clock, "test-app-id", false))
+                .setControllerAdvice(new com.aifitness.assistant.identity.api.AuthExceptionHandler())
+                .build();
+
+        String response = unavailableMvc.perform(post("/api/v1/auth/wechat/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"transport-secret-code\"}"))
+                .andExpect(status().isServiceUnavailable())
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode error = objectMapper.readTree(response).get("error");
+        assertThat(error.get("code").asText()).isEqualTo("INTERNAL_ERROR");
+        assertThat(error.get("retryable").asBoolean()).isTrue();
+        assertThat(response).doesNotContain("transport-secret-code", "identity provider unavailable");
     }
 
     private static Set<String> fieldNames(JsonNode node) {

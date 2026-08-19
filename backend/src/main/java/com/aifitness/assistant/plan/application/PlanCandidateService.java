@@ -25,14 +25,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public final class PlanCandidateService {
 
     private static final Pattern DAY_CODE = Pattern.compile("DAY_[1-6]");
+    private static final int DEFAULT_MAXIMUM_CACHED_CANDIDATES = 512;
 
     private final ProfileService profiles;
     private final TemplateQueryService templates;
@@ -41,7 +40,7 @@ public final class PlanCandidateService {
     private final PlanValidationEngine validator;
     private final PlanRulePolicy policy;
     private final Clock clock;
-    private final ConcurrentMap<String, CandidateEnvelope> generatedCandidates = new ConcurrentHashMap<>();
+    private final PlanCandidateCache generatedCandidates;
 
     public PlanCandidateService(
             ProfileService profiles,
@@ -51,6 +50,19 @@ public final class PlanCandidateService {
             PlanValidationEngine validator,
             PlanRulePolicy policy,
             Clock clock) {
+        this(profiles, templates, exercises, generator, validator, policy, clock,
+                DEFAULT_MAXIMUM_CACHED_CANDIDATES);
+    }
+
+    public PlanCandidateService(
+            ProfileService profiles,
+            TemplateQueryService templates,
+            ExerciseQueryService exercises,
+            PlanGenerationEngine generator,
+            PlanValidationEngine validator,
+            PlanRulePolicy policy,
+            Clock clock,
+            int maximumCachedCandidates) {
         this.profiles = Objects.requireNonNull(profiles, "profiles must not be null");
         this.templates = Objects.requireNonNull(templates, "templates must not be null");
         this.exercises = Objects.requireNonNull(exercises, "exercises must not be null");
@@ -58,13 +70,14 @@ public final class PlanCandidateService {
         this.validator = Objects.requireNonNull(validator, "validator must not be null");
         this.policy = Objects.requireNonNull(policy, "policy must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.generatedCandidates = new PlanCandidateCache(clock, maximumCachedCandidates);
     }
 
     public GenerationContext generationContext(AuthenticatedUserId user, long profileVersion) {
         Objects.requireNonNull(user, "authenticated user must not be null");
         UserProfile profile = currentProfile(user, profileVersion);
         Set<UUID> preferred = profiles.preferredExerciseIds(user);
-        List<GenerationExercise> eligible = eligibleExerciseCatalog(user).stream()
+        List<GenerationExercise> eligible = eligibleExerciseCatalog(user, profile.details().experience()).stream()
                 .map(exercise -> new GenerationExercise(
                         exercise.code(),
                         exercise.name(),
@@ -109,7 +122,7 @@ public final class PlanCandidateService {
 
     public GeneratedCandidates generate(
             AuthenticatedUserId user, long profileVersion, Map<String, Integer> lockedNumbers) {
-        return generate(user, profileVersion, lockedNumbers, null, null, true);
+        return generate(user, profileVersion, lockedNumbers, null, null, true, null);
     }
 
     public GeneratedCandidates generate(
@@ -119,23 +132,42 @@ public final class PlanCandidateService {
             String additionalRequirements,
             AiPlanProposal aiProposal,
             boolean fallbackAllowed) {
+        return generate(user, profileVersion, lockedNumbers, additionalRequirements,
+                aiProposal, fallbackAllowed, null);
+    }
+
+    public GeneratedCandidates generate(
+            AuthenticatedUserId user,
+            long profileVersion,
+            Map<String, Integer> lockedNumbers,
+            String additionalRequirements,
+            AiPlanProposal aiProposal,
+            boolean fallbackAllowed,
+            TrainingSplit requestedSplit) {
         Objects.requireNonNull(user, "authenticated user must not be null");
         UserProfile profile = currentProfile(user, profileVersion);
+        TrainingSplit trainingSplit = requestedSplit;
+        if (trainingSplit != null && !trainingSplit.supports(profile.details().weeklyFrequency())) {
+            return noCandidate(
+                    List.of(issue("SPLIT_FREQUENCY_MISMATCH", "/trainingSplit")),
+                    lockedNumbers == null ? Map.of() : Map.copyOf(lockedNumbers));
+        }
         Map<String, Integer> locks = lockedNumbers == null ? Map.of() : Map.copyOf(lockedNumbers);
-        Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises = eligibleExercises(user);
+        Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises =
+                eligibleExercises(user, profile.details().experience());
 
         if (aiProposal != null) {
+            AiPlanProposal ruleOwnedProposal = applyRulePrescription(profile.details().goal(), aiProposal);
             List<PlanVersionService.ValidationIssue> proposalIssues =
-                    validateProposal(aiProposal, profile, eligibleExercises);
+                    validateProposal(ruleOwnedProposal, profile, eligibleExercises);
             if (proposalIssues.isEmpty()) {
-                AiPlanProposal ruleOwnedProposal = applyRulePrescription(profile.details().goal(), aiProposal);
                 PlanGenerationEngine.GenerationResult evaluated = generator.evaluate(
-                        toAiCandidate(ruleOwnedProposal, currentReference(), eligibleExercises),
+                        toAiCandidate(ruleOwnedProposal, currentReference(), eligibleExercises, trainingSplit),
                         profile.details().sessionMinutes(),
                         eligibleExercises,
                         locks);
                 GeneratedCandidates generated = fromResult(
-                        user, profile, evaluated, GenerationSource.AI_PERSONALIZED);
+                        user, profile, evaluated, GenerationSource.AI_PERSONALIZED, trainingSplit);
                 return generated;
             }
             return noCandidate(proposalIssues, locks);
@@ -145,7 +177,7 @@ public final class PlanCandidateService {
                     locks);
         }
 
-        return generateFallback(user, profile, eligibleExercises, locks);
+        return generateFallback(user, profile, eligibleExercises, locks, trainingSplit);
     }
 
     public List<PlanVersionService.ValidationIssue> validate(
@@ -154,11 +186,19 @@ public final class PlanCandidateService {
         Objects.requireNonNull(candidate, "candidate must not be null");
         Objects.requireNonNull(reference, "rule reference must not be null");
         RuleReference activeReference = currentReference();
+        UserProfile profile = profiles.getProfile(user);
         List<PlanVersionService.ValidationIssue> issues = new ArrayList<>(validator.validate(
                         toRules(candidate, activeReference),
-                        profiles.getProfile(user).details().sessionMinutes(),
-                        eligibleExercises(user))
+                        profile.details().sessionMinutes(),
+                        eligibleExercises(user, profile.details().experience()))
                 .stream().map(PlanCandidateService::toApplication).toList());
+        if (candidate.trainingSplit() != null) {
+            TrainingSplit split = TrainingSplit.valueOf(candidate.trainingSplit().name());
+            if (!split.supports(candidate.days().size())
+                    || profile.details().weeklyFrequency() != candidate.days().size()) {
+                issues.add(issue("SPLIT_FREQUENCY_MISMATCH", "/trainingSplit"));
+            }
+        }
         if (!activeReference.equals(reference)) {
             issues.add(new PlanVersionService.ValidationIssue(
                     PlanVersionService.Severity.WARNING,
@@ -177,23 +217,19 @@ public final class PlanCandidateService {
         if (candidateId == null || candidateId.isBlank()) {
             throw new IllegalArgumentException("candidateId must not be blank");
         }
-        CandidateEnvelope candidate = generatedCandidates.get(candidateKey(user, candidateId));
-        if (candidate == null || !candidate.expiresAt().isAfter(clock.instant())) {
-            if (candidate != null) {
-                generatedCandidates.remove(candidateKey(user, candidateId));
-            }
-            throw new CandidateNotFoundException();
-        }
-        return candidate;
+        return generatedCandidates.get(candidateKey(user, candidateId))
+                .orElseThrow(CandidateNotFoundException::new);
     }
 
     private GeneratedCandidates generateFallback(
             AuthenticatedUserId user,
             UserProfile profile,
             Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises,
-            Map<String, Integer> locks) {
+            Map<String, Integer> locks,
+            TrainingSplit trainingSplit) {
         List<PlanGenerationEngine.Template> eligibleTemplates = templates
                 .listForGeneration(Optional.of(profile.details().weeklyFrequency())).stream()
+                .filter(template -> trainingSplit == null || trainingSplit.acceptsTemplate(template.code()))
                 .map(PlanCandidateService::toDomain)
                 .toList();
         PlanGenerationEngine.GenerationResult result = generator.generate(
@@ -208,7 +244,7 @@ public final class PlanCandidateService {
                         catalogExercises(),
                         policy,
                         locks));
-        return fromResult(user, profile, result, GenerationSource.FALLBACK_RULE_PLAN);
+        return fromResult(user, profile, result, GenerationSource.FALLBACK_RULE_PLAN, trainingSplit);
     }
 
     private static PlanGenerationEngine.FitnessGoal ruleGoal(UserProfile.FitnessGoal goal) {
@@ -218,9 +254,6 @@ public final class PlanCandidateService {
     }
 
     private AiPlanProposal applyRulePrescription(UserProfile.FitnessGoal goal, AiPlanProposal proposal) {
-        if (goal != UserProfile.FitnessGoal.FAT_LOSS) {
-            return proposal;
-        }
         PlanRulePolicy.GoalPrescription prescription = policy.goalPrescriptions().get(ruleGoal(goal));
         return new AiPlanProposal(
                 proposal.name(),
@@ -243,13 +276,14 @@ public final class PlanCandidateService {
             AuthenticatedUserId user,
             UserProfile profile,
             PlanGenerationEngine.GenerationResult result,
-            GenerationSource source) {
+            GenerationSource source,
+            TrainingSplit trainingSplit) {
         List<PlanVersionService.ValidationIssue> issues = result.issues().stream()
                 .map(PlanCandidateService::toApplication)
                 .toList();
         Map<String, FieldLock.Status> lockedOutcomes = lockedOutcomes(result.lockedFieldOutcomes().keySet());
         Optional<CandidateEnvelope> candidate = result.candidate()
-                .map(value -> envelope(user, profile, value, lockedOutcomes, source));
+                .map(value -> envelope(user, profile, value, lockedOutcomes, source, trainingSplit));
         candidate.ifPresent(value -> generatedCandidates.put(candidateKey(user, value.candidateId()), value));
         return new GeneratedCandidates(
                 GenerationStatus.valueOf(result.status().name()), candidate, issues, lockedOutcomes);
@@ -327,12 +361,15 @@ public final class PlanCandidateService {
     private static PlanGenerationEngine.Candidate toAiCandidate(
             AiPlanProposal proposal,
             RuleReference reference,
-            Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises) {
+            Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises,
+            TrainingSplit trainingSplit) {
         return new PlanGenerationEngine.Candidate(
                 "AI_PERSONALIZED",
                 proposal.name().trim(),
-                proposal.days().stream()
-                        .map(day -> new PlanGenerationEngine.Day(
+                java.util.stream.IntStream.range(0, proposal.days().size())
+                        .mapToObj(dayIndex -> {
+                            AiPlanDay day = proposal.days().get(dayIndex);
+                            return new PlanGenerationEngine.Day(
                                 day.code(),
                                 day.name().trim(),
                                 day.exercises().stream()
@@ -349,7 +386,14 @@ public final class PlanCandidateService {
                                                             ? PlanGenerationEngine.WeightStatus.BODYWEIGHT
                                                             : PlanGenerationEngine.WeightStatus.NEEDS_CALIBRATION);
                                         })
-                                        .toList()))
+                                        .toList(),
+                                trainingSplit == null
+                                        ? PlanGenerationEngine.SessionFocus.forWeeklyIndex(
+                                                proposal.days().size(), dayIndex)
+                                        : PlanGenerationEngine.SessionFocus.forSplitIndex(
+                                                PlanGenerationEngine.TrainingSplit.valueOf(trainingSplit.name()),
+                                                proposal.days().size(), dayIndex));
+                        })
                         .toList(),
                 PlanGenerationEngine.WeightUnit.KG,
                 reference);
@@ -372,7 +416,8 @@ public final class PlanCandidateService {
             UserProfile profile,
             PlanGenerationEngine.Candidate candidate,
             Map<String, FieldLock.Status> locks,
-            GenerationSource source) {
+            GenerationSource source,
+            TrainingSplit trainingSplit) {
         String identity = user.value() + "|" + profile.version() + "|" + source + "|" + candidate
                 + "|" + new java.util.TreeMap<>(locks);
         String candidateId = UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)).toString();
@@ -381,12 +426,12 @@ public final class PlanCandidateService {
                 : ExplanationStatus.DEGRADED;
         String explanation = source == GenerationSource.AI_PERSONALIZED
                 ? "AI 已结合你的资料、器械和额外需求生成方案；服务端规则已校验训练时长、训练量与恢复边界。"
-                : "AI 本次不可用，已提供规则保底计划；训练数字均经过服务端校验，未知初始重量保留为待校准状态。";
+                : "已按你的资料、训练目标和可用器械生成规则计划；训练数字均经过服务端校验，未知初始重量保留为待校准状态。";
         Instant expiresAt = clock.instant().plus(15, ChronoUnit.MINUTES);
         return new CandidateEnvelope(
                 candidateId,
                 source,
-                toPlanDraft(candidate, locks),
+                toPlanDraft(candidate, locks, trainingSplit),
                 candidate.ruleReference(),
                 status,
                 explanation,
@@ -407,15 +452,18 @@ public final class PlanCandidateService {
                 template.code(), template.name(), template.sessionsPerWeek(), days);
     }
 
-    private List<ExerciseCatalog.Exercise> eligibleExerciseCatalog(AuthenticatedUserId user) {
+    private List<ExerciseCatalog.Exercise> eligibleExerciseCatalog(
+            AuthenticatedUserId user, UserProfile.ExperienceLevel experience) {
         Set<UUID> excluded = profiles.excludedExerciseIds(user);
         return exercises.list(user, ExerciseQueryService.Filter.none()).stream()
                 .filter(exercise -> !excluded.contains(exercise.stableId()))
+                .filter(exercise -> ExerciseDifficultyEligibility.allows(experience, exercise.difficulty()))
                 .toList();
     }
 
-    private Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises(AuthenticatedUserId user) {
-        return eligibleExerciseCatalog(user).stream()
+    private Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises(
+            AuthenticatedUserId user, UserProfile.ExperienceLevel experience) {
+        return eligibleExerciseCatalog(user, experience).stream()
                 .collect(Collectors.toUnmodifiableMap(
                         ExerciseCatalog.Exercise::code,
                         PlanCandidateService::facts));
@@ -442,9 +490,12 @@ public final class PlanCandidateService {
     }
 
     private static PlanDraft toPlanDraft(
-            PlanGenerationEngine.Candidate candidate, Map<String, FieldLock.Status> locks) {
+            PlanGenerationEngine.Candidate candidate,
+            Map<String, FieldLock.Status> locks,
+            TrainingSplit trainingSplit) {
         return new PlanDraft(
-                candidate.templateCode(), candidate.name(), candidate.days().stream()
+                candidate.templateCode(), toDomainSplit(trainingSplit, candidate.templateCode()),
+                candidate.name(), candidate.days().stream()
                 .map(day -> new PlanDraft.Day(
                         day.code(), day.name(), day.exercises().stream()
                         .map(exercise -> new PlanDraft.Exercise(
@@ -456,15 +507,43 @@ public final class PlanCandidateService {
 
     private static PlanGenerationEngine.Candidate toRules(PlanDraft plan, RuleReference reference) {
         return new PlanGenerationEngine.Candidate(
-                plan.templateCode(), plan.name(), plan.days().stream()
-                .map(day -> new PlanGenerationEngine.Day(
-                        day.code(), day.name(), day.exercises().stream()
-                        .map(exercise -> new PlanGenerationEngine.Exercise(
-                                exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
-                                exercise.restSeconds(),
-                                PlanGenerationEngine.WeightStatus.valueOf(exercise.weightStatus().name())))
-                        .toList()))
+                plan.templateCode(), plan.name(), java.util.stream.IntStream.range(0, plan.days().size())
+                .mapToObj(dayIndex -> {
+                    PlanDraft.Day day = plan.days().get(dayIndex);
+                    return new PlanGenerationEngine.Day(
+                            day.code(), day.name(), day.exercises().stream()
+                            .map(exercise -> new PlanGenerationEngine.Exercise(
+                                    exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
+                                    exercise.restSeconds(),
+                                    PlanGenerationEngine.WeightStatus.valueOf(exercise.weightStatus().name())))
+                            .toList(),
+                            persistedSessionFocus(plan, day, dayIndex));
+                })
                 .toList(), reference);
+    }
+
+    private static PlanGenerationEngine.SessionFocus persistedSessionFocus(
+            PlanDraft plan, PlanDraft.Day day, int dayIndex) {
+        if ("AI_PERSONALIZED".equals(plan.templateCode()) && plan.trainingSplit() != null) {
+            return PlanGenerationEngine.SessionFocus.forSplitIndex(
+                    PlanGenerationEngine.TrainingSplit.valueOf(plan.trainingSplit().name()),
+                    plan.days().size(), dayIndex);
+        }
+        PlanGenerationEngine.SessionFocus namedFocus =
+                PlanGenerationEngine.SessionFocus.infer(day.code(), day.name());
+        if (namedFocus != PlanGenerationEngine.SessionFocus.FULL_BODY || plan.trainingSplit() == null) {
+            return namedFocus;
+        }
+        return PlanGenerationEngine.SessionFocus.forSplitIndex(
+                PlanGenerationEngine.TrainingSplit.valueOf(plan.trainingSplit().name()),
+                plan.days().size(), dayIndex);
+    }
+
+    private static PlanDraft.TrainingSplit toDomainSplit(
+            TrainingSplit requestedSplit, String templateCode) {
+        return requestedSplit == null
+                ? PlanDraft.inferTrainingSplit(templateCode)
+                : PlanDraft.TrainingSplit.valueOf(requestedSplit.name());
     }
 
     private static PlanVersionService.ValidationIssue toApplication(
@@ -582,6 +661,37 @@ public final class PlanCandidateService {
     public enum ExplanationStatus { PENDING, DEGRADED }
     public enum GenerationStatus { CANDIDATE_READY, NO_CANDIDATE }
     public enum GenerationSource { AI_PERSONALIZED, FALLBACK_RULE_PLAN }
+
+    public enum TrainingSplit {
+        UPPER_LOWER(Set.of(2, 4), Set.of("UPPER_LOWER_2_DAY_V1", "UPPER_LOWER_4_DAY_V1")),
+        PUSH_PULL_LEGS(Set.of(3, 6), Set.of("PUSH_PULL_LEGS_3_DAY_V1", "PUSH_PULL_LEGS_6_DAY_V1")),
+        BODY_PART_FIVE_DAY(Set.of(5), Set.of("BODY_PART_5_DAY_V1"));
+
+        private final Set<Integer> frequencies;
+        private final Set<String> templateCodes;
+
+        TrainingSplit(Set<Integer> frequencies, Set<String> templateCodes) {
+            this.frequencies = Set.copyOf(frequencies);
+            this.templateCodes = Set.copyOf(templateCodes);
+        }
+
+        boolean supports(int frequency) {
+            return frequencies.contains(frequency);
+        }
+
+        boolean acceptsTemplate(String templateCode) {
+            return templateCodes.contains(templateCode);
+        }
+
+        static TrainingSplit forFrequency(int frequency) {
+            return switch (frequency) {
+                case 2, 4 -> UPPER_LOWER;
+                case 3, 6 -> PUSH_PULL_LEGS;
+                case 5 -> BODY_PART_FIVE_DAY;
+                default -> throw new IllegalArgumentException("unsupported training frequency");
+            };
+        }
+    }
 
     public static final class CandidateNotFoundException extends RuntimeException {}
 }

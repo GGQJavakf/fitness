@@ -24,6 +24,7 @@ export default function MainNavigation({ current, onNavigate }: MainNavigationPr
         <Button
           key={item.destination}
           className={`main-navigation__item ${current === item.destination ? 'main-navigation__item--active' : ''}`}
+          aria-label={`${item.label}${current === item.destination ? '，当前页面' : ''}`}
           disabled={current === item.destination}
           onClick={() => onNavigate(item.destination)}
         >

@@ -1,7 +1,12 @@
 package com.aifitness.assistant.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.aifitness.assistant.FitnessAssistantApplication;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -12,8 +17,20 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.yaml.snakeyaml.Yaml;
 
+@SpringBootTest(classes = FitnessAssistantApplication.class)
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
 class OpenApiContractTest {
 
     private static final Set<String> P0_OPERATIONS = Set.of(
@@ -29,10 +46,12 @@ class OpenApiContractTest {
             "GET /api/v1/exercises",
             "GET /api/v1/exercises/{id}",
             "GET /api/v1/exercises/{sourceCode}/replacements",
+            "GET /api/v1/workout-sessions/{sessionId}/exercises/{snapshotId}/replacements",
             "GET /api/v1/plan-templates",
             "POST /api/v1/plans/candidates",
             "GET /api/v1/plans/generation-context",
             "GET /api/v1/plans/{planId}/exercise-options",
+            "GET /api/v1/plans/{planId}/exercise-replacements",
             "GET /api/v1/plans/{planId}/day-options",
             "POST /api/v1/plans/validate",
             "POST /api/v1/plans",
@@ -40,13 +59,13 @@ class OpenApiContractTest {
             "GET /api/v1/plans/{planId}/versions/{versionNo}",
             "POST /api/v1/plans/{planId}/versions",
             "POST /api/v1/plans/{planId}/rebalance",
-            "GET /api/v1/workouts/today",
+            "GET /api/v1/workout-recovery-checks",
             "POST /api/v1/workout-sessions",
             "GET /api/v1/workout-sessions/{id}",
             "PUT /api/v1/workout-sessions/{id}/status",
             "PUT /api/v1/workout-sessions/{id}/exercises/{exerciseId}",
-            "PUT /api/v1/workout-sessions/{id}/sets/{clientSetKey}",
-            "DELETE /api/v1/workout-sessions/{id}/sets/{clientSetKey}",
+            "PUT /api/v1/workout-sessions/{sessionId}/sets/{setId}",
+            "DELETE /api/v1/workout-sessions/{sessionId}/sets/{setId}",
             "POST /api/v1/workout-sessions/{id}/complete",
             "POST /api/v1/sync/workout-operations",
             "GET /api/v1/sync/conflicts",
@@ -75,6 +94,10 @@ class OpenApiContractTest {
     private static Map<String, Object> workoutSchemas;
     private static Map<String, Object> privacySchemas;
 
+    @Autowired @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping handlerMapping;
+    @Autowired private MockMvc mvc;
+
     @BeforeAll
     static void loadContract() throws IOException {
         contractRoot = Path.of(System.getProperty("user.dir"), "..", "contract").normalize();
@@ -97,6 +120,44 @@ class OpenApiContractTest {
 
         assertThat(openApi.get("openapi")).isEqualTo("3.1.0");
         assertThat(actual).containsExactlyInAnyOrderElementsOf(P0_OPERATIONS);
+    }
+
+    @Test
+    void springMappingsAndOpenApiOperationsHaveBidirectionalMethodPathParity() {
+        Set<String> documented = openApiOperations();
+        Set<String> implemented = new LinkedHashSet<>();
+        handlerMapping.getHandlerMethods().forEach((mapping, handler) -> {
+            for (String path : mapping.getPatternValues()) {
+                if (!path.startsWith("/api/v1/")) {
+                    continue;
+                }
+                for (RequestMethod method : mapping.getMethodsCondition().getMethods()) {
+                    implemented.add(method.name() + " " + normalizePath(path));
+                }
+            }
+        });
+
+        assertThat(implemented).containsExactlyInAnyOrderElementsOf(documented);
+    }
+
+    @Test
+    void criticalMockMvcErrorsMatchTheDocumentedEnvelope() throws Exception {
+        assertThat(required(map(commonSchemas.get("schemas")), "ApiErrorResponse"))
+                .containsExactlyInAnyOrder("error", "meta");
+
+        mvc.perform(post("/api/v1/auth/wechat/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{not-json}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.fieldErrors").isArray())
+                .andExpect(jsonPath("$.error.details").isMap())
+                .andExpect(jsonPath("$.error.retryable").isBoolean())
+                .andExpect(jsonPath("$.meta.requestId").isNotEmpty());
+        mvc.perform(get("/api/v1/profile"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTHENTICATION_REQUIRED"))
+                .andExpect(jsonPath("$.meta.requestId").isNotEmpty());
     }
 
     @Test
@@ -141,6 +202,44 @@ class OpenApiContractTest {
 
         assertThat(allContractText).contains("Idempotency-Key", "expectedVersion", "VERSION_CONFLICT");
         assertThat(allContractText).doesNotContain("userId:");
+    }
+
+    @Test
+    void workoutStartPublishesRecoveryConfirmationIdempotencyAndActiveWorkoutConflictShapes() {
+        Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
+        Map<String, Object> startProperties = map(map(schemas.get("StartWorkoutSessionRequest")).get("properties"));
+        assertThat(startProperties).containsKey("recoveryConfirmationToken");
+        assertThat(required(schemas, "WorkoutRecoveryConfirmationDetails"))
+                .containsExactlyInAnyOrder("assessment", "confirmationToken", "confirmationExpiresAt");
+
+        Map<String, Object> post = map(map(map(openApi.get("paths"))
+                .get("/api/v1/workout-sessions")).get("post"));
+        Map<String, Object> conflict = map(map(post.get("responses")).get("409"));
+        String conflictRef = (String) map(map(map(conflict.get("content"))
+                .get("application/json")).get("schema")).get("$ref");
+        assertThat(conflictRef).endsWith("/WorkoutSessionStartConflictResponse");
+        assertThat(list(map(schemas.get("WorkoutSessionStartConflictResponse")).get("oneOf")))
+                .extracting(item -> map(item).get("$ref"))
+                .containsExactlyInAnyOrder(
+                        "#/components/schemas/WorkoutRecoveryConfirmationErrorResponse",
+                        "#/components/schemas/WorkoutStartIdempotencyErrorResponse",
+                        "#/components/schemas/ActiveWorkoutExistsErrorResponse",
+                        "#/components/schemas/WorkoutStartTerminalReplayErrorResponse");
+    }
+
+    @Test
+    void workoutExerciseUpdatePublishesBothVersionAndReplacementConflictCodes() {
+        Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
+        Map<String, Object> put = map(map(map(openApi.get("paths"))
+                .get("/api/v1/workout-sessions/{id}/exercises/{exerciseId}")).get("put"));
+        Map<String, Object> conflict = map(map(put.get("responses")).get("409"));
+        String conflictRef = (String) map(map(map(conflict.get("content"))
+                .get("application/json")).get("schema")).get("$ref");
+        assertThat(conflictRef).endsWith("/WorkoutExerciseUpdateConflictResponse");
+        Map<String, Object> errorProperties = map(map(
+                schemas.get("WorkoutExerciseUpdateConflictError")).get("properties"));
+        assertThat(list(map(errorProperties.get("code")).get("enum")))
+                .containsExactlyInAnyOrder("VERSION_CONFLICT", "INSUFFICIENT_REPLACEMENTS");
     }
 
     @Test
@@ -244,16 +343,30 @@ class OpenApiContractTest {
                 .endsWith("/WorkoutSessionResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/exercises/{exerciseId}", "put"))
                 .endsWith("/WorkoutSessionResponse");
-        assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/sets/{clientSetKey}", "put"))
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{sessionId}/sets/{setId}", "put"))
                 .endsWith("/WorkoutSetResponse");
+        assertThat(successSchemaRef("/api/v1/workout-sessions/{sessionId}/sets/{setId}", "delete"))
+                .endsWith("/WorkoutSetVoidResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions", "get"))
                 .endsWith("/WorkoutHistoryResponse");
         assertThat(successSchemaRef("/api/v1/workout-sessions/{id}/complete", "post"))
                 .endsWith("/WorkoutCompletionResponse");
 
         Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
+        assertThat(required(schemas, "WorkoutSetVoidData"))
+                .containsExactlyInAnyOrder(
+                        "voidId", "setId", "reason", "voidedAt", "sessionVersion", "duplicate");
         assertThat(required(schemas, "WorkoutSessionData"))
-                .contains("planVersionId", "planVersionNo", "planDayId", "status", "version", "exercises");
+                .contains("planVersionId", "planVersionNo", "planDayId", "trainingDayCode",
+                        "status", "version", "exercises");
+        assertThat(required(schemas, "WorkoutHistoryItem"))
+                .contains("trainingDayCode", "trainingDayName");
+        Map<String, Object> statusProperty = map(map(
+                map(schemas.get("UpdateSessionStatusRequest")).get("properties")).get("status"));
+        assertThat(list(statusProperty.get("enum"))).doesNotContain("COMPLETING", "COMPLETED");
+        assertThat(list(map(map(map(schemas.get("UpdateSessionExerciseRequest"))
+                .get("properties")).get("action")).get("enum")))
+                .containsExactly("REPLACE");
         assertThat(required(schemas, "WorkoutExerciseSnapshot"))
                 .contains("exerciseCode", "exerciseName", "contentVersion", "equipment", "prescription");
         assertThat(required(schemas, "WorkoutPrescriptionSnapshot"))
@@ -264,7 +377,7 @@ class OpenApiContractTest {
         assertThat(required(schemas, "WorkoutSetData"))
                 .contains("setId", "sessionExerciseId", "clientSetKey", "serverRevision", "sessionVersion", "syncStatus");
         assertThat(list(map(map(commonSchemas.get("schemas")).get("ErrorCode")).get("enum")))
-                .contains("ANOMALY_CONFIRMATION_REQUIRED");
+                .contains("ANOMALY_CONFIRMATION_REQUIRED", "ACCESS_REVOKED");
     }
 
     @Test
@@ -274,7 +387,7 @@ class OpenApiContractTest {
         assertThat(successSchemaRef("/api/v1/sync/conflicts", "get"))
                 .endsWith("/SyncConflictListResponse");
         assertThat(successSchemaRef("/api/v1/sync/conflicts/{id}/resolve", "post"))
-                .endsWith("/SyncConflictResponse");
+                .endsWith("/SyncConflictResolutionResponse");
         Map<String, Object> schemas = map(workoutSchemas.get("schemas"));
         assertThat(required(schemas, "SyncSetPayload"))
                 .contains("sessionId", "sessionExerciseId", "expectedSessionVersion");
@@ -282,6 +395,14 @@ class OpenApiContractTest {
                 .containsExactlyInAnyOrder("clientOperationSeq", "status");
         assertThat(required(schemas, "ResolveSyncConflictRequest"))
                 .containsExactlyInAnyOrder("resolution", "expectedVersion");
+        assertThat(required(schemas, "SyncConflictResolutionData"))
+                .containsExactlyInAnyOrder(
+                        "conflictId", "clientOperationSeq", "clientKey", "resolution", "outcome",
+                        "authoritativeSessionVersion", "authoritativePayload");
+        Map<String, Object> resolutionProperties = map(
+                map(schemas.get("SyncConflictResolutionData")).get("properties"));
+        assertThat(list(map(resolutionProperties.get("outcome")).get("enum")))
+                .containsExactlyInAnyOrder("ACKNOWLEDGED", "REBUILT", "ABANDONED");
     }
 
     @Test
@@ -349,6 +470,20 @@ class OpenApiContractTest {
         Map<String, Object> response = map(responses.containsKey("200") ? responses.get("200") : responses.get("201"));
         Map<String, Object> content = map(response.get("content"));
         return (String) map(map(content.get("application/json")).get("schema")).get("$ref");
+    }
+
+    private static Set<String> openApiOperations() {
+        Set<String> operations = new LinkedHashSet<>();
+        map(openApi.get("paths")).forEach((path, value) -> map(value).keySet().stream()
+                .filter(HTTP_METHODS::contains)
+                .map(String::toUpperCase)
+                .map(method -> method + " " + normalizePath(path))
+                .forEach(operations::add));
+        return operations;
+    }
+
+    private static String normalizePath(String path) {
+        return path.replaceAll("\\{[^/}]+}", "{}");
     }
 
     private static Map<String, Object> loadYaml(Path path) throws IOException {

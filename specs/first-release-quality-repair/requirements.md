@@ -13,14 +13,15 @@ not deploy, upload, or create production resources.
 > Superseded for generation ownership by `../ai-primary-plan-generation/requirements.md`.
 > The requirements below retain only the fallback and validation behavior from this repair.
 
-- When a user generates a plan, session duration shall be treated as a maximum time budget,
-  not as a fixed exercise-count mapping.
+- When a user generates a 45-minute plan, the complete session budget shall contain four or five
+  safe exercises when at least four eligible exercises exist; other duration bands remain
+  versioned policy rather than a linear count mapping.
 - When AI is unavailable, the deterministic fallback shall use the saved profile, eligible
   exercises, goal prescriptions, and remaining duration without claiming AI personalization.
 - When a configured template exercise is unavailable or excluded, the generator shall prefer
   a deterministic eligible movement-compatible replacement before rejecting the whole plan.
-- While building a plan, the validator shall reject sessions that exceed the configured time;
-  it shall not reject a valid session merely because it has a different exercise count.
+- While building a plan, the validator shall reject sessions that exceed the configured time and
+  shall reject underfilled 45-minute sessions with a typed issue.
 
 ### R2 — Plan-first authenticated navigation
 

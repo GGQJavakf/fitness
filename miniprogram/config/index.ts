@@ -1,4 +1,4 @@
-import { defineConfig, type UserConfigExport } from '@tarojs/cli'
+import type { IProjectConfig } from '@tarojs/taro/types/compile'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
@@ -8,12 +8,20 @@ const cloudBaseEnvironmentId = process.env.TARO_APP_CLOUDBASE_ENV_ID?.trim()
   || localCloudBase.environmentId
 const cloudBaseAiModel = process.env.TARO_APP_CLOUDBASE_AI_MODEL?.trim()
   || localCloudBase.model
-  || 'hy3'
-const cloudBaseServiceName = process.env.TARO_APP_CLOUDBASE_SERVICE_NAME?.trim()
-  || localCloudBase.serviceName
   || ''
+const cloudBaseAiProviderGroup = process.env.TARO_APP_CLOUDBASE_AI_PROVIDER_GROUP?.trim()
+  || localCloudBase.providerGroup
+  || ''
+const cloudBaseAiEnabled = enabled(process.env.TARO_APP_CLOUDBASE_AI_ENABLED)
+const cloudBaseAiApproved = enabled(process.env.TARO_APP_CLOUDBASE_AI_APPROVED)
+const cloudBaseAiEligible = enabled(process.env.TARO_APP_CLOUDBASE_AI_ELIGIBLE)
+const cloudBaseAiModelReady = enabled(process.env.TARO_APP_CLOUDBASE_AI_MODEL_READY)
+const configuredCloudBaseServiceName = process.env.TARO_APP_CLOUDBASE_SERVICE_NAME
+const cloudBaseServiceName = configuredCloudBaseServiceName === undefined
+  ? localCloudBase.serviceName ?? ''
+  : configuredCloudBaseServiceName.trim()
 
-const config: UserConfigExport<'webpack5'> = {
+const config: IProjectConfig<'webpack5'> = {
   projectName: 'ai-fitness-miniprogram',
   date: '2026-07-23',
   designWidth: 750,
@@ -28,6 +36,11 @@ const config: UserConfigExport<'webpack5'> = {
     __FITNESS_API_BASE_URL__: JSON.stringify(apiBaseUrl),
     __FITNESS_CLOUDBASE_ENV_ID__: JSON.stringify(cloudBaseEnvironmentId),
     __FITNESS_CLOUDBASE_AI_MODEL__: JSON.stringify(cloudBaseAiModel),
+    __FITNESS_CLOUDBASE_AI_PROVIDER_GROUP__: JSON.stringify(cloudBaseAiProviderGroup),
+    __FITNESS_CLOUDBASE_AI_ENABLED__: JSON.stringify(cloudBaseAiEnabled),
+    __FITNESS_CLOUDBASE_AI_APPROVED__: JSON.stringify(cloudBaseAiApproved),
+    __FITNESS_CLOUDBASE_AI_ELIGIBLE__: JSON.stringify(cloudBaseAiEligible),
+    __FITNESS_CLOUDBASE_AI_MODEL_READY__: JSON.stringify(cloudBaseAiModelReady),
     __FITNESS_CLOUDBASE_SERVICE_NAME__: JSON.stringify(cloudBaseServiceName)
   },
   mini: {
@@ -47,11 +60,12 @@ const config: UserConfigExport<'webpack5'> = {
   }
 }
 
-export default defineConfig<'webpack5'>(config)
+export default config
 
 interface LocalCloudBaseConfig {
   environmentId: string
   model?: string
+  providerGroup?: string
   serviceName?: string
 }
 
@@ -67,9 +81,16 @@ function readLocalCloudBaseConfig(): LocalCloudBaseConfig {
     return {
       environmentId: typeof value.environmentId === 'string' ? value.environmentId.trim() : '',
       model: typeof value.model === 'string' ? value.model.trim() : undefined,
+      providerGroup: typeof value.providerGroup === 'string'
+        ? value.providerGroup.trim()
+        : undefined,
       serviceName: typeof value.serviceName === 'string' ? value.serviceName.trim() : undefined,
     }
   } catch {
     return { environmentId: '' }
   }
+}
+
+function enabled(value: string | undefined): boolean {
+  return value?.trim().toLowerCase() === 'true'
 }

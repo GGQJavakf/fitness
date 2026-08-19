@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  buildRampWarmupSets,
-  buildRemainingRampWarmupSets,
   createWorkoutFlow,
   beginWorkSets,
   completeGeneralWarmup,
@@ -10,10 +8,25 @@ import {
   isWorkoutPrescriptionFinished,
   recordWorkoutSet,
   markWorkoutSyncPending,
+  remainingRampWarmupSets,
   replaceExerciseForSession,
   setWorkoutExerciseWeight,
   summarizeWorkout,
 } from '../src/application/workoutFlow'
+
+const authoritativeWarmup = {
+  schemaVersion: 'workout-warmup-prescription-v1',
+  ruleVersion: '1.3.0',
+  generalWarmup: { occurrences: 1, durationSeconds: 180 },
+  rampWarmup: {
+    exerciseId: 'exercise-1',
+    exerciseOrder: 1,
+    status: 'READY',
+    sets: [{ weightKg: 10, reps: 10 }, { weightKg: 12.5, reps: 6 }],
+  },
+  countsTowardTrainingVolume: false,
+  countsTowardProgression: false,
+} as const
 
 const baseInput = {
   clientSessionKey: 'session-1',
@@ -34,8 +47,11 @@ function createWorkFlow() {
 
 describe('workout execution state', () => {
   it('moves explicitly through general warmup, ramp sets, and work sets', () => {
-    const general = createWorkoutFlow({ ...baseInput, warmupDurationSeconds: 300 })
-    expect(general.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300, maximumRampSets: 2 })
+    const general = createWorkoutFlow({ ...baseInput, warmupPrescription: authoritativeWarmup })
+    expect(general.warmup).toMatchObject({
+      phase: 'GENERAL', generalDurationSeconds: 180, maximumRampSets: 2,
+      prescriptionVersion: 'workout-warmup-prescription-v1', ruleVersion: '1.3.0',
+    })
 
     let ramp = completeGeneralWarmup(general)
     ramp = recordWorkoutSet(ramp, {
@@ -59,6 +75,18 @@ describe('workout execution state', () => {
     expect(completeGeneralWarmup(general).warmup.phase).toBe('WORK')
   })
 
+  it('does not infer a ramp exercise when the server prescription is absent', () => {
+    const general = createWorkoutFlow(baseInput)
+
+    expect(general.warmup).toMatchObject({
+      prescriptionVersion: 'legacy-client-v1',
+      rampExerciseIndex: null,
+      rampStatus: 'NOT_REQUIRED',
+      rampSets: [],
+    })
+    expect(completeGeneralWarmup(general).warmup.phase).toBe('WORK')
+  })
+
   it('rejects set records that bypass the warmup state machine', () => {
     const general = createWorkoutFlow(baseInput)
     expect(() => beginWorkSets(general)).toThrow(/general warmup/i)
@@ -68,27 +96,27 @@ describe('workout execution state', () => {
     })).toThrow(/after warmup/i)
   })
 
-  it('builds two beginner-friendly warmup sets from the confirmed work weight', () => {
-    expect(buildRampWarmupSets(8)).toEqual([
-      { weightKg: 2, reps: 10 },
-      { weightKg: 5, reps: 6 },
-    ])
-    expect(buildRampWarmupSets(20)).toEqual([
+  it('renders immutable server ramp sets and never recalculates weights in the client', () => {
+    let state = completeGeneralWarmup(createWorkoutFlow({
+      ...baseInput,
+      exercises: [{ ...baseInput.exercises[0], weightStatus: 'KNOWN', targetWeightKg: 20 }],
+      warmupPrescription: authoritativeWarmup,
+    }))
+    expect(remainingRampWarmupSets(state)).toEqual([
       { weightKg: 10, reps: 10 },
-      { weightKg: 14, reps: 6 },
+      { weightKg: 12.5, reps: 6 },
     ])
-    expect(buildRampWarmupSets(5)).toEqual([{ weightKg: 2, reps: 10 }])
-    expect(buildRampWarmupSets(2)).toEqual([])
-  })
-
-  it('never suggests a lighter ramp set after formal weight is adjusted mid-warmup', () => {
-    expect(buildRemainingRampWarmupSets(20, [10])).toEqual([{ weightKg: 14, reps: 6 }])
-    expect(buildRemainingRampWarmupSets(8, [10])).toEqual([])
-    expect(buildRemainingRampWarmupSets(30, [10])).toEqual([{ weightKg: 21, reps: 6 }])
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'server-ramp-1', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
+      actualWeightKg: 10, actualReps: 10,
+    })
+    expect(remainingRampWarmupSets(state)).toEqual([{ weightKg: 12.5, reps: 6 }])
+    const lowered = setWorkoutExerciseWeight(state, 0, 11)
+    expect(remainingRampWarmupSets(lowered)).toEqual([])
   })
 
   it('enforces the deterministic two-set ramp warmup ceiling', () => {
-    let state = completeGeneralWarmup(createWorkoutFlow(baseInput))
+    let state = completeGeneralWarmup(createWorkoutFlow({ ...baseInput, warmupPrescription: authoritativeWarmup }))
     for (let order = 1; order <= 2; order += 1) {
       state = recordWorkoutSet(state, {
         clientSetKey: `ramp-${order}`, exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
@@ -146,6 +174,7 @@ describe('workout execution state', () => {
     let state = completeGeneralWarmup(createWorkoutFlow({
       ...baseInput,
       exercises: [{ ...baseInput.exercises[0], targetWorkSets: 3 }],
+      warmupPrescription: authoritativeWarmup,
     }))
     state = recordWorkoutSet(state, {
       clientSetKey: 'warmup-1', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED',
@@ -289,6 +318,42 @@ describe('workout execution state', () => {
     expect(state.exercises[0].exerciseCode).toBe('goblet-squat')
   })
 
+  it('clears a known external weight when replacement load mode is bodyweight', () => {
+    const state = createWorkoutFlow({
+      ...baseInput,
+      exercises: [{ ...baseInput.exercises[0], weightStatus: 'KNOWN', targetWeightKg: 20 }],
+    })
+
+    const replaced = replaceExerciseForSession(state, 0, {
+      ...baseInput.exercises[0],
+      exerciseCode: 'bodyweight-squat',
+      name: '徒手深蹲',
+      weightStatus: 'BODYWEIGHT',
+    })
+
+    expect(replaced.exercises[0]).toMatchObject({ weightStatus: 'BODYWEIGHT' })
+    expect(replaced.exercises[0].targetWeightKg).toBeUndefined()
+    expect(replaced.exercises[0].sessionWeightKg).toBeUndefined()
+  })
+
+  it('requires calibration when a bodyweight exercise is replaced by an external load', () => {
+    const state = createWorkoutFlow({
+      ...baseInput,
+      exercises: [{ ...baseInput.exercises[0], weightStatus: 'BODYWEIGHT' }],
+    })
+
+    const replaced = replaceExerciseForSession(state, 0, {
+      ...baseInput.exercises[0],
+      exerciseCode: 'goblet-squat',
+      name: '高脚杯深蹲',
+      weightStatus: 'NEEDS_CALIBRATION',
+    })
+
+    expect(replaced.exercises[0]).toMatchObject({ weightStatus: 'NEEDS_CALIBRATION' })
+    expect(replaced.exercises[0].targetWeightKg).toBeUndefined()
+    expect(replaced.exercises[0].sessionWeightKg).toBeUndefined()
+  })
+
   it('turns off automatic progression and exposes a safety message when pain is reported', () => {
     const state = recordWorkoutSet(createWorkFlow(), {
       clientSetKey: 'pain-set', exerciseIndex: 0, setType: 'WORK', status: 'FAILED',
@@ -297,5 +362,19 @@ describe('workout execution state', () => {
 
     expect(state.automaticProgressionEligible).toBe(false)
     expect(state.safetyNotice).toMatch(/停止训练/)
+  })
+
+  it('keeps legacy generic discomfort non-medical instead of guessing pain', () => {
+    const state = recordWorkoutSet(createWorkFlow(), {
+      clientSetKey: 'generic-discomfort-set', exerciseIndex: 0, setType: 'WORK', status: 'FAILED',
+      actualWeightKg: 20, actualReps: 2, discomfort: 'DISCOMFORT',
+    })
+
+    expect(state.exercises[0].sets[0]).toMatchObject({
+      discomfort: 'DISCOMFORT',
+      safetyFlag: null,
+    })
+    expect(state.automaticProgressionEligible).toBe(false)
+    expect(state.safetyNotice).toMatch(/明显不适/)
   })
 })

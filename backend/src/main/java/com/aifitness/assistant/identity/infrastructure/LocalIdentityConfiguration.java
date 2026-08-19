@@ -1,6 +1,7 @@
 package com.aifitness.assistant.identity.infrastructure;
 
 import com.aifitness.assistant.identity.application.IdentityRepository;
+import com.aifitness.assistant.identity.application.AuthenticationAttemptLimiter;
 import com.aifitness.assistant.identity.application.SessionStore;
 import com.aifitness.assistant.identity.application.SubjectProtector;
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
@@ -8,6 +9,7 @@ import com.aifitness.assistant.identity.application.WechatIdentityResolver;
 import com.aifitness.assistant.identity.application.WechatLoginService;
 import com.aifitness.assistant.identity.application.UserAccessRevocation;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Set;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -71,6 +73,11 @@ public class LocalIdentityConfiguration {
     }
 
     @Bean
+    AuthenticationAttemptLimiter authenticationAttemptLimiter() {
+        return new InMemoryAuthenticationAttemptLimiter(10, 600, Duration.ofMinutes(1));
+    }
+
+    @Bean
     UserAccessRevocation userAccessRevocation(SessionStore sessions) {
         return sessions::revokeAllSessionsAndBlockLogin;
     }
@@ -81,8 +88,10 @@ public class LocalIdentityConfiguration {
             SubjectProtector protector,
             IdentityRepository identities,
             SessionStore sessions,
-            Clock identityClock) {
-        return new WechatLoginService(provider, protector, identities, sessions, identityClock);
+            Clock identityClock,
+            AuthenticationAttemptLimiter attemptLimiter) {
+        return new WechatLoginService(
+                provider, protector, identities, sessions, identityClock, attemptLimiter);
     }
 
     static final class LocalSubstituteBindingGuard {}

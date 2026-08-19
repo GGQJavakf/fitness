@@ -16,6 +16,7 @@ import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyAudit;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyDataReader;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyExportRepository;
 import com.aifitness.assistant.privacy.infrastructure.JdbcPrivacyRepository;
+import com.aifitness.assistant.privacy.application.PrivacyRateLimitPort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
 import javax.sql.DataSource;
@@ -41,6 +42,7 @@ class ExperiencePrivacyConfigurationTest {
             assertThat(context.getBean(PrivacyDataPort.class)).isInstanceOf(JdbcPrivacyDataReader.class);
             assertThat(context.getBean(PrivacyRequestService.AuditPort.class))
                     .isInstanceOf(JdbcPrivacyAudit.class);
+            assertThat(context).hasSingleBean(PrivacyRateLimitPort.class);
             assertThat(context).hasSingleBean(PrivacyRequestService.class);
             assertThat(context).doesNotHaveBean(PrivacyDeletionWorker.class);
         });

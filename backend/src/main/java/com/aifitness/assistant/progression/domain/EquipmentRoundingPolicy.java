@@ -1,47 +1,47 @@
 package com.aifitness.assistant.progression.domain;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
-/** Deterministic KG rounding based only on the user's configured equipment increments. */
+/** Deterministic KG rounding to concrete levels on one exact equipment item. */
 public final class EquipmentRoundingPolicy {
-    public static final String INCREASE_RULE = "ADD_ONE_MIN_INCREMENT";
-    public static final String REDUCTION_RULE = "FLOOR_TO_MIN_INCREMENT";
+    public static final String INCREASE_RULE = "NEXT_AVAILABLE_LEVEL";
+    public static final String REDUCTION_RULE = "FLOOR_TO_AVAILABLE_LEVEL";
 
     private final String unit;
-    private final List<BigDecimal> allowedSteps;
-    private final BigDecimal minimumIncrement;
+    private final List<BigDecimal> availableLevels;
 
     public EquipmentRoundingPolicy(String unit, List<BigDecimal> allowedSteps) {
         if (!"KG".equals(unit)) throw new IllegalArgumentException("P0 equipment rounding only supports KG");
         this.unit = unit;
-        if (allowedSteps == null || allowedSteps.isEmpty() || allowedSteps.stream()
+        if (allowedSteps == null || allowedSteps.stream()
                 .anyMatch(step -> step == null || step.signum() <= 0)) {
-            throw new IllegalArgumentException("equipment steps must contain positive values");
+            throw new IllegalArgumentException("available equipment levels must contain positive values");
         }
-        this.allowedSteps = allowedSteps.stream().map(BigDecimal::stripTrailingZeros)
-                .sorted(Comparator.naturalOrder()).toList();
-        this.minimumIncrement = this.allowedSteps.getFirst();
+        this.availableLevels = allowedSteps.stream().map(BigDecimal::stripTrailingZeros)
+                .distinct().sorted(Comparator.naturalOrder()).toList();
     }
 
-    public BigDecimal increaseOneStep(BigDecimal currentWeight) {
-        return requireWeight(currentWeight).add(minimumIncrement).stripTrailingZeros();
+    public Optional<BigDecimal> increaseOneStep(BigDecimal currentWeight) {
+        BigDecimal current = requireWeight(currentWeight);
+        return availableLevels.stream().filter(level -> level.compareTo(current) > 0).findFirst();
     }
 
-    public BigDecimal roundReduction(BigDecimal currentWeight, BigDecimal rawWeight) {
+    public Optional<BigDecimal> roundReduction(BigDecimal currentWeight, BigDecimal rawWeight) {
         BigDecimal current = requireWeight(currentWeight);
         BigDecimal raw = requireWeight(rawWeight);
-        BigDecimal rounded = raw.divide(minimumIncrement, 0, RoundingMode.FLOOR).multiply(minimumIncrement);
-        if (current.signum() > 0 && rounded.compareTo(current) >= 0) rounded = current.subtract(minimumIncrement);
-        if (rounded.signum() < 0) rounded = BigDecimal.ZERO;
-        return rounded.stripTrailingZeros();
+        return availableLevels.stream()
+                .filter(level -> level.compareTo(raw) <= 0 && level.compareTo(current) < 0)
+                .max(Comparator.naturalOrder());
     }
 
     public String unit() { return unit; }
-    public List<BigDecimal> allowedSteps() { return allowedSteps; }
-    public BigDecimal minimumIncrement() { return minimumIncrement; }
+    public List<BigDecimal> availableLevels() { return availableLevels; }
+
+    /** Kept as an accessor compatibility bridge; values are concrete levels, never increments. */
+    public List<BigDecimal> allowedSteps() { return availableLevels; }
 
     private static BigDecimal requireWeight(BigDecimal value) {
         if (value == null || value.signum() < 0) throw new IllegalArgumentException("weight must not be negative");

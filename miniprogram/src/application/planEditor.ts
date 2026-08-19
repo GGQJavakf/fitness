@@ -432,6 +432,7 @@ function effectiveLock(state: PlanEditorState, fieldPath: string): LockStatus | 
 function toValidationDraft(plan: PlanDraft): PlanValidationDraft {
   return {
     templateCode: plan.templateCode,
+    trainingSplit: plan.trainingSplit,
     name: plan.name,
     days: plan.days.map((day) => ({
       ...day,

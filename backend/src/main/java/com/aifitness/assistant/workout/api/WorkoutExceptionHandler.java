@@ -6,9 +6,11 @@ import com.aifitness.assistant.common.api.ErrorCode;
 import com.aifitness.assistant.common.api.ErrorMeta;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutRecoveryCheckService;
 import com.aifitness.assistant.workout.application.WorkoutSetService;
 import com.aifitness.assistant.workout.application.WorkoutCompletionService;
 import com.aifitness.assistant.workout.application.ExerciseReplacementService;
+import com.aifitness.assistant.workout.application.WorkoutHistoryQueryService;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -45,10 +47,24 @@ public final class WorkoutExceptionHandler {
                 "替代动作不符合当前训练条件", Map.of());
     }
 
+    @ExceptionHandler(ExerciseReplacementService.InsufficientReplacementsException.class)
+    ResponseEntity<ApiErrorResponse> insufficientReplacements(
+            ExerciseReplacementService.InsufficientReplacementsException exception) {
+        return error(HttpStatus.CONFLICT, ErrorCode.INSUFFICIENT_REPLACEMENTS,
+                "当前条件下没有兼容的替代动作",
+                Map.of("availableCandidateCount", exception.availableCandidateCount(), "minimumRequired", 1));
+    }
+
     @ExceptionHandler(WorkoutCompletionService.IncompleteWorkoutException.class)
     ResponseEntity<ApiErrorResponse> incompleteWorkout() {
         return error(HttpStatus.CONFLICT, ErrorCode.VALIDATION_FAILED,
                 "训练尚未完整完成，可选择提前结束", Map.of("completionType", "EARLY_END"));
+    }
+
+    @ExceptionHandler(WorkoutHistoryQueryService.WorkoutNotTerminalException.class)
+    ResponseEntity<ApiErrorResponse> workoutNotTerminal() {
+        return error(HttpStatus.CONFLICT, ErrorCode.WORKOUT_NOT_TERMINAL,
+                "训练尚未结束，不能生成历史汇总", Map.of());
     }
 
     @ExceptionHandler(WorkoutSessionService.VersionConflictException.class)
@@ -62,6 +78,12 @@ public final class WorkoutExceptionHandler {
         return error(HttpStatus.CONFLICT, ErrorCode.IDEMPOTENCY_KEY_REUSED, "幂等键已用于不同请求", Map.of());
     }
 
+    @ExceptionHandler(WorkoutRecoveryCheckService.RecoveryFactsUnavailableException.class)
+    ResponseEntity<ApiErrorResponse> recoveryFactsUnavailable() {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.INTERNAL_ERROR,
+                "恢复检查暂时不可用", Map.of());
+    }
+
     @ExceptionHandler(WorkoutSetService.AnomalyConfirmationRequiredException.class)
     ResponseEntity<ApiErrorResponse> anomalyConfirmation(
             WorkoutSetService.AnomalyConfirmationRequiredException exception) {
@@ -69,7 +91,7 @@ public final class WorkoutExceptionHandler {
                 "异常训练数据需要显式确认", Map.of("reasons", exception.reasons()));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
+    @ExceptionHandler({IllegalStateException.class, WorkoutSetService.SessionNotAcceptingSetsException.class})
     ResponseEntity<ApiErrorResponse> invalidState() {
         return error(HttpStatus.CONFLICT, ErrorCode.SESSION_ALREADY_TERMINAL, "会话状态不允许此操作", Map.of());
     }

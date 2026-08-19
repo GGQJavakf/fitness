@@ -23,7 +23,7 @@ export class WorkoutSyncService {
       queue: appended.queue,
       updatedAtUtc: this.nowUtc(),
     }
-    await this.drafts.save(updated)
+    await this.drafts.save(updated, draft.revision)
     return { draft: updated, operation: appended.operation }
   }
 
@@ -34,7 +34,7 @@ export class WorkoutSyncService {
       queue: acknowledgeOperation(draft.queue, clientOperationSeq),
       updatedAtUtc: this.nowUtc(),
     }
-    await this.drafts.save(updated)
+    await this.drafts.save(updated, draft.revision)
     return updated
   }
 }

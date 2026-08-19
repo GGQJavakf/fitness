@@ -30,6 +30,12 @@ public final class RecommendationExceptionHandler {
         return error(HttpStatus.CONFLICT, ErrorCode.VERSION_CONFLICT, "建议已处理，不能重复操作", Map.of());
     }
 
+    @ExceptionHandler(RecommendationService.IdempotencyKeyReusedException.class)
+    ResponseEntity<ApiErrorResponse> idempotencyKeyReused() {
+        return error(HttpStatus.CONFLICT, ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                "幂等键已用于不同请求", Map.of());
+    }
+
     @ExceptionHandler(RecommendationService.LockedWeightException.class)
     ResponseEntity<ApiErrorResponse> lockedWeight() {
         return error(HttpStatus.CONFLICT, ErrorCode.PLAN_VALIDATION_FAILED,

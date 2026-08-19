@@ -13,6 +13,7 @@ public final class WechatLoginService {
     private final IdentityRepository identityRepository;
     private final SessionStore sessionStore;
     private final Clock clock;
+    private final AuthenticationAttemptLimiter attemptLimiter;
 
     public WechatLoginService(
             WechatIdentityProvider identityProvider,
@@ -20,15 +21,28 @@ public final class WechatLoginService {
             IdentityRepository identityRepository,
             SessionStore sessionStore,
             Clock clock) {
+        this(identityProvider, subjectProtector, identityRepository, sessionStore, clock,
+                AuthenticationAttemptLimiter.allowAll());
+    }
+
+    public WechatLoginService(
+            WechatIdentityProvider identityProvider,
+            SubjectProtector subjectProtector,
+            IdentityRepository identityRepository,
+            SessionStore sessionStore,
+            Clock clock,
+            AuthenticationAttemptLimiter attemptLimiter) {
         this.identityProvider = Objects.requireNonNull(identityProvider);
         this.subjectProtector = Objects.requireNonNull(subjectProtector);
         this.identityRepository = Objects.requireNonNull(identityRepository);
         this.sessionStore = Objects.requireNonNull(sessionStore);
         this.clock = Objects.requireNonNull(clock);
+        this.attemptLimiter = Objects.requireNonNull(attemptLimiter);
     }
 
     public SessionTokens login(String oneTimeCode) {
         requireCredential(oneTimeCode, 2048, "wechat code");
+        requireAttemptAllowed(AuthenticationAttemptLimiter.Action.WECHAT_CODE_LOGIN, oneTimeCode);
         WechatIdentityProvider.ProviderSubject providerSubject;
         try {
             providerSubject = identityProvider.exchange(oneTimeCode);
@@ -40,6 +54,7 @@ public final class WechatLoginService {
 
     public SessionTokens loginTrustedWechatSubject(String providerSubject) {
         requireCredential(providerSubject, 256, "wechat subject");
+        requireAttemptAllowed(AuthenticationAttemptLimiter.Action.TRUSTED_SUBJECT_LOGIN, providerSubject);
         return issueForWechatSubject(providerSubject);
     }
 
@@ -56,6 +71,7 @@ public final class WechatLoginService {
 
     public SessionTokens refresh(String refreshToken) {
         requireCredential(refreshToken, 4096, "refresh token");
+        requireAttemptAllowed(AuthenticationAttemptLimiter.Action.REFRESH_TOKEN, refreshToken);
         return sessionStore.refresh(refreshToken, clock.instant());
     }
 
@@ -72,6 +88,12 @@ public final class WechatLoginService {
     private static void requireNotBlank(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(message);
+        }
+    }
+
+    private void requireAttemptAllowed(AuthenticationAttemptLimiter.Action action, String credential) {
+        if (!attemptLimiter.allow(action, credential, clock.instant())) {
+            throw new AuthenticationRateLimitedException();
         }
     }
 
@@ -97,6 +119,18 @@ public final class WechatLoginService {
     public static final class AuthenticationRequiredException extends RuntimeException {
         public AuthenticationRequiredException() {
             super("authentication required");
+        }
+    }
+
+    public static final class AccessRevokedException extends RuntimeException {
+        public AccessRevokedException() {
+            super("access revoked");
+        }
+    }
+
+    public static final class AuthenticationRateLimitedException extends RuntimeException {
+        public AuthenticationRateLimitedException() {
+            super("authentication request rate limited");
         }
     }
 }

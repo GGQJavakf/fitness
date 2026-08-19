@@ -114,11 +114,78 @@ class PlanVersionEndpointIntegrationTest {
                 .isEqualTo(first.at("/data/activeVersion/id").asText());
     }
 
+    @Test
+    void activatingARegeneratedCandidateCreatesANewVersionOnTheExistingPlan() throws Exception {
+        String token = loginAndConfigure();
+        String firstCandidateId = generateCandidate(token).path("candidateId").asText();
+        JsonNode first = json(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + firstCandidateId + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.activeVersion.versionNumber").value(1))
+                .andReturn().getResponse().getContentAsString());
+
+        mvc.perform(put("/api/v1/profile")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"experience":"BEGINNER","goal":"HYPERTROPHY",
+                                 "weeklyFrequency":2,"sessionMinutes":45,"location":"GYM",
+                                 "expectedVersion":1}
+                                """))
+                .andExpect(status().isOk());
+        String replacementCandidateId = generateCandidate(token, 2).path("candidateId").asText();
+        String replacementRequest = "{\"candidateId\":\"" + replacementCandidateId + "\"}";
+
+        JsonNode replacement = json(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replacementRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.planId").value(first.at("/data/planId").asText()))
+                .andExpect(jsonPath("$.data.activeVersion.versionNumber").value(2))
+                .andExpect(jsonPath("$.data.activeVersion.sourceType").value("USER_EDIT"))
+                .andReturn().getResponse().getContentAsString());
+
+        JsonNode replay = json(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replacementRequest))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.activeVersion.versionNumber").value(2))
+                .andReturn().getResponse().getContentAsString());
+
+        assertThat(replay.at("/data/activeVersion/id").asText())
+                .isEqualTo(replacement.at("/data/activeVersion/id").asText());
+        mvc.perform(get("/api/v1/plans/{planId}/versions/{versionNo}",
+                        first.at("/data/planId").asText(), 1)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.versionNumber").value(1));
+    }
+
+    @Test
+    void rejectsMalformedCandidateIdentifiersBeforeLookingUpCandidateState() throws Exception {
+        String token = login();
+
+        mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"candidate-not-a-uuid\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+    }
+
     private JsonNode generateCandidate(String token) throws Exception {
+        return generateCandidate(token, 1);
+    }
+
+    private JsonNode generateCandidate(String token, int profileVersion) throws Exception {
         return json(mvc.perform(post("/api/v1/plans/candidates")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                        .content("{\"profileVersion\":" + profileVersion + ",\"lockedFields\":{}}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString()).at("/data/candidate");
     }

@@ -8,13 +8,14 @@ import './index.scss'
 interface ProgressionCardProps {
   readonly card: ProgressionCardView
   readonly busy: boolean
+  readonly actionsDisabled: boolean
   readonly onApply: (acceptedWeightKg: number) => Promise<void> | void
   readonly onDismiss: () => Promise<void> | void
   readonly onOpenTrend: () => Promise<void> | void
 }
 
 export default function ProgressionCard({
-  card, busy, onApply, onDismiss, onOpenTrend,
+  card, busy, actionsDisabled, onApply, onDismiss, onOpenTrend,
 }: ProgressionCardProps) {
   return (
     <View className='surface-card progression-card'>
@@ -41,14 +42,14 @@ export default function ProgressionCard({
           <Button
             className='primary-action progression-card__apply'
             loading={busy}
-            disabled={busy}
+            disabled={actionsDisabled}
             onClick={() => void onApply(card.recommendedWeightKg)}
           >
             {busy ? '正在更新计划' : '采用建议'}
           </Button>
         )}
-        <Button className='secondary-action' disabled={busy} onClick={() => void onOpenTrend()}>查看训练变化</Button>
-        <Button className='progression-card__dismiss' disabled={busy} onClick={() => void onDismiss()}>保持当前安排</Button>
+        <Button className='secondary-action' disabled={actionsDisabled} onClick={() => void onOpenTrend()}>查看训练变化</Button>
+        <Button className='progression-card__dismiss' disabled={actionsDisabled} onClick={() => void onDismiss()}>保持当前安排</Button>
       </View>
     </View>
   )

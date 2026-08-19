@@ -1,7 +1,11 @@
 import { Button, Input, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
-import type { PlanDayOption, PlanExerciseOption } from '../../../application/models'
+import type {
+  PlanDayOption,
+  PlanExerciseOption,
+  PlanExerciseReplacementOption,
+} from '../../../application/models'
 import { numericFieldPath, type EditableNumericField, type PlanEditorState } from '../../../application/planEditor'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { exerciseDisplayName, planFieldDisplayName, planIssueDisplayMessage } from '../../copy'
@@ -35,19 +39,50 @@ export default function PlanEditorPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [optionPicker, setOptionPicker] = useState<{ dayCode: string; replacing?: string } | null>(null)
-  const [exerciseOptions, setExerciseOptions] = useState<readonly PlanExerciseOption[]>([])
+  const [exerciseOptions, setExerciseOptions] = useState<readonly (
+    PlanExerciseOption | PlanExerciseReplacementOption
+  )[]>([])
   const [dayOptions, setDayOptions] = useState<readonly PlanDayOption[]>([])
   const [showDayOptions, setShowDayOptions] = useState(false)
   const [pendingRemove, setPendingRemove] = useState('')
   const [rawValues, setRawValues] = useState<Record<string, string>>({})
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [expandedDayCode, setExpandedDayCode] = useState('')
+  const [expandedExerciseKey, setExpandedExerciseKey] = useState('')
+  const [showAdvancedTools, setShowAdvancedTools] = useState(false)
+  const editorLoadInFlight = useRef(false)
+  const editorLoadRequestId = useRef(0)
+  const mounted = useRef(true)
+  const mutationInFlight = useRef(false)
+
+  async function loadEditor(): Promise<void> {
+    if (editorLoadInFlight.current || editor) return
+    editorLoadInFlight.current = true
+    const requestId = ++editorLoadRequestId.current
+    setError('')
+    try {
+      await application.loadActivePlan()
+      const loaded = application.openPlanEditor()
+      if (!mounted.current || requestId !== editorLoadRequestId.current) return
+      setEditor(loaded)
+      if (!loaded) setError('活动计划已变更，请重新读取。')
+    } catch {
+      if (mounted.current && requestId === editorLoadRequestId.current) {
+        setError('活动计划加载失败，请检查网络后重试。')
+      }
+    } finally {
+      editorLoadInFlight.current = false
+    }
+  }
 
   useEffect(() => {
-    if (editor) return
-    void application.loadActivePlan()
-      .then(() => setEditor(application.openPlanEditor()))
-      .catch(() => setError('活动计划加载失败，请返回计划页重试'))
-  }, [editor])
+    mounted.current = true
+    if (!editor) void loadEditor()
+    return () => {
+      mounted.current = false
+      editorLoadRequestId.current += 1
+    }
+  }, [])
 
   function edit(dayCode: string, exerciseCode: string, field: EditableNumericField, raw: string): void {
     const path = numericFieldPath(dayCode, exerciseCode, field)
@@ -81,7 +116,9 @@ export default function PlanEditorPage() {
   }
 
   async function run(action: () => Promise<PlanEditorState>): Promise<void> {
+    if (mutationInFlight.current) return
     if (!rawValuesAreValid()) return
+    mutationInFlight.current = true
     setBusy(true)
     setError('')
     try {
@@ -89,12 +126,15 @@ export default function PlanEditorPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
     } finally {
+      mutationInFlight.current = false
       setBusy(false)
     }
   }
 
   async function save(): Promise<void> {
+    if (mutationInFlight.current) return
     if (!rawValuesAreValid()) return
+    mutationInFlight.current = true
     const previousVersion = editor?.baseVersion ?? 0
     setBusy(true)
     setError('')
@@ -115,26 +155,38 @@ export default function PlanEditorPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
     } finally {
+      mutationInFlight.current = false
       setBusy(false)
     }
   }
 
   async function openExerciseOptions(dayCode: string, replacing?: string): Promise<void> {
+    if (mutationInFlight.current) return
+    mutationInFlight.current = true
     setBusy(true)
     setError('')
     try {
-      const options = await application.listPlanExerciseOptions(dayCode)
+      const options = replacing
+        ? await application.listPlanExerciseReplacements(dayCode, replacing)
+        : await application.listPlanExerciseOptions(dayCode)
       setExerciseOptions(options)
       setOptionPicker({ dayCode, ...(replacing ? { replacing } : {}) })
-      if (options.length === 0) setError('当前器械、排除偏好和模板下没有更多可用动作')
+      if (options.length === 0) {
+        setError(replacing
+          ? '当前没有与原动作模式、主要肌群和难度一致且符合器械条件的替换动作；可以保留原动作或删除后添加其他动作。'
+          : '当前器械、排除偏好和模板下没有更多可用动作')
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '动作候选加载失败')
     } finally {
+      mutationInFlight.current = false
       setBusy(false)
     }
   }
 
   async function openDayOptions(): Promise<void> {
+    if (mutationInFlight.current) return
+    mutationInFlight.current = true
     setBusy(true)
     setError('')
     try {
@@ -145,11 +197,13 @@ export default function PlanEditorPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '训练日候选加载失败')
     } finally {
+      mutationInFlight.current = false
       setBusy(false)
     }
   }
 
   function applyStructureEdit(action: () => PlanEditorState): void {
+    if (mutationInFlight.current) return
     try {
       setEditor(action())
       application.telemetry.track('plan_edited', { fieldKind: 'structure' })
@@ -174,8 +228,21 @@ export default function PlanEditorPage() {
   }
 
   if (!editor) {
-    return <View className='screen'><View className='card'><Text>{error || '正在加载编辑器…'}</Text></View></View>
+    return (
+      <View className='screen'>
+        <View className='card'>
+          <Text>{error || '正在加载编辑器…'}</Text>
+          {error && <Button className='secondary-action' onClick={() => void loadEditor()}>重新读取计划</Button>}
+        </View>
+      </View>
+    )
   }
+
+  const expandedDay = editor.workingCopy.days.find((day) => day.code === expandedDayCode)
+    ?? editor.workingCopy.days[0]
+  const activeExercise = expandedDay?.exercises.find(
+    (exercise) => `${expandedDay.code}:${exercise.exerciseCode}` === expandedExerciseKey,
+  ) ?? expandedDay?.exercises[0]
 
   return (
     <View className='screen'>
@@ -189,107 +256,177 @@ export default function PlanEditorPage() {
         </Text>
       </View>
 
-      {editor.workingCopy.days.map((day, dayIndex) => (
-        <View key={day.code} className='card'>
+      <View className='editor-day-list' aria-label='选择要编辑的训练日'>
+        {editor.workingCopy.days.map((day) => {
+          const selected = day.code === expandedDay?.code
+          return (
+            <Button
+              key={day.code}
+              className={`editor-day-summary ${selected ? 'editor-day-summary--active' : ''}`.trim()}
+              aria-label={`${selected ? '当前训练日，' : ''}${day.name}，${day.exercises.length}个动作`}
+              onClick={() => {
+                setExpandedDayCode(day.code)
+                setExpandedExerciseKey(day.exercises[0]
+                  ? `${day.code}:${day.exercises[0].exerciseCode}`
+                  : '')
+                setPendingRemove('')
+                setOptionPicker(null)
+              }}
+            >
+              <Text className='editor-day-summary__name'>{day.name}</Text>
+              <Text className='code-label'>{day.exercises.length} 个动作</Text>
+            </Button>
+          )
+        })}
+      </View>
+
+      {expandedDay && (
+        <View className='card editor-day-detail'>
           <View className='editor-exercise__heading editor-day-heading'>
             <View>
-              <Text className='section-title'>{day.name}</Text>
-              <Text className='code-label'>{day.exercises.length} 个动作</Text>
+              <Text className='section-title'>{expandedDay.name} · 动作设置</Text>
+              <Text className='code-label'>先选动作，再调整训练处方</Text>
             </View>
             <View className='editor-structure-actions'>
-              <Button size='mini' disabled={dayIndex === 0} onClick={() => applyStructureEdit(() => application.movePlanDay(day.code, -1))}>上移日</Button>
-              <Button size='mini' disabled={dayIndex === editor.workingCopy.days.length - 1} onClick={() => applyStructureEdit(() => application.movePlanDay(day.code, 1))}>下移日</Button>
+              {editor.workingCopy.days.indexOf(expandedDay) > 0 && (
+                <Button
+                  className='editor-structure-action'
+                  aria-label={`将${expandedDay.name}上移`}
+                  onClick={() => applyStructureEdit(() => application.movePlanDay(expandedDay.code, -1))}
+                >上移日</Button>
+              )}
+              {editor.workingCopy.days.indexOf(expandedDay) < editor.workingCopy.days.length - 1 && (
+                <Button
+                  className='editor-structure-action'
+                  aria-label={`将${expandedDay.name}下移`}
+                  onClick={() => applyStructureEdit(() => application.movePlanDay(expandedDay.code, 1))}
+                >下移日</Button>
+              )}
               <Button
-                size='mini'
-                className={pendingRemove === `day:${day.code}` ? 'danger-action' : ''}
+                className={`editor-structure-action ${pendingRemove === `day:${expandedDay.code}` ? 'danger-action' : ''}`.trim()}
+                aria-label={`${pendingRemove === `day:${expandedDay.code}` ? '确认删除' : '删除'}${expandedDay.name}`}
                 onClick={() => {
-                  const key = `day:${day.code}`
+                  const key = `day:${expandedDay.code}`
                   if (pendingRemove !== key) return setPendingRemove(key)
-                  applyStructureEdit(() => application.removePlanDay(day.code))
+                  applyStructureEdit(() => application.removePlanDay(expandedDay.code))
                 }}
-              >{pendingRemove === `day:${day.code}` ? '确认删除日' : '删除日'}</Button>
+              >{pendingRemove === `day:${expandedDay.code}` ? '确认删除日' : '删除日'}</Button>
             </View>
           </View>
-          {day.exercises.map((exercise, exerciseIndex) => (
-            <View key={exercise.exerciseCode} className='editor-exercise'>
-              <View className='editor-exercise__heading'>
-                <View>
-                  <Text className='section-title'>{exerciseDisplayName(exercise.exerciseCode)}</Text>
-                  <Text className='code-label'>{exercise.exerciseCode}</Text>
-                </View>
-                <View className='editor-structure-actions'>
-                  <Button size='mini' disabled={exerciseIndex === 0} onClick={() => applyStructureEdit(() => application.movePlanExercise(day.code, exercise.exerciseCode, -1))}>上移</Button>
-                  <Button size='mini' disabled={exerciseIndex === day.exercises.length - 1} onClick={() => applyStructureEdit(() => application.movePlanExercise(day.code, exercise.exerciseCode, 1))}>下移</Button>
-                  <Button size='mini' loading={busy} onClick={() => void openExerciseOptions(day.code, exercise.exerciseCode)}>替换</Button>
-                  <Button
-                    size='mini'
-                    className={pendingRemove === `${day.code}:${exercise.exerciseCode}` ? 'danger-action' : ''}
-                    onClick={() => {
-                      const key = `${day.code}:${exercise.exerciseCode}`
-                      if (pendingRemove !== key) return setPendingRemove(key)
-                      applyStructureEdit(() => application.removePlanExercise(day.code, exercise.exerciseCode))
-                    }}
-                  >{pendingRemove === `${day.code}:${exercise.exerciseCode}` ? '确认删除' : '删除'}</Button>
-                </View>
-              </View>
-              {editableFields.map((field) => {
-                const path = numericFieldPath(day.code, exercise.exerciseCode, field)
-                const lock = editor.locks[path] ?? 'UNLOCKED'
-                const weightUnavailable = field === 'targetWeightKg' && exercise.weightStatus === 'BODYWEIGHT'
-                const value = exercise[field]
-                const rawValue = rawValues[path]
-                return (
-                  <View key={field} className='editor-field'>
-                    <Text>{fieldLabels[field]}</Text>
-                    {weightUnavailable
-                      ? <Text className='editor-field__hint'>自重动作</Text>
-                      : (
-                        <View className='editor-field__input-group'>
-                          <Input
-                            className='editor-field__input'
-                            type='digit'
-                            value={rawValue ?? (typeof value === 'number' ? String(value) : '')}
-                            placeholder={field === 'targetWeightKg' ? '先校准' : ''}
-                            disabled={lock === 'RULE_LOCKED'}
-                            onInput={(event) => edit(day.code, exercise.exerciseCode, field, event.detail.value)}
-                          />
-                          {fieldErrors[path] && <Text className='editor-field__error'>{fieldErrors[path]}</Text>}
-                        </View>
-                      )}
-                    {weightUnavailable
-                      ? <Text className='editor-field__lock'>无需锁定</Text>
-                      : lock === 'RULE_LOCKED'
-                      ? <Text className='editor-field__lock'>安全边界固定</Text>
-                      : field === 'targetWeightKg' && typeof value !== 'number'
-                        ? <Text className='editor-field__lock'>填写后可锁定</Text>
-                      : <Button
-                          size='mini'
-                          className='secondary-action'
-                          disabled={Boolean(fieldErrors[path])}
-                          onClick={() => setEditor(application.setPlanFieldLock(path, lock === 'USER_LOCKED' ? 'UNLOCKED' : 'USER_LOCKED'))}
-                        >{lock === 'USER_LOCKED' ? '解锁' : '锁定'}</Button>}
+
+          <View className='editor-exercise-list' aria-label={`${expandedDay.name}动作列表`}>
+            {expandedDay.exercises.map((exercise) => {
+              const selected = exercise.exerciseCode === activeExercise?.exerciseCode
+              return (
+                <Button
+                  key={exercise.exerciseCode}
+                  className={`editor-exercise-summary ${selected ? 'editor-exercise-summary--active' : ''}`.trim()}
+                  aria-label={`${selected ? '当前动作，' : ''}${exerciseDisplayName(exercise.exerciseCode)}，${exercise.workSets}组，每组${exercise.repMin}到${exercise.repMax}次`}
+                  onClick={() => {
+                    setExpandedExerciseKey(`${expandedDay.code}:${exercise.exerciseCode}`)
+                    setPendingRemove('')
+                    setOptionPicker(null)
+                  }}
+                >
+                  <Text className='editor-exercise-summary__name'>{exerciseDisplayName(exercise.exerciseCode)}</Text>
+                  <Text className='code-label'>{exercise.workSets} 组 · {exercise.repMin}～{exercise.repMax} 次</Text>
+                </Button>
+              )
+            })}
+          </View>
+
+          {activeExercise && (() => {
+            const exercise = activeExercise
+            const exerciseIndex = expandedDay.exercises.indexOf(exercise)
+            return (
+              <View className='editor-exercise'>
+                <View className='editor-exercise__heading'>
+                  <View>
+                    <Text className='section-title'>{exerciseDisplayName(exercise.exerciseCode)}</Text>
+                    <Text className='code-label'>训练处方与锁定项</Text>
                   </View>
-                )
-              })}
-            </View>
-          ))}
-          <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openExerciseOptions(day.code)}>添加动作</Button>
-          {optionPicker?.dayCode === day.code && (
+                  <View className='editor-structure-actions'>
+                    {exerciseIndex > 0 && (
+                      <Button className='editor-structure-action' onClick={() => applyStructureEdit(() => application.movePlanExercise(expandedDay.code, exercise.exerciseCode, -1))}>上移</Button>
+                    )}
+                    {exerciseIndex < expandedDay.exercises.length - 1 && (
+                      <Button className='editor-structure-action' onClick={() => applyStructureEdit(() => application.movePlanExercise(expandedDay.code, exercise.exerciseCode, 1))}>下移</Button>
+                    )}
+                    <Button className='editor-structure-action' loading={busy} onClick={() => void openExerciseOptions(expandedDay.code, exercise.exerciseCode)}>替换</Button>
+                    <Button
+                      className={`editor-structure-action ${pendingRemove === `${expandedDay.code}:${exercise.exerciseCode}` ? 'danger-action' : ''}`.trim()}
+                      onClick={() => {
+                        const key = `${expandedDay.code}:${exercise.exerciseCode}`
+                        if (pendingRemove !== key) return setPendingRemove(key)
+                        applyStructureEdit(() => application.removePlanExercise(expandedDay.code, exercise.exerciseCode))
+                      }}
+                    >{pendingRemove === `${expandedDay.code}:${exercise.exerciseCode}` ? '确认删除' : '删除'}</Button>
+                  </View>
+                </View>
+                {editableFields.map((field) => {
+                  const path = numericFieldPath(expandedDay.code, exercise.exerciseCode, field)
+                  const lock = editor.locks[path] ?? 'UNLOCKED'
+                  const weightUnavailable = field === 'targetWeightKg' && exercise.weightStatus === 'BODYWEIGHT'
+                  const value = exercise[field]
+                  const rawValue = rawValues[path]
+                  return (
+                    <View key={field} className='editor-field'>
+                      <Text>{fieldLabels[field]}</Text>
+                      {weightUnavailable
+                        ? <Text className='editor-field__hint'>自重动作</Text>
+                        : (
+                          <View className='editor-field__input-group'>
+                            <Input
+                              className='editor-field__input'
+                              type='digit'
+                              value={rawValue ?? (typeof value === 'number' ? String(value) : '')}
+                              placeholder={field === 'targetWeightKg' ? '先校准' : ''}
+                              disabled={lock === 'RULE_LOCKED'}
+                              aria-label={`${exerciseDisplayName(exercise.exerciseCode)}${fieldLabels[field]}`}
+                              onInput={(event) => edit(expandedDay.code, exercise.exerciseCode, field, event.detail.value)}
+                            />
+                            {fieldErrors[path] && <Text className='editor-field__error'>{fieldErrors[path]}</Text>}
+                          </View>
+                        )}
+                      {weightUnavailable
+                        ? <Text className='editor-field__lock'>无需锁定</Text>
+                        : lock === 'RULE_LOCKED'
+                        ? <Text className='editor-field__lock'>安全边界固定</Text>
+                        : field === 'targetWeightKg' && typeof value !== 'number'
+                          ? <Text className='editor-field__lock'>填写后可锁定</Text>
+                        : <Button
+                            className='secondary-action editor-lock-action'
+                            disabled={Boolean(fieldErrors[path])}
+                            aria-label={`${lock === 'USER_LOCKED' ? '解锁' : '锁定'}${exerciseDisplayName(exercise.exerciseCode)}${fieldLabels[field]}`}
+                            onClick={() => setEditor(application.setPlanFieldLock(path, lock === 'USER_LOCKED' ? 'UNLOCKED' : 'USER_LOCKED'))}
+                          >{lock === 'USER_LOCKED' ? '解锁' : '锁定'}</Button>}
+                    </View>
+                  )
+                })}
+              </View>
+            )
+          })()}
+
+          <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openExerciseOptions(expandedDay.code)}>添加动作</Button>
+          {optionPicker?.dayCode === expandedDay.code && (
             <View className='exercise-option-panel'>
               <View className='editor-exercise__heading'>
                 <Text className='section-title'>{optionPicker.replacing ? '选择替换动作' : '选择新增动作'}</Text>
-                <Button size='mini' onClick={() => setOptionPicker(null)}>取消</Button>
+                <Button onClick={() => setOptionPicker(null)}>取消</Button>
               </View>
               {exerciseOptions.map((option) => (
                 <Button key={option.exerciseCode} className='exercise-option' onClick={() => chooseExercise(option)}>
                   <Text>{option.name}</Text>
                   <Text className='code-label'>{option.workSets} 组 · {option.repMin}～{option.repMax} 次 · 休息 {option.restSeconds} 秒</Text>
+                  {'matchReason' in option && (
+                    <Text className='code-label'>同动作模式、同主要肌群、同难度；原训练处方保持不变</Text>
+                  )}
                 </Button>
               ))}
             </View>
           )}
         </View>
-      ))}
+      )}
 
       <View className='card'>
         <Button className='secondary-action editor-add-action' loading={busy} onClick={() => void openDayOptions()}>恢复训练日</Button>
@@ -297,7 +434,7 @@ export default function PlanEditorPage() {
           <View className='exercise-option-panel'>
             <View className='editor-exercise__heading'>
               <Text className='section-title'>选择训练日</Text>
-              <Button size='mini' onClick={() => setShowDayOptions(false)}>取消</Button>
+              <Button onClick={() => setShowDayOptions(false)}>取消</Button>
             </View>
             {dayOptions.map((option) => (
               <Button key={option.code} className='exercise-option' onClick={() => applyStructureEdit(() => application.addPlanDay(option))}>
@@ -327,12 +464,23 @@ export default function PlanEditorPage() {
       {editor.warningConfirmationToken && !editor.warningConfirmed && (
         <View className='warning-box'>服务端返回警告。请阅读上述问题并显式确认，第二次保存将携带一次性确认 token。</View>
       )}
+      <View className='card editor-advanced-tools'>
+        <Button
+          className='editor-advanced-toggle'
+          aria-label={`${showAdvancedTools ? '收起' : '展开'}高级检查与调整`}
+          onClick={() => setShowAdvancedTools((visible) => !visible)}
+        >{showAdvancedTools ? '收起高级检查与调整' : '高级检查与调整'}</Button>
+        {showAdvancedTools && (
+          <View className='editor-advanced-actions'>
+            <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.validateEditor())}>校验计划</Button>
+            <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.previewRebalance())}>查看系统调整建议</Button>
+          </View>
+        )}
+      </View>
       <View className='action-row action-row--sticky'>
-        <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.validateEditor())}>校验</Button>
-        <Button className='secondary-action' loading={busy} onClick={() => void run(() => application.previewRebalance())}>查看系统调整建议</Button>
         {editor.warningConfirmationToken && !editor.warningConfirmed
-          ? <Button className='primary-action' onClick={() => setEditor(application.confirmEditorWarnings())}>确认警告</Button>
-          : <Button className='primary-action' loading={busy} onClick={() => void save()}>保存新版本</Button>}
+          ? <Button className='primary-action editor-sticky-primary' onClick={() => setEditor(application.confirmEditorWarnings())}>确认警告</Button>
+          : <Button className='primary-action editor-sticky-primary' loading={busy} onClick={() => void save()}>保存新版本</Button>}
       </View>
     </View>
   )

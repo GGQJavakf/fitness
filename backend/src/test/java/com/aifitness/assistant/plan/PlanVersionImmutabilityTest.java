@@ -109,6 +109,52 @@ class PlanVersionImmutabilityTest {
     }
 
     @Test
+    void activatingANewCandidateAppendsAnImmutableVersionAndReplaysIt() {
+        PlanDraft original = draft(90);
+        PlanDraft regenerated = draft(150);
+        StubPolicy policy = new StubPolicy(original);
+        PlanVersionService service = service(policy);
+
+        TrainingPlan first = service.createInitial(USER, "candidate-original");
+        policy.candidate(regenerated);
+        TrainingPlan replacement = service.createInitial(USER, "candidate-regenerated");
+        UUID replacementVersionId = replacement.activeVersion().id();
+
+        assertThat(replacement.id()).isEqualTo(first.id());
+        assertThat(replacement.activeVersionNumber()).isEqualTo(2);
+        assertThat(replacement.activeVersion().sourceType())
+                .isEqualTo(TrainingPlanVersion.SourceType.USER_EDIT);
+        assertThat(replacement.activeVersion().plan()).isEqualTo(regenerated);
+        assertThat(service.getVersion(USER, first.id(), 1).plan()).isEqualTo(original);
+
+        policy.rejectCandidateLookups();
+        TrainingPlan replay = service.createInitial(USER, "candidate-regenerated");
+
+        assertThat(replay.activeVersionNumber()).isEqualTo(2);
+        assertThat(replay.activeVersion().id()).isEqualTo(replacementVersionId);
+        assertThat(replay.versions()).hasSize(2);
+    }
+
+    @Test
+    void regeneratedCandidatePreservesExistingUserLockedValues() {
+        String lockedPath = "/days/DAY_A/exercises/SQUAT/restSeconds";
+        PlanDraft original = new PlanDraft(
+                "FULL_BODY_3D", "全身训练", draft(90).days(),
+                Map.of(lockedPath, FieldLock.Status.USER_LOCKED));
+        StubPolicy policy = new StubPolicy(original);
+        PlanVersionService service = service(policy);
+        TrainingPlan first = service.createInitial(USER, "candidate-locked-original");
+        policy.candidate(draft(150));
+
+        TrainingPlan replacement = service.createInitial(USER, "candidate-locked-regenerated");
+
+        assertThat(replacement.id()).isEqualTo(first.id());
+        assertThat(replacement.activeVersion().plan().valueAt(lockedPath)).contains(90);
+        assertThat(replacement.activeVersion().plan().locks())
+                .containsEntry(lockedPath, FieldLock.Status.USER_LOCKED);
+    }
+
+    @Test
     void stableFieldPathsRequireUniqueSlashFreeCodes() {
         PlanDraft.Day day = draft(90).days().getFirst();
 
@@ -157,7 +203,8 @@ class PlanVersionImmutabilityTest {
     }
 
     static final class StubPolicy implements PlanVersionService.PlanPolicy {
-        private final PlanDraft candidate;
+        private PlanDraft candidate;
+        private boolean candidateLookupsRejected;
         private List<PlanVersionService.ValidationIssue> issues = List.of();
         private RuleReference activeRules = RULES;
 
@@ -167,6 +214,9 @@ class PlanVersionImmutabilityTest {
 
         @Override
         public PlanVersionService.CandidatePlan candidate(AuthenticatedUserId user, String candidateId) {
+            if (candidateLookupsRejected) {
+                throw new AssertionError("candidate replay must not require the expired candidate cache entry");
+            }
             return new PlanVersionService.CandidatePlan(candidateId, candidate, RULES);
         }
 
@@ -187,6 +237,14 @@ class PlanVersionImmutabilityTest {
 
         void activeRules(RuleReference value) {
             activeRules = value;
+        }
+
+        void candidate(PlanDraft value) {
+            candidate = value;
+        }
+
+        void rejectCandidateLookups() {
+            candidateLookupsRejected = true;
         }
     }
 }

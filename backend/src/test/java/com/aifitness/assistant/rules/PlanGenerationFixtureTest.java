@@ -19,8 +19,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PlanGenerationFixtureTest {
 
-    private static final RuleReference REFERENCE = new RuleReference("1.2.0", "1.0.0", "1.0.0");
-    private static final PlanRulePolicy POLICY = policy(8, 12, 48);
+    private static final RuleReference REFERENCE = new RuleReference("1.6.0", "1.0.0", "1.0.0");
+    private static final PlanRulePolicy POLICY = policy(2, 12, 48);
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Test
@@ -74,8 +74,15 @@ class PlanGenerationFixtureTest {
             PlanGenerationEngine.GenerationResult result =
                     engine.generate(input(
                             frequency, 60, Set.of("SQUAT", "ROW", "PRESS", "HINGE", "CORE"), Map.of()));
-            assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.CANDIDATE_READY);
-            assertThat(result.candidate().orElseThrow().days()).hasSize(frequency);
+            if (result.status() == PlanGenerationEngine.GenerationStatus.CANDIDATE_READY) {
+                assertThat(result.candidate().orElseThrow().days()).hasSize(frequency);
+            } else {
+                assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.NO_CANDIDATE);
+                assertThat(result.candidate()).isEmpty();
+                assertThat(result.issues()).anyMatch(issue -> java.util.Set.of(
+                                "RECOVERY_WINDOW_TOO_SHORT", "INSUFFICIENT_ELIGIBLE_EXERCISES")
+                        .contains(issue.reasonCode()));
+            }
         });
     }
 
@@ -113,8 +120,10 @@ class PlanGenerationFixtureTest {
         PlanGenerationEngine.Template equipment = repeatedTemplate(
                 "Z_EQUIPMENT_2_DAY", 2, equipmentExercise);
         Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
-                "DUMBBELL_SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS")),
-                "BODYWEIGHT_SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS")));
+                "DUMBBELL_SQUAT",
+                new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS"), false),
+                "BODYWEIGHT_SQUAT",
+                new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS"), true));
 
         PlanGenerationEngine.GenerationResult result = engine().generate(
                 new PlanGenerationEngine.GenerationInput(
@@ -124,7 +133,7 @@ class PlanGenerationFixtureTest {
     }
 
     @Test
-    void fallbackUsesFortyFiveMinutesAsABudgetWithoutAnExperienceCountQuota() {
+    void fallbackComposesFourOrFiveExercisesWithinTheCompleteFortyFiveMinuteBudget() {
         PlanGenerationEngine.Template template = threeExerciseTemplate();
         Map<String, PlanValidationEngine.ExerciseFacts> facts = personalizedFacts();
 
@@ -145,6 +154,13 @@ class PlanGenerationFixtureTest {
         assertThat(advanced.candidate()).isPresent();
         assertThat(advanced.candidate().orElseThrow().days())
                 .containsExactlyElementsOf(beginner.candidate().orElseThrow().days());
+        assertThat(beginner.candidate().orElseThrow().days()).allSatisfy(day -> {
+            assertThat(day.exercises().size()).isBetween(4, 5);
+            int estimatedSeconds = 180 + (2 * 30) + day.exercises().stream()
+                    .mapToInt(exercise -> exercise.workSets() * (45 + exercise.restSeconds()) + 75)
+                    .sum();
+            assertThat(estimatedSeconds).isLessThanOrEqualTo(45 * 60);
+        });
         assertThat(beginner.issues())
                 .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
                 .doesNotContain("SESSION_DURATION_EXCEEDED");
@@ -322,6 +338,155 @@ class PlanGenerationFixtureTest {
     }
 
     @Test
+    void rejectsAProfessionalPushDayWithDuplicateShoulderPressesAnUnrelatedSquatAndNoDirectTriceps() {
+        PlanRulePolicy professional = policy(1, 12, 48);
+        PlanValidationEngine validator = new PlanValidationEngine(professional);
+        PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
+                "UNPROFESSIONAL_PUSH",
+                "重复肩推推日",
+                List.of(new PlanGenerationEngine.Day(
+                        "PUSH_A",
+                        "推 A",
+                        List.of(
+                                exercise("BENCH_PRESS"),
+                                exercise("OVERHEAD_PRESS"),
+                                exercise("SEATED_PRESS"),
+                                exercise("SQUAT")))),
+                REFERENCE);
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "BENCH_PRESS", new PlanValidationEngine.ExerciseFacts(
+                        "HORIZONTAL_PUSH", Set.of("CHEST", "TRICEPS")),
+                "OVERHEAD_PRESS", new PlanValidationEngine.ExerciseFacts(
+                        "VERTICAL_PUSH", Set.of("SHOULDERS", "TRICEPS")),
+                "SEATED_PRESS", new PlanValidationEngine.ExerciseFacts(
+                        "VERTICAL_PUSH", Set.of("SHOULDERS", "TRICEPS")),
+                "SQUAT", new PlanValidationEngine.ExerciseFacts(
+                        "SQUAT", Set.of("QUADRICEPS", "GLUTES")));
+
+        assertThat(validator.validate(candidate, 45, facts))
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .contains(
+                        "DUPLICATE_MOVEMENT_PATTERN",
+                        "SESSION_FOCUS_MISMATCH",
+                        "SESSION_REQUIRED_PATTERN_MISSING");
+    }
+
+    @Test
+    void acceptsPushAndPullDaysWithOneCompoundPerPatternAndDirectArmWork() {
+        PlanRulePolicy professional = policy(1, 12, 48);
+        PlanValidationEngine validator = new PlanValidationEngine(professional);
+        PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
+                "PROFESSIONAL_UPPER",
+                "专业推拉",
+                List.of(
+                        new PlanGenerationEngine.Day("PUSH_A", "推 A", List.of(
+                                exercise("BENCH_PRESS"), exercise("OVERHEAD_PRESS"),
+                                exercise("LATERAL_RAISE"), exercise("TRICEPS_EXTENSION"))),
+                        new PlanGenerationEngine.Day("PULL_A", "拉 A", List.of(
+                                exercise("ROW"), exercise("PULLDOWN"),
+                                exercise("REVERSE_FLY"), exercise("BICEPS_CURL")))),
+                REFERENCE);
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "BENCH_PRESS", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PUSH", Set.of("CHEST", "TRICEPS")),
+                "OVERHEAD_PRESS", new PlanValidationEngine.ExerciseFacts("VERTICAL_PUSH", Set.of("SHOULDERS", "TRICEPS")),
+                "LATERAL_RAISE", new PlanValidationEngine.ExerciseFacts("SHOULDER_ABDUCTION", Set.of("SHOULDERS")),
+                "TRICEPS_EXTENSION", new PlanValidationEngine.ExerciseFacts("ELBOW_EXTENSION", Set.of("TRICEPS")),
+                "ROW", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PULL", Set.of("BACK", "BICEPS")),
+                "PULLDOWN", new PlanValidationEngine.ExerciseFacts("VERTICAL_PULL", Set.of("LATS", "BICEPS")),
+                "REVERSE_FLY", new PlanValidationEngine.ExerciseFacts("SHOULDER_HORIZONTAL_ABDUCTION", Set.of("BACK", "SHOULDERS")),
+                "BICEPS_CURL", new PlanValidationEngine.ExerciseFacts("ELBOW_FLEXION", Set.of("BICEPS")));
+
+        assertThat(validator.validate(candidate, 45, facts))
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .doesNotContain(
+                        "DUPLICATE_MOVEMENT_PATTERN",
+                        "SESSION_FOCUS_MISMATCH",
+                        "SESSION_REQUIRED_PATTERN_MISSING");
+    }
+
+    @Test
+    void rejectsAFullBodyWeekThatOmitsAvailableDirectBicepsAndTricepsWork() {
+        PlanRulePolicy professional = policy(1, 12, 48);
+        PlanValidationEngine validator = new PlanValidationEngine(professional);
+        PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
+                "FULL_BODY_WITHOUT_ARMS",
+                "缺少直接手臂训练",
+                List.of(
+                        new PlanGenerationEngine.Day("DAY_A", "全身 A", List.of(
+                                exercise("SQUAT"), exercise("BENCH_PRESS"),
+                                exercise("ROW"), exercise("CORE"))),
+                        new PlanGenerationEngine.Day("DAY_B", "全身 B", List.of(
+                                exercise("HINGE"), exercise("OVERHEAD_PRESS"),
+                                exercise("PULLDOWN"), exercise("CORE")))),
+                REFERENCE);
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("QUADRICEPS", "GLUTES")),
+                "HINGE", new PlanValidationEngine.ExerciseFacts("HINGE", Set.of("HAMSTRINGS", "GLUTES")),
+                "BENCH_PRESS", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PUSH", Set.of("CHEST")),
+                "OVERHEAD_PRESS", new PlanValidationEngine.ExerciseFacts("VERTICAL_PUSH", Set.of("SHOULDERS")),
+                "ROW", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PULL", Set.of("BACK")),
+                "PULLDOWN", new PlanValidationEngine.ExerciseFacts("VERTICAL_PULL", Set.of("BACK")),
+                "CORE", new PlanValidationEngine.ExerciseFacts("CORE", Set.of("CORE")),
+                "BICEPS_CURL", new PlanValidationEngine.ExerciseFacts("ELBOW_FLEXION", Set.of("BICEPS")),
+                "TRICEPS_EXTENSION", new PlanValidationEngine.ExerciseFacts("ELBOW_EXTENSION", Set.of("TRICEPS")));
+
+        assertThat(validator.validate(candidate, 45, facts))
+                .filteredOn(issue -> issue.reasonCode().equals("WEEKLY_DIRECT_ARM_PATTERN_MISSING"))
+                .extracting(PlanGenerationEngine.ValidationIssue::fieldPath)
+                .containsExactlyInAnyOrder(
+                        "/weeklyRequiredPatterns/ELBOW_FLEXION",
+                        "/weeklyRequiredPatterns/ELBOW_EXTENSION");
+    }
+
+    @Test
+    void rejectsAThreeDayFullBodyWeekThatOverusesShoulderPressesAndDirectArms() {
+        PlanValidationEngine validator = new PlanValidationEngine(professionalThreeDayPolicy());
+        PlanGenerationEngine.Candidate candidate = fullBodyCandidate(
+                "VISUALLY_UNBALANCED",
+                List.of(
+                        List.of("SQUAT_A", "VERTICAL_PUSH_A", "HORIZONTAL_PULL_A", "BICEPS_A", "TRICEPS_A"),
+                        List.of("HINGE_B", "HORIZONTAL_PUSH_B", "VERTICAL_PULL_B", "BICEPS_B", "TRICEPS_B"),
+                        List.of("SQUAT_C", "VERTICAL_PUSH_C", "HORIZONTAL_PULL_C", "BICEPS_C", "TRICEPS_C")));
+
+        assertThat(validator.validate(candidate, 45, professionalFullBodyFacts(candidate)))
+                .filteredOn(issue -> issue.reasonCode().startsWith("WEEKLY_MOVEMENT_PATTERN_"))
+                .extracting(
+                        PlanGenerationEngine.ValidationIssue::reasonCode,
+                        PlanGenerationEngine.ValidationIssue::fieldPath)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple(
+                                "WEEKLY_MOVEMENT_PATTERN_UNDERFILLED",
+                                "/weeklyMovementPatterns/HORIZONTAL_PUSH"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "WEEKLY_MOVEMENT_PATTERN_OVERFILLED",
+                                "/weeklyMovementPatterns/VERTICAL_PUSH"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "WEEKLY_MOVEMENT_PATTERN_OVERFILLED",
+                                "/weeklyMovementPatterns/ELBOW_FLEXION"),
+                        org.assertj.core.groups.Tuple.tuple(
+                                "WEEKLY_MOVEMENT_PATTERN_OVERFILLED",
+                                "/weeklyMovementPatterns/ELBOW_EXTENSION"));
+    }
+
+    @Test
+    void acceptsAThreeDayFullBodyWeekWithBalancedPressPullLowerAndDirectArmCoverage() {
+        PlanValidationEngine validator = new PlanValidationEngine(professionalThreeDayPolicy());
+        PlanGenerationEngine.Candidate candidate = fullBodyCandidate(
+                "PROFESSIONALLY_BALANCED",
+                List.of(
+                        List.of("SQUAT_A", "HORIZONTAL_PUSH_A", "HORIZONTAL_PULL_A", "BICEPS_A", "CORE_A"),
+                        List.of("HINGE_B", "VERTICAL_PUSH_B", "VERTICAL_PULL_B", "TRICEPS_B", "CORE_B"),
+                        List.of("SQUAT_C", "HINGE_C", "HORIZONTAL_PUSH_C", "HORIZONTAL_PULL_C", "CORE_C")));
+
+        assertThat(validator.validate(candidate, 45, professionalFullBodyFacts(candidate)))
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .doesNotContain(
+                        "WEEKLY_MOVEMENT_PATTERN_UNDERFILLED",
+                        "WEEKLY_MOVEMENT_PATTERN_OVERFILLED",
+                        "WEEKLY_DIRECT_ARM_PATTERN_MISSING");
+    }
+
+    @Test
     void validatesRecoveryAcrossTheLastAndFirstDayBoundary() {
         PlanValidationEngine validator = new PlanValidationEngine(POLICY);
         PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
@@ -347,7 +512,33 @@ class PlanGenerationFixtureTest {
     }
 
     @Test
-    void acceptsDifferentExerciseCountsWhenBothFitTheFortyFiveMinuteBudget() {
+    void evaluationRejectsAPlanWithAnUnsafeRecoveryWindow() {
+        PlanGenerationEngine engine = new PlanGenerationEngine(new PlanValidationEngine(POLICY));
+        PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
+                "CYCLIC",
+                "跨周恢复",
+                List.of(
+                        day("A", "CORE_A"),
+                        day("B", "LEGS_B"),
+                        day("C", "BACK_C"),
+                        day("D", "CORE_D")),
+                REFERENCE);
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "CORE_A", new PlanValidationEngine.ExerciseFacts("CORE", Set.of("CORE")),
+                "LEGS_B", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS")),
+                "BACK_C", new PlanValidationEngine.ExerciseFacts("PULL", Set.of("BACK")),
+                "CORE_D", new PlanValidationEngine.ExerciseFacts("CORE", Set.of("CORE")));
+
+        PlanGenerationEngine.GenerationResult result = engine.evaluate(candidate, 30, facts, Map.of());
+
+        assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.NO_CANDIDATE);
+        assertThat(result.candidate()).isEmpty();
+        assertThat(result.issues())
+                .anyMatch(issue -> issue.reasonCode().equals("RECOVERY_WINDOW_TOO_SHORT"));
+    }
+
+    @Test
+    void rejectsAnUnderfilledFortyFiveMinuteCandidate() {
         PlanValidationEngine validator = new PlanValidationEngine(POLICY);
         PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
                 "EDITED",
@@ -360,7 +551,92 @@ class PlanGenerationFixtureTest {
 
         assertThat(validator.validate(candidate, 45, facts))
                 .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
-                .doesNotContain("SESSION_TARGET_UNDERFILLED");
+                .contains("SESSION_TARGET_UNDERFILLED");
+    }
+
+    @Test
+    void reportsInsufficientEligibleExercisesInsteadOfRepeatingAnUnsafePattern() {
+        PlanGenerationEngine.Template template = threeExerciseTemplate();
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS"), false),
+                "ROW", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PULL", Set.of("BACK"), false),
+                "PRESS", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PUSH", Set.of("CHEST"), false));
+
+        PlanGenerationEngine.GenerationResult result = engine().generate(
+                personalizedInput(
+                        template,
+                        facts,
+                        PlanGenerationEngine.ExperienceLevel.BEGINNER,
+                        PlanGenerationEngine.FitnessGoal.GENERAL_FITNESS));
+
+        assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.NO_CANDIDATE);
+        assertThat(result.candidate()).isEmpty();
+        assertThat(result.issues())
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .contains("INSUFFICIENT_ELIGIBLE_EXERCISES");
+    }
+
+    @Test
+    void usesADistinctSafeAccessoryWhenTheMovementPatternAlreadyExists() {
+        PlanGenerationEngine.Template template = threeExerciseTemplate();
+        Map<String, PlanValidationEngine.ExerciseFacts> facts = Map.of(
+                "SQUAT", new PlanValidationEngine.ExerciseFacts("SQUAT", Set.of("LEGS"), false),
+                "BICEPS_ACCESSORY", new PlanValidationEngine.ExerciseFacts(
+                        "ELBOW_FLEXION", Set.of("BICEPS"), false),
+                "ROW", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PULL", Set.of("BACK"), false),
+                "PRESS", new PlanValidationEngine.ExerciseFacts("HORIZONTAL_PUSH", Set.of("CHEST"), false));
+
+        PlanGenerationEngine.GenerationResult result = engine().generate(
+                personalizedInput(
+                        template,
+                        facts,
+                        PlanGenerationEngine.ExperienceLevel.BEGINNER,
+                        PlanGenerationEngine.FitnessGoal.GENERAL_FITNESS));
+
+        assertThat(result.status()).isEqualTo(PlanGenerationEngine.GenerationStatus.CANDIDATE_READY);
+        assertThat(result.candidate().orElseThrow().days()).allSatisfy(day -> {
+            assertThat(day.exercises()).hasSize(4);
+            assertThat(day.exercises())
+                    .extracting(PlanGenerationEngine.Exercise::exerciseCode)
+                    .doesNotHaveDuplicates();
+        });
+    }
+
+    @Test
+    void durationValidationIncludesGeneralAndRampWarmups() {
+        PlanValidationEngine validator = new PlanValidationEngine(POLICY);
+        assertThat(POLICY.duration().sessionWarmupSeconds(false)).isEqualTo(180);
+        assertThat(POLICY.duration().sessionWarmupSeconds(true)).isEqualTo(240);
+
+        List<PlanGenerationEngine.Exercise> exercises = List.of("SQUAT", "ROW", "PRESS", "HINGE").stream()
+                .map(code -> new PlanGenerationEngine.Exercise(
+                        code, 4, 8, 12, 100, PlanGenerationEngine.WeightStatus.KNOWN))
+                .toList();
+        PlanGenerationEngine.Candidate candidate = new PlanGenerationEngine.Candidate(
+                "WARMUP_BUDGET",
+                "完整时长预算",
+                List.of(
+                        new PlanGenerationEngine.Day("A", "A", exercises),
+                        new PlanGenerationEngine.Day("B", "B", exercises)),
+                REFERENCE);
+
+        assertThat(validator.validate(candidate, 45, fixtureFacts(candidate)))
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .contains("SESSION_DURATION_EXCEEDED");
+
+        List<PlanGenerationEngine.Exercise> withinBudgetExercises = exercises.stream()
+                .map(exercise -> new PlanGenerationEngine.Exercise(
+                        exercise.exerciseCode(), 3, 8, 12, 120, PlanGenerationEngine.WeightStatus.KNOWN))
+                .toList();
+        PlanGenerationEngine.Candidate withinBudget = new PlanGenerationEngine.Candidate(
+                "WARMUP_BUDGET_ONCE",
+                "热身仅按训练日计入一次",
+                List.of(new PlanGenerationEngine.Day("A", "A", withinBudgetExercises)),
+                REFERENCE);
+
+        assertThat(validator.validate(withinBudget, 45, fixtureFacts(withinBudget)))
+                .extracting(PlanGenerationEngine.ValidationIssue::reasonCode)
+                .doesNotContain("SESSION_DURATION_EXCEEDED");
     }
 
     private static PlanGenerationEngine engine() {
@@ -372,6 +648,11 @@ class PlanGenerationFixtureTest {
                 .map(exercise -> new PlanGenerationEngine.Exercise(
                         exercise, 4, 8, 12, 90, PlanGenerationEngine.WeightStatus.KNOWN))
                 .toList());
+    }
+
+    private static PlanGenerationEngine.Exercise exercise(String code) {
+        return new PlanGenerationEngine.Exercise(
+                code, 2, 8, 12, 75, PlanGenerationEngine.WeightStatus.KNOWN);
     }
 
     private static PlanGenerationEngine.Template repeatedTemplate(
@@ -397,12 +678,72 @@ class PlanGenerationFixtureTest {
 
     private static PlanRulePolicy policy(int maximumPatternOccurrences, int maximumMuscleSets, int recoveryHours) {
         return new PlanRulePolicy(
-                "1.2.0",
+                "1.6.0",
                 new PlanRulePolicy.PlanLimits(2, 6, 8, 90),
                 new PlanRulePolicy.Prescription(2, 4, 5, 15),
                 new PlanRulePolicy.Rest(45, 240),
                 new PlanRulePolicy.Duration(45, 75),
                 new PlanRulePolicy.Balance(maximumPatternOccurrences, maximumMuscleSets, recoveryHours));
+    }
+
+    private static PlanRulePolicy professionalThreeDayPolicy() {
+        return new PlanRulePolicy(
+                "1.6.0",
+                new PlanRulePolicy.PlanLimits(2, 6, 8, 90),
+                new PlanRulePolicy.Prescription(2, 4, 5, 15),
+                new PlanRulePolicy.Rest(45, 240),
+                new PlanRulePolicy.Duration(45, 75),
+                new PlanRulePolicy.Balance(
+                        1,
+                        12,
+                        48,
+                        List.of(new PlanRulePolicy.WeeklyMovementPatternTargetSet(
+                                3,
+                                List.of(
+                                        new PlanRulePolicy.MovementPatternSessionTarget("SQUAT", 2, 3),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("HINGE", 1, 2),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("HORIZONTAL_PUSH", 2, 2),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("VERTICAL_PUSH", 1, 1),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("HORIZONTAL_PULL", 2, 2),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("VERTICAL_PULL", 1, 1),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("ELBOW_FLEXION", 1, 2),
+                                        new PlanRulePolicy.MovementPatternSessionTarget("ELBOW_EXTENSION", 1, 2))))));
+    }
+
+    private static PlanGenerationEngine.Candidate fullBodyCandidate(
+            String code,
+            List<List<String>> exerciseCodesByDay) {
+        List<PlanGenerationEngine.Day> days = IntStream.range(0, exerciseCodesByDay.size())
+                .mapToObj(index -> new PlanGenerationEngine.Day(
+                        "DAY_" + (index + 1),
+                        "训练日 " + (index + 1),
+                        exerciseCodesByDay.get(index).stream().map(PlanGenerationFixtureTest::exercise).toList()))
+                .toList();
+        return new PlanGenerationEngine.Candidate(code, code, days, REFERENCE);
+    }
+
+    private static Map<String, PlanValidationEngine.ExerciseFacts> professionalFullBodyFacts(
+            PlanGenerationEngine.Candidate candidate) {
+        return candidate.days().stream()
+                .flatMap(day -> day.exercises().stream())
+                .map(PlanGenerationEngine.Exercise::exerciseCode)
+                .collect(java.util.stream.Collectors.toMap(
+                        code -> code,
+                        code -> new PlanValidationEngine.ExerciseFacts(
+                                professionalPattern(code), Set.of("MUSCLE_" + code))));
+    }
+
+    private static String professionalPattern(String exerciseCode) {
+        if (exerciseCode.startsWith("SQUAT")) return "SQUAT";
+        if (exerciseCode.startsWith("HINGE")) return "HINGE";
+        if (exerciseCode.startsWith("HORIZONTAL_PUSH")) return "HORIZONTAL_PUSH";
+        if (exerciseCode.startsWith("VERTICAL_PUSH")) return "VERTICAL_PUSH";
+        if (exerciseCode.startsWith("HORIZONTAL_PULL")) return "HORIZONTAL_PULL";
+        if (exerciseCode.startsWith("VERTICAL_PULL")) return "VERTICAL_PULL";
+        if (exerciseCode.startsWith("BICEPS")) return "ELBOW_FLEXION";
+        if (exerciseCode.startsWith("TRICEPS")) return "ELBOW_EXTENSION";
+        if (exerciseCode.startsWith("CORE")) return "CORE";
+        throw new IllegalArgumentException("unknown professional test exercise: " + exerciseCode);
     }
 
     private static PlanGenerationEngine.Candidate fixtureCandidate(JsonNode input) {

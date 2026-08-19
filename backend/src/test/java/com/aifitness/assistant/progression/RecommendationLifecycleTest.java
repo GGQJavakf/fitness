@@ -132,8 +132,8 @@ class RecommendationLifecycleTest {
                 recommended,
                 Optional.of(new BigDecimal("42.5")),
                 Optional.of(new BigDecimal("42.5")),
-                Optional.of("ADD_ONE_MIN_INCREMENT"),
-                List.of(new BigDecimal("2.5")),
+                Optional.of("NEXT_AVAILABLE_LEVEL"),
+                List.of(new BigDecimal("40"), new BigDecimal("42.5"), new BigDecimal("45")),
                 "double-progression-v1");
     }
 }

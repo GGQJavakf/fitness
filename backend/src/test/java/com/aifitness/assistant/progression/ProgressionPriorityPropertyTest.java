@@ -18,7 +18,9 @@ class ProgressionPriorityPropertyTest {
     private static final ProgressionEngine.EnginePolicy POLICY =
             new ProgressionEngine.EnginePolicy("double-progression-v1", new BigDecimal("0.05"));
     private static final EquipmentRoundingPolicy EQUIPMENT =
-            new EquipmentRoundingPolicy("KG", List.of(new BigDecimal("2.5")));
+            new EquipmentRoundingPolicy("KG", List.of(
+                    new BigDecimal("35"), new BigDecimal("37.5"), new BigDecimal("40"),
+                    new BigDecimal("42.5"), new BigDecimal("45")));
 
     @Test
     void eachHigherPriorityReviewSignalOverridesEveryLowerPrioritySignalAndStrongPerformance() {

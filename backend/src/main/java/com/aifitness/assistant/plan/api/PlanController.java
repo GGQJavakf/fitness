@@ -54,7 +54,7 @@ public final class PlanController {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
-        TrainingPlan plan = versions.createInitial(user, request.candidateId());
+        TrainingPlan plan = versions.createInitial(user, validCandidateId(request.candidateId()));
         return ResponseEntity.status(HttpStatus.CREATED).body(response(ActivePlanData.from(plan)));
     }
 
@@ -77,6 +77,18 @@ public final class PlanController {
             @PathVariable UUID planId,
             @RequestParam String dayCode) {
         return response(new ExerciseOptionListData(exerciseOptions.list(user, planId, dayCode)));
+    }
+
+    @GetMapping("/{planId}/exercise-replacements")
+    public ApiResponse<ExerciseReplacementOptionListData> exerciseReplacements(
+            AuthenticatedUserId user,
+            @PathVariable UUID planId,
+            @RequestParam String dayCode,
+            @RequestParam String sourceExerciseCode) {
+        return response(new ExerciseReplacementOptionListData(exerciseOptions
+                .listReplacements(user, planId, dayCode, sourceExerciseCode).stream()
+                .map(ExerciseReplacementOptionData::from)
+                .toList()));
     }
 
     @GetMapping("/{planId}/day-options")
@@ -121,6 +133,20 @@ public final class PlanController {
         return Map.copyOf(locks);
     }
 
+    private static String validCandidateId(String value) {
+        if (value == null || value.length() != 36) {
+            throw new IllegalArgumentException("candidateId must be a canonical UUID");
+        }
+        try {
+            if (!UUID.fromString(value).toString().equals(value)) {
+                throw new IllegalArgumentException("candidateId must be a canonical UUID");
+            }
+        } catch (IllegalArgumentException invalid) {
+            throw new IllegalArgumentException("candidateId must be a canonical UUID");
+        }
+        return value;
+    }
+
     private <T> ApiResponse<T> response(T data) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {
@@ -134,6 +160,33 @@ public final class PlanController {
     public record ExerciseOptionListData(List<PlanExerciseOptionService.Option> items) {
         public ExerciseOptionListData {
             items = List.copyOf(items);
+        }
+    }
+
+    public record ExerciseReplacementOptionListData(List<ExerciseReplacementOptionData> items) {
+        public ExerciseReplacementOptionListData {
+            items = List.copyOf(items);
+        }
+    }
+
+    public record ExerciseReplacementOptionData(
+            String exerciseCode,
+            String name,
+            int workSets,
+            int repMin,
+            int repMax,
+            int restSeconds,
+            PlanDraft.WeightStatus weightStatus,
+            @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal targetWeightKg,
+            String movementPattern,
+            List<String> primaryMuscles,
+            List<String> equipment,
+            PlanExerciseOptionService.MatchReason matchReason) {
+        static ExerciseReplacementOptionData from(PlanExerciseOptionService.ReplacementOption option) {
+            return new ExerciseReplacementOptionData(
+                    option.exerciseCode(), option.name(), option.workSets(), option.repMin(), option.repMax(),
+                    option.restSeconds(), option.weightStatus(), option.targetWeightKg().orElse(null),
+                    option.movementPattern(), option.primaryMuscles(), option.equipment(), option.matchReason());
         }
     }
 
@@ -193,6 +246,7 @@ public final class PlanController {
 
     public record PlanData(
             String templateCode,
+            PlanDraft.TrainingSplit trainingSplit,
             String name,
             List<DayData> days,
             Map<String, FieldLock.Status> locks) {
@@ -201,13 +255,14 @@ public final class PlanController {
                 throw new IllegalArgumentException("plan days are required");
             }
             return new PlanDraft(
-                    templateCode, name, days.stream().map(DayData::toDomain).toList(),
+                    templateCode, trainingSplit, name, days.stream().map(DayData::toDomain).toList(),
                     Map.of());
         }
 
         static PlanData from(PlanDraft plan) {
             return new PlanData(
-                    plan.templateCode(), plan.name(), plan.days().stream().map(DayData::from).toList(), plan.locks());
+                    plan.templateCode(), plan.trainingSplit(), plan.name(),
+                    plan.days().stream().map(DayData::from).toList(), plan.locks());
         }
     }
 

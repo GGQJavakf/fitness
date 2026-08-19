@@ -3,12 +3,153 @@ components:
     SessionStatus:
       type: string
       enum: [CREATED, IN_PROGRESS, PAUSED, COMPLETING, COMPLETED, ABORTED]
+    WorkoutRecoveryDecision:
+      type: string
+      enum: [READY, CONFIRMATION_REQUIRED]
+    AffectedMuscleRecoveryData:
+      type: object
+      additionalProperties: false
+      required: [muscleGroup, elapsedHours, minimumRecoveryHours, lastCompletedAt]
+      properties:
+        muscleGroup: {type: string, minLength: 1}
+        elapsedHours: {type: integer, format: int64, minimum: 0}
+        minimumRecoveryHours: {type: integer, minimum: 1}
+        lastCompletedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    WorkoutRecoveryCheckData:
+      type: object
+      additionalProperties: false
+      required: [decision, policyVersion, checkedAt, minimumRecoveryHours, affectedMuscles]
+      properties:
+        decision: {$ref: '#/components/schemas/WorkoutRecoveryDecision'}
+        policyVersion: {type: string, minLength: 1}
+        checkedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        minimumRecoveryHours: {type: integer, minimum: 1}
+        affectedMuscles:
+          type: array
+          items: {$ref: '#/components/schemas/AffectedMuscleRecoveryData'}
+    WorkoutRecoveryCheckResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutRecoveryCheckData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutRecoveryConfirmationDetails:
+      type: object
+      additionalProperties: false
+      required: [assessment, confirmationToken, confirmationExpiresAt]
+      properties:
+        assessment: {$ref: '#/components/schemas/WorkoutRecoveryCheckData'}
+        confirmationToken:
+          type: string
+          minLength: 32
+          maxLength: 256
+          description: 短期、单次使用且仅绑定本次训练启动事实的 opaque token。
+        confirmationExpiresAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+    WorkoutRecoveryConfirmationError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code:
+          type: string
+          enum: [RECOVERY_CONFIRMATION_REQUIRED]
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details: {$ref: '#/components/schemas/WorkoutRecoveryConfirmationDetails'}
+        retryable: {type: boolean, enum: [false]}
+    WorkoutRecoveryConfirmationErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/WorkoutRecoveryConfirmationError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
+    WorkoutStartIdempotencyError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code:
+          type: string
+          enum: [IDEMPOTENCY_KEY_REUSED]
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details:
+          type: object
+          additionalProperties: false
+        retryable: {type: boolean, enum: [false]}
+    WorkoutStartIdempotencyErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/WorkoutStartIdempotencyError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
+    WorkoutSessionStartConflictResponse:
+      oneOf:
+        - {$ref: '#/components/schemas/WorkoutRecoveryConfirmationErrorResponse'}
+        - {$ref: '#/components/schemas/WorkoutStartIdempotencyErrorResponse'}
+        - {$ref: '#/components/schemas/ActiveWorkoutExistsErrorResponse'}
+        - {$ref: '#/components/schemas/WorkoutStartTerminalReplayErrorResponse'}
+    WorkoutExerciseUpdateConflictError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code:
+          type: string
+          enum: [VERSION_CONFLICT, INSUFFICIENT_REPLACEMENTS]
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details:
+          type: object
+          additionalProperties: true
+        retryable: {type: boolean}
+    WorkoutExerciseUpdateConflictResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/WorkoutExerciseUpdateConflictError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
+    WorkoutNotTerminalError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code: {type: string, enum: [WORKOUT_NOT_TERMINAL]}
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details:
+          type: object
+          additionalProperties: false
+        retryable: {type: boolean, enum: [false]}
+    WorkoutNotTerminalErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/WorkoutNotTerminalError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
     SetType:
       type: string
       enum: [WARMUP, WORK, EXTRA]
     CompletionStatus:
       type: string
       enum: [PLANNED, COMPLETED, FAILED, SKIPPED]
+    WorkoutSafetyFlag:
+      type: string
+      description: 用户在该组训练中主动记录的非诊断性安全信号；任一值都会禁止自动进阶。
+      enum: [PAIN, INJURY, CHEST_DISCOMFORT, DIZZINESS, SEVERE_UNWELL]
     SyncOperationStatus:
       type: string
       enum: [APPLIED, DUPLICATE, CONFLICT, REJECTED]
@@ -18,15 +159,29 @@ components:
       required: [clientSessionKey, planId, planVersionNo, planDayId]
       properties:
         clientSessionKey: {type: string, minLength: 8, maxLength: 128}
-        planId: {type: string}
+        planId: {type: string, format: uuid}
         planVersionNo: {type: integer, minimum: 1}
-        planDayId: {type: string}
+        planDayId:
+          type: string
+          minLength: 1
+          description: 兼容字段，旧客户端以训练日代码传值；新客户端同时发送 trainingDayCode。
+        trainingDayCode:
+          type: string
+          minLength: 1
+          description: 计划版本内真实、稳定的训练日代码；省略时服务端兼容使用 planDayId。
+        recoveryConfirmationToken:
+          type: string
+          minLength: 32
+          maxLength: 256
+          description: 仅在服务端返回 RECOVERY_CONFIRMATION_REQUIRED 后由用户明确确认继续时原样回传。
     UpdateSessionStatusRequest:
       type: object
       additionalProperties: false
       required: [status, expectedVersion]
       properties:
-        status: {$ref: '#/components/schemas/SessionStatus'}
+        status:
+          type: string
+          enum: [IN_PROGRESS, PAUSED, ABORTED]
         expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
     UpdateSessionExerciseRequest:
       type: object
@@ -35,7 +190,7 @@ components:
       properties:
         action:
           type: string
-          enum: [SKIP, REPLACE, COMPLETE]
+          enum: [REPLACE]
         replacementExerciseId: {type: string}
         expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
     SetTarget:
@@ -66,6 +221,7 @@ components:
         remainingReps: {type: integer, minimum: 0}
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        safetyFlag: {$ref: '#/components/schemas/WorkoutSafetyFlag'}
         expectedSessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
         confirmAnomaly: {type: boolean, default: false}
     DeleteSetRequest:
@@ -106,6 +262,7 @@ components:
         remainingReps: {type: integer, minimum: 0}
         completionStatus: {$ref: '#/components/schemas/CompletionStatus'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        safetyFlag: {$ref: '#/components/schemas/WorkoutSafetyFlag'}
         expectedSessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
         confirmAnomaly: {type: boolean, default: false}
     SyncWorkoutOperationsRequest:
@@ -122,11 +279,60 @@ components:
       type: object
       additionalProperties: false
       required: [resolution, expectedVersion]
+      description: |
+        Resolves the current user's conflict with optimistic conflict-version checking.
+        KEEP_LOCAL appends a correction revision to the existing workout set and makes the
+        correctable local facts authoritative. KEEP_SERVER abandons the queued local operation.
+        KEEP_BOTH retains both local and server versions only as conflict/revision audit evidence;
+        it does not create another workout set or session, and only the active server fact counts
+        toward workout statistics. Repeating the same decision with the original expectedVersion
+        replays the result; another decision or version is rejected with VERSION_CONFLICT.
       properties:
         resolution:
           type: string
           enum: [KEEP_LOCAL, KEEP_SERVER, KEEP_BOTH]
         expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+    SyncConflictResolutionData:
+      type: object
+      additionalProperties: false
+      required:
+        [conflictId, clientOperationSeq, clientKey, resolution, outcome,
+         authoritativeSessionVersion, authoritativePayload]
+      properties:
+        conflictId: {type: string, format: uuid}
+        clientOperationSeq:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Trusted sequence copied from persisted conflict evidence, never from the resolution request.
+        clientKey: {type: string, minLength: 8, maxLength: 128}
+        resolution: {type: string, enum: [KEEP_LOCAL, KEEP_SERVER, KEEP_BOTH]}
+        outcome:
+          type: string
+          enum: [ACKNOWLEDGED, REBUILT, ABANDONED]
+          description: |
+            KEEP_LOCAL returns ACKNOWLEDGED after the revision is active. KEEP_SERVER and
+            KEEP_BOTH return ABANDONED so the client terminates the queued local operation.
+            REBUILT is reserved for a future response that explicitly supplies rebuiltPayload.
+        authoritativeSessionVersion:
+          type: integer
+          format: int64
+          minimum: 0
+        authoritativePayload:
+          type: object
+          additionalProperties: true
+          description: Latest authoritative workout-set or workout-session snapshot used to converge local state.
+        rebuiltPayload:
+          type: object
+          additionalProperties: true
+          description: Present only when outcome is REBUILT and a new operation must actually be enqueued.
+    SyncConflictResolutionResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/SyncConflictResolutionData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     SyncOperationResult:
       type: object
       additionalProperties: false
@@ -217,16 +423,75 @@ components:
         status:
           type: string
           enum: [PENDING, ACTIVE, COMPLETED, SKIPPED, ABORTED, REPLACED]
+    WorkoutWarmupRampSet:
+      type: object
+      additionalProperties: false
+      required: [weightKg, reps]
+      properties:
+        weightKg: {type: number, exclusiveMinimum: 0, multipleOf: 0.01}
+        reps: {type: integer, minimum: 1}
+    WorkoutGeneralWarmupPrescription:
+      type: object
+      additionalProperties: false
+      required: [occurrences, durationSeconds]
+      properties:
+        occurrences:
+          type: integer
+          const: 1
+          description: 通用热身在同一训练日会话中只执行一次。
+        durationSeconds: {type: integer, minimum: 1}
+    WorkoutRampWarmupPrescription:
+      type: object
+      additionalProperties: false
+      required: [exerciseId, exerciseOrder, status, sets]
+      properties:
+        exerciseId: {type: string, format: uuid}
+        exerciseOrder: {type: integer, minimum: 1}
+        status: {type: string, enum: [READY, CALIBRATION_REQUIRED]}
+        equipmentType: {type: string, minLength: 1}
+        sets:
+          type: array
+          maxItems: 3
+          items: {$ref: '#/components/schemas/WorkoutWarmupRampSet'}
+        calibrationCode: {type: string, minLength: 1}
+        calibrationMessage: {type: string, minLength: 1}
+    WorkoutWarmupPrescription:
+      type: object
+      additionalProperties: false
+      required:
+        [schemaVersion, ruleVersion, generalWarmup, countsTowardTrainingVolume, countsTowardProgression]
+      properties:
+        schemaVersion:
+          type: string
+          const: workout-warmup-prescription-v1
+        ruleVersion: {type: string, minLength: 1}
+        generalWarmup: {$ref: '#/components/schemas/WorkoutGeneralWarmupPrescription'}
+        rampWarmup: {$ref: '#/components/schemas/WorkoutRampWarmupPrescription'}
+        countsTowardTrainingVolume:
+          type: boolean
+          const: false
+        countsTowardProgression:
+          type: boolean
+          const: false
     WorkoutSessionData:
       type: object
       additionalProperties: false
-      required: [id, planId, planVersionId, planVersionNo, planDayId, status, startedAt, version, exercises]
+      required: [id, planId, planVersionId, planVersionNo, clientSessionKey, planDayId, trainingDayCode, status, startedAt, version, exercises]
       properties:
         id: {type: string, format: uuid}
         planId: {type: string, format: uuid}
         planVersionId: {type: string, format: uuid}
         planVersionNo: {type: integer, minimum: 1}
-        planDayId: {type: string, minLength: 1}
+        clientSessionKey:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: 服务端已接受的原始启动幂等键；用于响应丢失和跨页面恢复，不是身份凭证。
+        planDayId:
+          type: string
+          minLength: 1
+          description: 兼容字段，当前与 trainingDayCode 返回相同值。
+        trainingDayCode: {type: string, minLength: 1}
         status: {$ref: '#/components/schemas/SessionStatus'}
         startedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
@@ -235,6 +500,10 @@ components:
           type: array
           minItems: 1
           items: {$ref: '#/components/schemas/WorkoutExerciseSnapshot'}
+        warmupPrescription:
+          allOf:
+            - {$ref: '#/components/schemas/WorkoutWarmupPrescription'}
+          description: 版本化服务端权威热身快照；旧训练会话可能省略。
     WorkoutSessionResponse:
       type: object
       additionalProperties: false
@@ -242,6 +511,65 @@ components:
       properties:
         data: {$ref: '#/components/schemas/WorkoutSessionData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    ActiveWorkoutExistsDetails:
+      type: object
+      additionalProperties: false
+      required: [activeSession, sets]
+      properties:
+        activeSession: {$ref: '#/components/schemas/WorkoutSessionData'}
+        sets:
+          type: array
+          description: 当前会话仍生效的训练组事实；已逻辑作废的组不会返回。
+          items: {$ref: '#/components/schemas/RecoverableWorkoutSetData'}
+    ActiveWorkoutExistsError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code:
+          type: string
+          enum: [ACTIVE_WORKOUT_EXISTS]
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details: {$ref: '#/components/schemas/ActiveWorkoutExistsDetails'}
+        retryable: {type: boolean, enum: [false]}
+    ActiveWorkoutExistsErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/ActiveWorkoutExistsError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
+
+    WorkoutStartTerminalReplayDetails:
+      type: object
+      additionalProperties: false
+      required: [terminalSession]
+      properties:
+        terminalSession: {$ref: '#/components/schemas/WorkoutSessionData'}
+
+    WorkoutStartTerminalReplayError:
+      type: object
+      additionalProperties: false
+      required: [code, message, fieldErrors, details, retryable]
+      properties:
+        code: {type: string, enum: [WORKOUT_START_ALREADY_TERMINAL]}
+        message: {type: string}
+        fieldErrors:
+          type: array
+          items: {$ref: './common.yaml#/components/schemas/FieldError'}
+        details: {$ref: '#/components/schemas/WorkoutStartTerminalReplayDetails'}
+        retryable: {type: boolean, enum: [false]}
+
+    WorkoutStartTerminalReplayErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, meta]
+      properties:
+        error: {$ref: '#/components/schemas/WorkoutStartTerminalReplayError'}
+        meta: {$ref: './common.yaml#/components/schemas/ErrorMeta'}
     WorkoutSetData:
       type: object
       additionalProperties: false
@@ -260,6 +588,34 @@ components:
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         serverRevision: {type: integer, format: int64, minimum: 0}
         sessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        safetyFlag: {$ref: '#/components/schemas/WorkoutSafetyFlag'}
+        anomalyStatus:
+          type: string
+          enum: [CONFIRMED_EXCLUDED]
+        syncStatus:
+          type: string
+          enum: [APPLIED]
+    RecoverableWorkoutSetData:
+      type: object
+      additionalProperties: false
+      required: [setId, sessionExerciseId, clientSetKey, clientOperationSeq, setType, setOrder, target, actual, completionStatus, serverRevision, sessionVersion, syncStatus]
+      properties:
+        setId: {type: string, format: uuid}
+        sessionExerciseId: {type: string, format: uuid}
+        clientSetKey: {type: string, minLength: 8, maxLength: 128}
+        clientOperationSeq: {type: integer, format: int64, minimum: 1}
+        setType: {$ref: '#/components/schemas/SetType'}
+        setOrder: {type: integer, minimum: 1}
+        target: {$ref: '#/components/schemas/SetTarget'}
+        actual: {$ref: '#/components/schemas/SetActual'}
+        remainingReps: {type: integer, minimum: 0}
+        completionStatus:
+          type: string
+          enum: [COMPLETED, FAILED, SKIPPED]
+        completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        serverRevision: {type: integer, format: int64, minimum: 0}
+        sessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        safetyFlag: {$ref: '#/components/schemas/WorkoutSafetyFlag'}
         anomalyStatus:
           type: string
           enum: [CONFIRMED_EXCLUDED]
@@ -272,6 +628,24 @@ components:
       required: [data, meta]
       properties:
         data: {$ref: '#/components/schemas/WorkoutSetData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutSetVoidData:
+      type: object
+      additionalProperties: false
+      required: [voidId, setId, reason, voidedAt, sessionVersion, duplicate]
+      properties:
+        voidId: {type: string, format: uuid}
+        setId: {type: string, format: uuid}
+        reason: {type: string, enum: [USER_REQUESTED]}
+        voidedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
+        sessionVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+        duplicate: {type: boolean}
+    WorkoutSetVoidResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutSetVoidData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     WorkoutCompletionData:
       type: object
@@ -292,10 +666,14 @@ components:
     WorkoutHistoryItem:
       type: object
       additionalProperties: false
-      required: [sessionId, trainingDayCode, status, startedAt, completedAt, completedWorkSets, completedVolumeKg, completedReps, usesExternalLoad]
+      required: [sessionId, trainingDayCode, trainingDayName, status, startedAt, completedAt, completedWorkSets, completedVolumeKg, completedReps, usesExternalLoad]
       properties:
         sessionId: {type: string, format: uuid}
         trainingDayCode: {type: string, minLength: 1}
+        trainingDayName:
+          type: string
+          minLength: 1
+          description: 来自不可变计划版本快照的训练日名称。
         status: {type: string, enum: [COMPLETED, ABORTED]}
         startedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
         completedAt: {$ref: './common.yaml#/components/schemas/UtcDateTime'}
@@ -317,4 +695,22 @@ components:
       required: [data, meta]
       properties:
         data: {$ref: '#/components/schemas/WorkoutHistoryData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    WorkoutSessionSummaryData:
+      type: object
+      additionalProperties: false
+      required: [sessionId, status, completedWorkSets, completedVolumeKg, completedReps, usesExternalLoad]
+      properties:
+        sessionId: {type: string, format: uuid}
+        status: {type: string, enum: [COMPLETED, ABORTED]}
+        completedWorkSets: {type: integer, minimum: 0}
+        completedVolumeKg: {type: number, minimum: 0}
+        completedReps: {type: integer, minimum: 0}
+        usesExternalLoad: {type: boolean}
+    WorkoutSessionSummaryResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/WorkoutSessionSummaryData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}

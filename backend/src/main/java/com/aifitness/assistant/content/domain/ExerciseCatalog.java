@@ -38,6 +38,9 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
             requiredCode(movementPattern, "movement pattern");
             requiredCode(difficulty, "difficulty");
             equipment = Set.copyOf(Objects.requireNonNull(equipment, "equipment must not be null"));
+            if (equipment.isEmpty() || equipment.contains("BODYWEIGHT") && equipment.size() > 1) {
+                throw new IllegalArgumentException("equipment must declare exactly one supported load mode");
+            }
             primaryMuscles = Set.copyOf(
                     Objects.requireNonNull(primaryMuscles, "primary muscles must not be null"));
             instructions = requiredTexts(instructions, "instructions");

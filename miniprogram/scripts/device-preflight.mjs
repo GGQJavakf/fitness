@@ -2,6 +2,12 @@ import { networkInterfaces } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
+import {
+  ALLOWED_RELEASE_ENVIRONMENT_KEYS,
+  DEVICE_BUILD_API_BASE_URL_ENVIRONMENT_KEY,
+  loadMergedReleaseEnvironment
+} from '../../scripts/release-environment.mjs'
+
 const REQUIRED_ENVIRONMENT = [
   'WECHAT_APP_ID',
   'WECHAT_APP_SECRET',
@@ -54,16 +60,41 @@ export function missingRequiredEnvironment(environment) {
   return REQUIRED_ENVIRONMENT.filter((key) => !environment[key]?.trim())
 }
 
-export function buildDeviceApiBaseUrl(host, port = 8080) {
+export function buildDeviceApiBaseUrl(host, port = 8443) {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error('--port must be an integer between 1 and 65535')
   }
-  return `http://${host}:${port}`
+  return `https://${host}:${port}`
+}
+
+export function normalizeDeviceApiBaseUrl(value) {
+  let parsed
+  try {
+    parsed = new URL(value)
+  } catch {
+    throw new Error('--api-base-url must be an absolute HTTPS URL')
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('--api-base-url must use HTTPS')
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('--api-base-url must not contain credentials, query parameters, or fragments')
+  }
+  if (parsed.pathname !== '/' && parsed.pathname !== '') {
+    throw new Error('--api-base-url must be an origin without a path')
+  }
+  return parsed.origin
 }
 
 export function miniprogramBuildEnvironment(environment, apiBaseUrl) {
-  const buildEnvironment = { ...environment, TARO_APP_API_BASE_URL: apiBaseUrl }
-  for (const key of REQUIRED_ENVIRONMENT) delete buildEnvironment[key]
+  const buildEnvironment = {
+    ...environment,
+    TARO_APP_API_BASE_URL: apiBaseUrl,
+    [DEVICE_BUILD_API_BASE_URL_ENVIRONMENT_KEY]: apiBaseUrl
+  }
+  for (const key of ALLOWED_RELEASE_ENVIRONMENT_KEYS) {
+    if (!key.startsWith('TARO_APP_')) delete buildEnvironment[key]
+  }
   return buildEnvironment
 }
 
@@ -85,32 +116,41 @@ function flattenNetworkInterfaces() {
 }
 
 function parseArguments(argumentsList) {
-  const options = { build: false, host: undefined, port: 8080 }
+  const options = { build: false, host: undefined, port: 8443, apiBaseUrl: undefined }
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
     if (argument === '--build') {
       options.build = true
       continue
     }
-    if (argument === '--host' || argument === '--port') {
+    if (argument === '--host' || argument === '--port' || argument === '--api-base-url') {
       const value = argumentsList[index + 1]
       if (!value || value.startsWith('--')) throw new Error(`${argument} requires a value`)
       if (argument === '--host') options.host = value
       if (argument === '--port') options.port = Number(value)
+      if (argument === '--api-base-url') options.apiBaseUrl = value
       index += 1
       continue
     }
     throw new Error(`Unknown argument: ${argument}`)
+  }
+  if (options.apiBaseUrl && (options.host || options.port !== 8443)) {
+    throw new Error('--api-base-url cannot be combined with --host or --port')
   }
   return options
 }
 
 function run() {
   try {
+    const environment = loadMergedReleaseEnvironment(process.env)
     const options = parseArguments(process.argv.slice(2))
-    const host = selectDeviceHost(options.host, flattenNetworkInterfaces())
-    const apiBaseUrl = buildDeviceApiBaseUrl(host, options.port)
-    const missing = missingRequiredEnvironment(process.env)
+    const host = options.apiBaseUrl
+      ? undefined
+      : selectDeviceHost(options.host, flattenNetworkInterfaces())
+    const apiBaseUrl = options.apiBaseUrl
+      ? normalizeDeviceApiBaseUrl(options.apiBaseUrl)
+      : buildDeviceApiBaseUrl(host, options.port)
+    const missing = options.apiBaseUrl ? [] : missingRequiredEnvironment(environment)
 
     console.log(`Device API base URL: ${apiBaseUrl}`)
     if (missing.length > 0) {
@@ -120,13 +160,18 @@ function run() {
       return
     }
 
-    console.log('Backend credential and database environment keys are present (values hidden).')
-    console.log(`Start backend with profile staging-experience and --server.address=${host} --server.port=${options.port}.`)
+    if (host) {
+      console.log('Backend credential and database environment keys are present (values hidden).')
+      console.log(`Expose the staging-experience backend through a trusted HTTPS endpoint at ${apiBaseUrl}.`)
+      console.log('The TLS endpoint may be a local reverse proxy; do not expose the Spring HTTP port directly to the phone.')
+    } else {
+      console.log('Using an explicit HTTPS API endpoint; local backend credential checks are not required.')
+    }
 
     if (!options.build) return
-    const npmInvocation = resolveNpmInvocation(process.env, process.execPath)
+    const npmInvocation = resolveNpmInvocation(environment, process.execPath)
     const result = spawnSync(npmInvocation.command, npmInvocation.arguments, {
-      env: miniprogramBuildEnvironment(process.env, apiBaseUrl),
+      env: miniprogramBuildEnvironment(environment, apiBaseUrl),
       stdio: 'inherit'
     })
     if (result.error) throw result.error

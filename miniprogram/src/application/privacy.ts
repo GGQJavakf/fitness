@@ -57,6 +57,10 @@ export interface ReauthenticationProofPort {
   getProof(): Promise<string>
 }
 
+export interface RevokedAccountLocalLifecyclePort {
+  onAccessRevoked(status: DeletionStatus): Promise<void>
+}
+
 export interface PrivacyExportViewModel extends PrivacyExportData {
   scopeLabel: string
   resourceSummary: string
@@ -133,17 +137,37 @@ export function createPrivacyUseCases(port: PrivacyPort) {
 export function createVerifiedPrivacyUseCases(
   port: PrivacyPort,
   proofPort: ReauthenticationProofPort,
+  lifecycle?: RevokedAccountLocalLifecyclePort,
 ) {
   const privacy = createPrivacyUseCases(port)
+  async function enforceRevokedAccess(
+    result: DeletionStatusViewModel,
+  ): Promise<DeletionStatusViewModel> {
+    if (lifecycle && hasRevokedAccess(result.status)) {
+      await lifecycle.onAccessRevoked(result.status)
+    }
+    return result
+  }
   return {
     async exportData(): Promise<PrivacyExportViewModel> {
       return privacy.exportData(await proofPort.getProof())
     },
     async requestDeletion(confirmationText: string): Promise<DeletionStatusViewModel> {
-      return privacy.requestDeletion(await proofPort.getProof(), confirmationText)
+      return enforceRevokedAccess(
+        await privacy.requestDeletion(await proofPort.getProof(), confirmationText),
+      )
     },
-    getDeletionStatus: privacy.getDeletionStatus,
+    async getDeletionStatus(requestId: string): Promise<DeletionStatusViewModel> {
+      return enforceRevokedAccess(await privacy.getDeletionStatus(requestId))
+    },
   }
+}
+
+function hasRevokedAccess(status: DeletionStatus): boolean {
+  return status === 'ACCESS_REVOKED'
+    || status === 'BUSINESS_DATA_ANONYMIZED'
+    || status === 'RETENTION_SEPARATED'
+    || status === 'COMPLETED'
 }
 
 function requireProof(proof: string): void {

@@ -2,9 +2,9 @@
   "metadata": {
     "schemaVersion": "1.0.0",
     "kind": "RULE_CONFIG",
-    "version": "1.2.0",
+    "version": "1.6.0",
     "status": "AI_VALIDATED",
-    "generatedAt": "2026-08-04T13:47:04Z",
+    "generatedAt": "2026-08-12T04:00:00Z",
     "promptConstraints": [
       "仅面向成年一般健身用户",
       "仅使用 KG 且不得生成 LB 运行值",
@@ -22,23 +22,59 @@
       }
     ],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "ba1903ad8d21905262511f7fe3e22a3b29d85dd2cc970fb4f05d3bd25e9b8d8b"
+    "digestSha256": "b1048e5d33c39defcf768724d3188618a1c59a178fbbc7b851785e00a5e18ee1"
   },
   "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
   "parameters": {
     "planLimits": { "minimumSessionsPerWeek": 2, "maximumSessionsPerWeek": 6, "maximumExercisesPerSession": 8, "maximumEstimatedMinutes": 90 },
     "prescription": { "minimumWorkSets": 2, "maximumWorkSets": 4, "minimumReps": 5, "maximumReps": 15 },
     "rest": { "minimumSeconds": 45, "defaultSeconds": 90, "maximumSeconds": 240 },
-    "warmup": { "maximumRampSets": 3, "knownWorkWeightRatios": [0.5, 0.7, 0.85], "unknownWeightResult": "CALIBRATION_STEPS_ONLY", "countsTowardTrainingVolume": false },
+    "warmup": { "maximumRampSets": 3, "knownWorkWeightRatios": [0.5, 0.7, 0.85], "rampSetReps": [10, 6, 3], "eligibleLoadedCompoundMovementPatterns": ["SQUAT", "HINGE", "HORIZONTAL_PUSH", "HORIZONTAL_PULL", "VERTICAL_PUSH", "VERTICAL_PULL"], "unknownWeightResult": "CALIBRATION_STEPS_ONLY", "countsTowardTrainingVolume": false },
     "initialWeight": { "sourcePriority": ["RECENT_VALID_RECORD", "USER_INPUT", "CALIBRATION", "BODYWEIGHT"], "unknownResult": "NEEDS_CALIBRATION", "demographicEstimationAllowed": false },
-    "duration": { "secondsPerWorkSet": 45, "secondsPerWarmupSet": 30, "secondsPerExerciseTransition": 75 },
-    "balance": { "maximumMovementPatternOccurrencesPerSession": 1, "maximumWorkSetsPerPrimaryMusclePerSession": 12, "minimumRecoveryHoursBetweenPrimaryMuscleSessions": 48 },
+    "duration": { "secondsPerWorkSet": 45, "secondsPerWarmupSet": 30, "secondsPerExerciseTransition": 75, "generalWarmupSeconds": 180, "rampWarmupSetsPerSession": 2 },
+    "balance": {
+      "maximumMovementPatternOccurrencesPerSession": 1,
+      "maximumWorkSetsPerPrimaryMusclePerSession": 12,
+      "minimumRecoveryHoursBetweenPrimaryMuscleSessions": 48,
+      "weeklyMovementPatternTargets": [
+        {
+          "sessionsPerWeek": 2,
+          "targets": [
+            { "movementPattern": "SQUAT", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "HINGE", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "HORIZONTAL_PUSH", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "VERTICAL_PUSH", "minimumSessions": 1, "maximumSessions": 1 },
+            { "movementPattern": "HORIZONTAL_PULL", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "VERTICAL_PULL", "minimumSessions": 1, "maximumSessions": 1 },
+            { "movementPattern": "ELBOW_FLEXION", "minimumSessions": 1, "maximumSessions": 1 },
+            { "movementPattern": "ELBOW_EXTENSION", "minimumSessions": 1, "maximumSessions": 1 }
+          ]
+        },
+        {
+          "sessionsPerWeek": 3,
+          "targets": [
+            { "movementPattern": "SQUAT", "minimumSessions": 2, "maximumSessions": 3 },
+            { "movementPattern": "HINGE", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "HORIZONTAL_PUSH", "minimumSessions": 2, "maximumSessions": 2 },
+            { "movementPattern": "VERTICAL_PUSH", "minimumSessions": 1, "maximumSessions": 1 },
+            { "movementPattern": "HORIZONTAL_PULL", "minimumSessions": 2, "maximumSessions": 2 },
+            { "movementPattern": "VERTICAL_PULL", "minimumSessions": 1, "maximumSessions": 1 },
+            { "movementPattern": "ELBOW_FLEXION", "minimumSessions": 1, "maximumSessions": 2 },
+            { "movementPattern": "ELBOW_EXTENSION", "minimumSessions": 1, "maximumSessions": 2 }
+          ]
+        }
+      ]
+    },
     "sessionComposition": {
       "accessoryWorkSets": 2,
       "accessoryRepMin": 8,
       "accessoryRepMax": 12,
-      "accessoryRestSeconds": 60
+      "accessoryRestSeconds": 60,
+      "targetExercisesByMinutes": [
+        { "sessionMinutes": 45, "minimumExercises": 4, "maximumExercises": 5 }
+      ]
     },
+    "progression": { "longTrainingGapDays": 21, "multipleFailedSetsThreshold": 2 },
     "goalPrescriptions": [
       { "goal": "STRENGTH", "workSets": 3, "repMin": 5, "repMax": 8, "restSeconds": 120 },
       { "goal": "HYPERTROPHY", "workSets": 3, "repMin": 8, "repMax": 12, "restSeconds": 90 },

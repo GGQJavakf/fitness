@@ -102,7 +102,7 @@ class SensitiveLoggingTest {
     }
 
     @Test
-    void echoesValidRequestIdAndClearsMdcAfterAnExceptionalChain() {
+    void redactsUnexpectedErrorsAndClearsMdcAfterAnExceptionalChain() throws Exception {
         RequestIdFilter filter = new RequestIdFilter();
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/profile");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -110,12 +110,16 @@ class SensitiveLoggingTest {
         MDC.put("requestId", "previous-request");
 
         try {
-            assertThatThrownBy(() -> filter.doFilter(request, response, (servletRequest, servletResponse) -> {
+            filter.doFilter(request, response, (servletRequest, servletResponse) -> {
                 assertThat(MDC.get("requestId")).isEqualTo("request_01-accepted");
                 throw new IllegalStateException("do not log this exception message");
-            })).isInstanceOf(IllegalStateException.class);
+            });
 
             assertThat(response.getHeader("X-Request-Id")).isEqualTo("request_01-accepted");
+            assertThat(response.getStatus()).isEqualTo(500);
+            assertThat(response.getContentAsString())
+                    .contains("INTERNAL_ERROR", "服务器内部错误", "request_01-accepted")
+                    .doesNotContain("do not log this exception message");
             assertThat(MDC.get("requestId")).isEqualTo("previous-request");
         } finally {
             MDC.remove("requestId");

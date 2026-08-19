@@ -10,7 +10,7 @@
     "rigPartSheet": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
     "rigPartSheetSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555"
   },
-  "renderMode": "approved-static-source-crops",
+  "renderMode": "approved-static-source-crops-and-rigid-project-renderer",
   "assets": [
     {
       "exerciseCode": "GOBLET_SQUAT",
@@ -135,6 +135,90 @@
           "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
           "sha256": "8c17599eb6257d2d5ca35f2a96a703020a9afb2c3a55463189d78d4236e946b0",
           "sizeBytes": 12863
+        }
+      ]
+    },
+    {
+      "exerciseCode": "PRISONER_SQUAT",
+      "primaryRef": "asset://exercise-guides/prisoner-squat-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "双手轻放头后，脚掌稳定并保持胸口自然。",
+          "file": "prisoner-squat-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
+          "sha256": "70481fa619191601c227e5eb9735273aef70748e85c04b912fff1f85ab2dc4e5",
+          "sizeBytes": 11449
+        },
+        {
+          "id": "drive",
+          "label": "下蹲",
+          "description": "屈髋屈膝，膝盖跟随脚尖方向。",
+          "file": "prisoner-squat-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
+          "sha256": "29c52043313c4a20b78c40078faa596f3c13242a63b503c90f9a7c8baf8fe4ad",
+          "sizeBytes": 13609
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "在躯干稳定的可控深度停住。",
+          "file": "prisoner-squat-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
+          "sha256": "25d783c329612d19918a941a7c404a788c831c2493c4d380ba9bff7638a0ff97",
+          "sizeBytes": 13861
+        }
+      ]
+    },
+    {
+      "exerciseCode": "STANDING_WALL_CALF_RAISE",
+      "primaryRef": "asset://exercise-guides/standing-wall-calf-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "脚跟落地",
+          "description": "双手轻扶墙面，双脚平行站稳。",
+          "file": "standing-wall-calf-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
+          "sha256": "a8fd8e718e360171940ebf0f3279867b96669c51f17204f12dc983afa62e9419",
+          "sizeBytes": 10598
+        },
+        {
+          "id": "drive",
+          "label": "提起脚跟",
+          "description": "缓慢抬起脚跟，把重心保持在前脚掌。",
+          "file": "standing-wall-calf-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
+          "sourceGridIndex": 1,
+          "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
+          "sha256": "dbcb994473b0ce65dfaf90d04cf0fab7157bdb99df0dc64849cc2fcd11f36d65",
+          "sizeBytes": 10197
+        },
+        {
+          "id": "finish",
+          "label": "稳定顶端",
+          "description": "身体保持直立，再缓慢放下脚跟。",
+          "file": "standing-wall-calf-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
+          "sha256": "d497bd5c7e33345bb9d7687e7ab615b56ac6f40da7d1f1ae93beade3eccb53b8",
+          "sizeBytes": 9914
         }
       ]
     },
@@ -265,6 +349,34 @@
       ]
     },
     {
+      "exerciseCode": "GLUTE_BRIDGE_EXERCISE",
+      "primaryRef": "asset://exercise-guides/glute-bridge-exercise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "仰卧准备",
+          "description": "双脚踩稳，屈膝并保持腰背自然。",
+          "file": "glute-bridge-exercise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/glute-bridge-exercise-keyframe-01.png",
+          "sourceSha256": "c6a166386ee1edba61c58499365bd84757afc65b0dd9aff96da75f5c770edc65",
+          "sha256": "945143e71cd2daa0ef788fbf2a7ad5fe7adcc2dfab4c55f6f2991ae4e77cba86",
+          "sizeBytes": 8119
+        },
+        {
+          "id": "lift",
+          "label": "抬髋",
+          "description": "臀部发力抬起髋部，避免腰部过度后仰。",
+          "file": "glute-bridge-exercise-02-lift.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/glute-bridge-exercise-keyframe-02.png",
+          "sourceSha256": "e078a852acf38eb9de21129e83491d25f19b2a2aa5a7952d80e58f0037f2e7c3",
+          "sha256": "21ac0f332e63f6781b746ea19dac9c65473fa17e11162e3d836e31e69e1861e1",
+          "sizeBytes": 8414
+        }
+      ]
+    },
+    {
       "exerciseCode": "DUMBBELL_BENCH_PRESS",
       "primaryRef": "asset://exercise-guides/dumbbell-bench-press-01-setup.jpg",
       "stages": [
@@ -314,10 +426,10 @@
           "file": "dumbbell-floor-press-01-setup.jpg",
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
-          "sourceGridIndex": 0,
+          "sourceGridIndex": 2,
           "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
-          "sha256": "a7c0d6cb35e4f7beb92c853ca61c82c5f86d191f8a79d552829473f0d8515326",
-          "sizeBytes": 12172
+          "sha256": "a62fde84d9396a30c3e9b787b7a081aef1700710d02d7dd665bec71c91b830f9",
+          "sizeBytes": 12223
         },
         {
           "id": "drive",
@@ -326,10 +438,10 @@
           "file": "dumbbell-floor-press-02-drive.jpg",
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
-          "sourceGridIndex": 2,
+          "sourceGridIndex": 5,
           "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
-          "sha256": "a62fde84d9396a30c3e9b787b7a081aef1700710d02d7dd665bec71c91b830f9",
-          "sizeBytes": 12223
+          "sha256": "3be0f51a8ba42597220d93bf227172c5ef791ad3483efd539353aeb7b77bdaff",
+          "sizeBytes": 12195
         },
         {
           "id": "finish",
@@ -384,6 +496,118 @@
           "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
           "sha256": "e4ae6e0953c6a35ace82c90751aa48541262d1d8751aa88a96d4cb699579d750",
           "sizeBytes": 11503
+        }
+      ]
+    },
+    {
+      "exerciseCode": "BENT_KNEE_PUSH_UP",
+      "primaryRef": "asset://exercise-guides/bent-knee-push-up-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "跪姿支撑",
+          "description": "双手和双膝压稳，头背髋保持稳定。",
+          "file": "bent-knee-push-up-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/bent-knee-push-up-keyframe-01.png",
+          "sourceSha256": "0e6b1bbebf4f408cceeea8cfce7e26465e5856151fea7501623670736cc15d38",
+          "sha256": "50e5f0255fbe47cce5990aa547b67a0419d3cd0304d55c2d2e5a312e304b04ef",
+          "sizeBytes": 9468
+        },
+        {
+          "id": "lower",
+          "label": "控制下降",
+          "description": "屈肘降低身体，不塌腰或抬高臀部。",
+          "file": "bent-knee-push-up-02-lower.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/bent-knee-push-up-keyframe-02.png",
+          "sourceSha256": "2150be0432be1e9ee015afdf2e0b1274b2143ccadfb6dab5c4402b69d8063ec4",
+          "sha256": "9aa456e69124a13b30da9af36b7389517c3b63d4d4ab5918a3467210f6400420",
+          "sizeBytes": 8652
+        }
+      ]
+    },
+    {
+      "exerciseCode": "PUSH_UP",
+      "primaryRef": "asset://exercise-guides/push-up-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "直臂支撑",
+          "description": "双手与双脚压稳，头背髋保持接近直线。",
+          "file": "push-up-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
+          "sha256": "b03f22ec7181fdef01b35bc2fb87328b2fd2df295846585b48cb7026bfb9f1ae",
+          "sizeBytes": 11413
+        },
+        {
+          "id": "drive",
+          "label": "控制下降",
+          "description": "屈肘约四十五度，身体整体靠近地面。",
+          "file": "push-up-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
+          "sha256": "6bf1bc4175ec727808a99acf66432167a4785d10501a48aabfc993ecfceb1249",
+          "sizeBytes": 9597
+        },
+        {
+          "id": "finish",
+          "label": "最低点",
+          "description": "核心持续收紧，不塌腰或耸肩。",
+          "file": "push-up-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
+          "sha256": "33218ea1c9ee7c13c672b7a087aa5a87f34b798854568be531727eb96dde5250",
+          "sizeBytes": 8696
+        }
+      ]
+    },
+    {
+      "exerciseCode": "WALL_PUSH_UP",
+      "primaryRef": "asset://exercise-guides/wall-push-up-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "扶墙支撑",
+          "description": "双手撑墙，双脚后移并让身体保持直线。",
+          "file": "wall-push-up-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
+          "sourceGridIndex": 0,
+          "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
+          "sha256": "a450745e121bec56ea0b6c6c9d31394a9a713d22c783ae4503ea9803f5db56e0",
+          "sizeBytes": 10650
+        },
+        {
+          "id": "drive",
+          "label": "靠近墙面",
+          "description": "屈肘让胸口缓慢靠近墙面。",
+          "file": "wall-push-up-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
+          "sourceGridIndex": 2,
+          "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
+          "sha256": "6eea84843a14728f22ed8437bf7cdf35ee8c29105600058b153c591d4045882d",
+          "sizeBytes": 10229
+        },
+        {
+          "id": "finish",
+          "label": "控制返回",
+          "description": "推回起点，避免耸肩或身体折叠。",
+          "file": "wall-push-up-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
+          "sourceGridIndex": 5,
+          "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
+          "sha256": "0ada372989c3749796cde2dced3e7f27c680ecd161854e3fb554138ece8bc4dc",
+          "sizeBytes": 10273
         }
       ]
     },
@@ -514,6 +738,45 @@
       ]
     },
     {
+      "exerciseCode": "ONE_ARM_DUMBBELL_ROW",
+      "primaryRef": "asset://exercise-guides/one-arm-dumbbell-row-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "稳定支撑",
+          "description": "一手一膝压稳训练凳，负重手自然伸展。",
+          "file": "one-arm-dumbbell-row-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "68ebbb67159d70fc8e5d7e2486ffcd6459a9b2a5f402dd3095628e952ba3ca11",
+          "sizeBytes": 9963
+        },
+        {
+          "id": "drive",
+          "label": "向后划船",
+          "description": "肘部朝髋部方向移动，躯干不要旋转。",
+          "file": "one-arm-dumbbell-row-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "590bcb87acef99fd04861a851647ba052408af57d35d4f57c4f6526185c61c4e",
+          "sizeBytes": 10145
+        },
+        {
+          "id": "finish",
+          "label": "背部收紧",
+          "description": "哑铃靠近身体后停稳，再受控放下。",
+          "file": "one-arm-dumbbell-row-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "8fd24b42c50298a1194ee940eb80a9f192023668023020a7a19b14505317e150",
+          "sizeBytes": 10089
+        }
+      ]
+    },
+    {
       "exerciseCode": "DUMBBELL_OVERHEAD_PRESS",
       "primaryRef": "asset://exercise-guides/dumbbell-overhead-press-01-setup.jpg",
       "stages": [
@@ -636,6 +899,591 @@
           "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
           "sha256": "23c86de1c1ad56b9a478d867b1aa23ae45d8ad70a168117ab518e656c9cc41b3",
           "sizeBytes": 11059
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_LATERAL_RAISE",
+      "primaryRef": "asset://exercise-guides/dumbbell-lateral-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让手肘保持轻微弯曲。",
+          "file": "dumbbell-lateral-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
+          "sizeBytes": 9374
+        },
+        {
+          "id": "drive",
+          "label": "向侧面抬起",
+          "description": "肩部带动手臂平稳向两侧移动。",
+          "file": "dumbbell-lateral-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "6a6cf86d93d9ee0178f050b61a1ca9747b5b01e5a071e6b1873876e5999f8251",
+          "sizeBytes": 9746
+        },
+        {
+          "id": "finish",
+          "label": "肩部高度",
+          "description": "抬到肩部附近停稳，避免耸肩。",
+          "file": "dumbbell-lateral-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "9c56d8983ac40329e202c45c34cfef9fd7337bb1e0c5015edebe7ae571244533",
+          "sizeBytes": 9791
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SINGLE_ARM_DUMBBELL_LATERAL_RAISE",
+      "primaryRef": "asset://exercise-guides/single-arm-dumbbell-lateral-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让手肘保持轻微弯曲。",
+          "file": "single-arm-dumbbell-lateral-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "0e6d5f1f1545208a2c1077136303d112cf52442b0bfc39857b9ae0bf05f137c3",
+          "sizeBytes": 9127
+        },
+        {
+          "id": "drive",
+          "label": "向侧面抬起",
+          "description": "肩部带动手臂平稳向两侧移动。",
+          "file": "single-arm-dumbbell-lateral-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "843a877df9f2de4c4060731b2ed3b3a29de944c92d12bd17c79f179750128899",
+          "sizeBytes": 9482
+        },
+        {
+          "id": "finish",
+          "label": "肩部高度",
+          "description": "抬到肩部附近停稳，避免耸肩。",
+          "file": "single-arm-dumbbell-lateral-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "1e9e9e4267be92cfed1ea35017936da1a286f3700476a5b07699ea7813d60d1c",
+          "sizeBytes": 9441
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_LATERAL_RAISE",
+      "primaryRef": "asset://exercise-guides/cable-lateral-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让手肘保持轻微弯曲。",
+          "file": "cable-lateral-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "7bfa4d398c96d2c294e3fe6d2f7469ef948f9675af9202ea3ecd001e86161c89",
+          "sizeBytes": 10540
+        },
+        {
+          "id": "drive",
+          "label": "向侧面抬起",
+          "description": "肩部带动手臂平稳向两侧移动。",
+          "file": "cable-lateral-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "077ef181b768445ef50c33e26519272aa7a70c132218a92e075a0a34a054bf64",
+          "sizeBytes": 10985
+        },
+        {
+          "id": "finish",
+          "label": "肩部高度",
+          "description": "抬到肩部附近停稳，避免耸肩。",
+          "file": "cable-lateral-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "c98f932ce59b7e372f67c468a32135f12d121b9fe3185294a69a708d15e6c0fb",
+          "sizeBytes": 11067
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_BICEPS_CURL",
+      "primaryRef": "asset://exercise-guides/dumbbell-biceps-curl-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让上臂贴近身体。",
+          "file": "dumbbell-biceps-curl-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
+          "sizeBytes": 9374
+        },
+        {
+          "id": "drive",
+          "label": "屈肘举起",
+          "description": "固定上臂，用手臂前侧带动负重。",
+          "file": "dumbbell-biceps-curl-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "00a3cbe7635c4d1ab3dfc1b1312134da2dc291297aaaa84072ab4adbba328fab",
+          "sizeBytes": 9378
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "接近肩部后停稳，不用身体甩动。",
+          "file": "dumbbell-biceps-curl-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "a714f49c0e8007a65f1b19aa7646393e72c6b6f1e5c161597f1c33014fcb5745",
+          "sizeBytes": 9286
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_HAMMER_CURL",
+      "primaryRef": "asset://exercise-guides/dumbbell-hammer-curl-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让上臂贴近身体。",
+          "file": "dumbbell-hammer-curl-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "c13f3ed6e9c878bb45dffb4f7639d3444e434b2e76feaafb6646bedc1b23d29d",
+          "sizeBytes": 9277
+        },
+        {
+          "id": "drive",
+          "label": "屈肘举起",
+          "description": "固定上臂，用手臂前侧带动负重。",
+          "file": "dumbbell-hammer-curl-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "9bbe7c584be92ef596a4e03cef5af539eeb119269d6c0709a3fd478c9fbfc07a",
+          "sizeBytes": 9366
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "接近肩部后停稳，不用身体甩动。",
+          "file": "dumbbell-hammer-curl-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "1826b693cdb54e3e3b44919cd1943053b0f2cf8195fc5ee007ff052f1e047162",
+          "sizeBytes": 9281
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_BICEPS_CURL",
+      "primaryRef": "asset://exercise-guides/cable-biceps-curl-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "手臂下垂",
+          "description": "站稳并让上臂贴近身体。",
+          "file": "cable-biceps-curl-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "c6759ccf69463b9ba3994c3084981d8768154cdf7f769ef694657ffa23eb5491",
+          "sizeBytes": 10553
+        },
+        {
+          "id": "drive",
+          "label": "屈肘举起",
+          "description": "固定上臂，用手臂前侧带动负重。",
+          "file": "cable-biceps-curl-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "b5c7fcb08a8ed732ec2528174ef86c627aacaf547019487529d4f9d0974f7708",
+          "sizeBytes": 10511
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "接近肩部后停稳，不用身体甩动。",
+          "file": "cable-biceps-curl-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "859c8eaf7ab991f544efe88af3b0926742270dc719b1a8fc37ac2ee10696d075",
+          "sizeBytes": 10446
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_TRICEPS_PUSHDOWN",
+      "primaryRef": "asset://exercise-guides/cable-triceps-pushdown-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "屈肘准备",
+          "description": "固定上臂，让手肘处于可控弯曲位置。",
+          "file": "cable-triceps-pushdown-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "fdb9dd5b9bd4b968c847c0bc395c2eb9cf1394f113082eb16b34b9ce9c1ee91f",
+          "sizeBytes": 10283
+        },
+        {
+          "id": "drive",
+          "label": "伸直手肘",
+          "description": "只移动前臂，避免身体借力。",
+          "file": "cable-triceps-pushdown-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "13ec0f404a000ff30a7301f88d97d60da46c821b69c8063a6f1827e33d3c1983",
+          "sizeBytes": 10449
+        },
+        {
+          "id": "finish",
+          "label": "手臂伸展",
+          "description": "在手肘接近伸直时停稳，不锁死关节。",
+          "file": "cable-triceps-pushdown-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "3f84c4bd5f4bf422870771f6166985d8b229ebe86ba1d85ffb591ddd8e074324",
+          "sizeBytes": 10781
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION",
+      "primaryRef": "asset://exercise-guides/dumbbell-overhead-triceps-extension-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "屈肘准备",
+          "description": "固定上臂，让手肘处于可控弯曲位置。",
+          "file": "dumbbell-overhead-triceps-extension-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "31a47ecb81e32d1ac200ab55ff06415fd60bf5b5be63cc61e1ef02faa33411a8",
+          "sizeBytes": 9304
+        },
+        {
+          "id": "drive",
+          "label": "伸直手肘",
+          "description": "只移动前臂，避免身体借力。",
+          "file": "dumbbell-overhead-triceps-extension-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "bc1843a6476aba0bc0f2ccc7108340b51414f4d8ff220c50b8cb252086bfdb4a",
+          "sizeBytes": 9594
+        },
+        {
+          "id": "finish",
+          "label": "手臂伸展",
+          "description": "在手肘接近伸直时停稳，不锁死关节。",
+          "file": "dumbbell-overhead-triceps-extension-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "f2855c22508cab88a9c9a1fb33de554570bc8a3c06640dd047e32a96b0d93f28",
+          "sizeBytes": 9506
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_LYING_TRICEPS_EXTENSION",
+      "primaryRef": "asset://exercise-guides/dumbbell-lying-triceps-extension-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "屈肘准备",
+          "description": "固定上臂，让手肘处于可控弯曲位置。",
+          "file": "dumbbell-lying-triceps-extension-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "ccfb410eeb9cbec0b393d197d44660739344555f1b2b71a52cc02e1640a8292f",
+          "sizeBytes": 9123
+        },
+        {
+          "id": "drive",
+          "label": "伸直手肘",
+          "description": "只移动前臂，避免身体借力。",
+          "file": "dumbbell-lying-triceps-extension-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "8c78b59b59fafd803ae4e5730a60ee423e4570756d2411dde9b98bb74c94e618",
+          "sizeBytes": 8201
+        },
+        {
+          "id": "finish",
+          "label": "手臂伸展",
+          "description": "在手肘接近伸直时停稳，不锁死关节。",
+          "file": "dumbbell-lying-triceps-extension-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "1ff627a34de535c2513e9295cf88418c0d7419463c88cb0ba2937d74bf2a2471",
+          "sizeBytes": 8529
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_REVERSE_FLY",
+      "primaryRef": "asset://exercise-guides/dumbbell-reverse-fly-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩胛稳定",
+          "description": "站稳或俯身后先保持躯干稳定。",
+          "file": "dumbbell-reverse-fly-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "f99bd0dd58fa8c455b316ce989a9c9fd71be9be12977684af7ee9cc2621b4f5c",
+          "sizeBytes": 8164
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "肘部向外移动，肩部不要耸起。",
+          "file": "dumbbell-reverse-fly-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "1d63fb7f0e2c2992de4d32d91414f04f6267ae30e436b405b7ec39391dba7230",
+          "sizeBytes": 8716
+        },
+        {
+          "id": "finish",
+          "label": "上背收紧",
+          "description": "肩部后侧和上背收紧后受控返回。",
+          "file": "dumbbell-reverse-fly-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "486af66e4e7a6c81483cdac9c731252bb3d86646712daa03398a94a7a308dbf0",
+          "sizeBytes": 8121
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_REVERSE_FLY",
+      "primaryRef": "asset://exercise-guides/cable-reverse-fly-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩胛稳定",
+          "description": "站稳或俯身后先保持躯干稳定。",
+          "file": "cable-reverse-fly-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "191a745516488cc30039c7531b3dfdd6b3a62a79c91f843e307ff561be751180",
+          "sizeBytes": 8202
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "肘部向外移动，肩部不要耸起。",
+          "file": "cable-reverse-fly-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "972049c33ad74a709999366acdad2f7110f56a76ee201da6f308e246c775c87d",
+          "sizeBytes": 9063
+        },
+        {
+          "id": "finish",
+          "label": "上背收紧",
+          "description": "肩部后侧和上背收紧后受控返回。",
+          "file": "cable-reverse-fly-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "ae0125581550e189127c1183c33bc47c06f139df0283f93d79700b172f51a5a9",
+          "sizeBytes": 8029
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_FACE_PULL",
+      "primaryRef": "asset://exercise-guides/cable-face-pull-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩胛稳定",
+          "description": "站稳或俯身后先保持躯干稳定。",
+          "file": "cable-face-pull-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "7cc049abf7b12d5448b577ae515a315068da9b40837c02863da745a0b6753e4e",
+          "sizeBytes": 9873
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "肘部向外移动，肩部不要耸起。",
+          "file": "cable-face-pull-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "c2fdea05fec8f474d2588cd1025bc779d050ca3e9e7dc41db44c7087bd8394a5",
+          "sizeBytes": 9646
+        },
+        {
+          "id": "finish",
+          "label": "上背收紧",
+          "description": "肩部后侧和上背收紧后受控返回。",
+          "file": "cable-face-pull-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "d7396e5716d512943767b62eec724828274107e0dd1565776bd4b7929d1f5401",
+          "sizeBytes": 9119
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_SHRUG",
+      "primaryRef": "asset://exercise-guides/dumbbell-shrug-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩部放松",
+          "description": "站稳并让双臂自然下垂。",
+          "file": "dumbbell-shrug-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
+          "sizeBytes": 9374
+        },
+        {
+          "id": "drive",
+          "label": "垂直耸肩",
+          "description": "保持手肘伸展，将肩部垂直抬高。",
+          "file": "dumbbell-shrug-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "0ba344edbef984710fc5a91203566e5b57d94fc5d486240bd50706d8b7c93d76",
+          "sizeBytes": 9319
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "肩部抬高后短暂停稳，不转动肩膀。",
+          "file": "dumbbell-shrug-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "01949b3ddabf5a47fdf7616a9f4bdf860ad03408e957dec35b1a05235beeeff8",
+          "sizeBytes": 9393
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CABLE_SHRUG",
+      "primaryRef": "asset://exercise-guides/cable-shrug-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩部放松",
+          "description": "站稳并让双臂自然下垂。",
+          "file": "cable-shrug-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "7bfa4d398c96d2c294e3fe6d2f7469ef948f9675af9202ea3ecd001e86161c89",
+          "sizeBytes": 10540
+        },
+        {
+          "id": "drive",
+          "label": "垂直耸肩",
+          "description": "保持手肘伸展，将肩部垂直抬高。",
+          "file": "cable-shrug-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "916ca1053eb8c98ff12ff0b2bbd2da84d1114b79fd04e62243bccdd4aa49fdf9",
+          "sizeBytes": 10573
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "肩部抬高后短暂停稳，不转动肩膀。",
+          "file": "cable-shrug-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "b5461c877646280ebc6df635839bb148fc9d796125c318f0aa1790ead8bfe786",
+          "sizeBytes": 10578
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_SHRUG",
+      "primaryRef": "asset://exercise-guides/machine-shrug-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩部放松",
+          "description": "站稳并让双臂自然下垂。",
+          "file": "machine-shrug-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "9f4c2821c3ae0fd752c05fee56b49cd99677f51b2a80e0e31b7cfe48feb4e0c1",
+          "sizeBytes": 9131
+        },
+        {
+          "id": "drive",
+          "label": "垂直耸肩",
+          "description": "保持手肘伸展，将肩部垂直抬高。",
+          "file": "machine-shrug-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "84e5ad43d459b8e3c73448f91d17860c573864588c18ff31b8378cabcfffc7d8",
+          "sizeBytes": 9165
+        },
+        {
+          "id": "finish",
+          "label": "顶端停稳",
+          "description": "肩部抬高后短暂停稳，不转动肩膀。",
+          "file": "machine-shrug-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
+          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
+          "sha256": "782b740fb83efcb67bfe51ebf5e8037a727e1046ad7e728ec4d29fb54732d94e",
+          "sizeBytes": 9211
         }
       ]
     },
@@ -846,6 +1694,62 @@
           "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
           "sha256": "e51a349e2fb2b89e4d24b2a5d91f4af0deeb775973bf40b380bc81b7d54b2981",
           "sizeBytes": 11368
+        }
+      ]
+    },
+    {
+      "exerciseCode": "FLOOR_PRONE_COBRA",
+      "primaryRef": "asset://exercise-guides/floor-prone-cobra-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "俯卧准备",
+          "description": "双臂放在身体两侧，颈部保持自然。",
+          "file": "floor-prone-cobra-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/floor-prone-cobra-keyframe-01.png",
+          "sourceSha256": "d2a20dc01d3bad7398d2691ad8c6e6372a2d5509d61cb38b159ce98b199071d2",
+          "sha256": "8d035c8fc0cccd89278a30c9c85701ddbf8a6c65d6fbd295ccf0cfcfd040e061",
+          "sizeBytes": 6372
+        },
+        {
+          "id": "lift",
+          "label": "收紧抬起",
+          "description": "肩胛轻轻收拢并小幅抬起上胸，不用腰部后仰借力。",
+          "file": "floor-prone-cobra-02-lift.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/floor-prone-cobra-keyframe-02.png",
+          "sourceSha256": "39f80256c822704dd3392d6cf5b8875f9f7807357a2a335ac7fee7bf0ae15d88",
+          "sha256": "4e80d64709c9f4ba8ec1b3483d803744c6040a5d82e1e2619586fd1782d2f341",
+          "sizeBytes": 6488
+        }
+      ]
+    },
+    {
+      "exerciseCode": "CONTRALATERAL_LIMB_RAISE",
+      "primaryRef": "asset://exercise-guides/contralateral-limb-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "俯卧准备",
+          "description": "手臂和双腿自然伸展，骨盆保持稳定。",
+          "file": "contralateral-limb-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/contralateral-limb-raise-keyframe-01.png",
+          "sourceSha256": "562da7e157d33bfcad35dc25751681ac1a902eb73fe3d9996877cb4bbd64fa7f",
+          "sha256": "31cdff496bd3845ceb9bcf0f6da527294d341d9802b38d2a18bef48e55132a50",
+          "sizeBytes": 5952
+        },
+        {
+          "id": "raise",
+          "label": "对侧抬起",
+          "description": "一侧手臂与对侧腿小幅抬起，躯干不要旋转。",
+          "file": "contralateral-limb-raise-02-raise.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/contralateral-limb-raise-keyframe-02.png",
+          "sourceSha256": "da6e448b2aafc3071ce86bcc8211e4e9b78f9c6c6c68a53b647df93f942fa009",
+          "sha256": "cd02b490a00555a967162e93fd9393499b340aef8b53d0b58058fd0d0f129961",
+          "sizeBytes": 7678
         }
       ]
     },

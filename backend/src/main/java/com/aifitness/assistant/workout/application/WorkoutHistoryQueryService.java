@@ -17,10 +17,13 @@ public final class WorkoutHistoryQueryService {
     private static final int MAX_LIMIT = 50;
     private final WorkoutSessionRepository sessions;
     private final WorkoutSetRepository sets;
+    private final WorkoutHistoryRepository history;
 
-    public WorkoutHistoryQueryService(WorkoutSessionRepository sessions, WorkoutSetRepository sets) {
+    public WorkoutHistoryQueryService(
+            WorkoutSessionRepository sessions, WorkoutSetRepository sets, WorkoutHistoryRepository history) {
         this.sessions = Objects.requireNonNull(sessions);
         this.sets = Objects.requireNonNull(sets);
+        this.history = Objects.requireNonNull(history);
     }
 
     public Page list(AuthenticatedUserId user, Optional<String> encodedCursor, int limit) {
@@ -28,13 +31,13 @@ public final class WorkoutHistoryQueryService {
         Objects.requireNonNull(encodedCursor);
         if (limit < 1 || limit > MAX_LIMIT) throw new IllegalArgumentException("history limit must be between 1 and 50");
         Optional<Cursor> cursor = encodedCursor.map(WorkoutHistoryQueryService::decode);
-        List<WorkoutSession> found = sessions.findHistory(
+        List<WorkoutHistoryRepository.Projection> found = history.findHistory(
                 user.value(), cursor.map(Cursor::startedAt), cursor.map(Cursor::id), limit + 1);
         boolean hasMore = found.size() > limit;
-        List<WorkoutSession> page = found.stream().limit(limit).toList();
-        List<Item> items = page.stream().map(session -> item(user.value(), session)).toList();
+        List<WorkoutHistoryRepository.Projection> page = found.stream().limit(limit).toList();
+        List<Item> items = page.stream().map(WorkoutHistoryQueryService::item).toList();
         Optional<String> next = hasMore && !page.isEmpty()
-                ? Optional.of(encode(new Cursor(page.getLast().startedAt(), page.getLast().id())))
+                ? Optional.of(encode(new Cursor(page.getLast().startedAt(), page.getLast().sessionId())))
                 : Optional.empty();
         return new Page(items, next, hasMore);
     }
@@ -44,6 +47,9 @@ public final class WorkoutHistoryQueryService {
         Objects.requireNonNull(sessionId);
         WorkoutSession session = sessions.findByIdAndUser(sessionId, user.value())
                 .orElseThrow(WorkoutSessionService.SessionNotFoundException::new);
+        if (!session.status().terminal()) {
+            throw new WorkoutNotTerminalException();
+        }
         List<WorkoutSet> facts = sets.findBySession(user.value(), sessionId);
         List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
         Metrics metrics = metrics(completed);
@@ -51,13 +57,12 @@ public final class WorkoutHistoryQueryService {
                 metrics.completedReps(), metrics.usesExternalLoad());
     }
 
-    private Item item(UUID userId, WorkoutSession session) {
-        List<WorkoutSet> facts = sets.findBySession(userId, session.id());
-        List<WorkoutSet> completed = WorkoutFactSummary.completedPrescribedWorkSets(session, facts);
-        Metrics metrics = metrics(completed);
-        return new Item(session.id(), session.trainingDayCode(), session.status(), session.startedAt(),
-                session.completedAt().orElseThrow(), completed.size(), metrics.volumeKg(),
-                metrics.completedReps(), metrics.usesExternalLoad());
+    private static Item item(WorkoutHistoryRepository.Projection projection) {
+        return new Item(
+                projection.sessionId(), projection.trainingDayCode(), projection.trainingDayName(),
+                projection.status(), projection.startedAt(), projection.completedAt(),
+                projection.completedWorkSets(), projection.completedVolumeKg(),
+                projection.completedReps(), projection.usesExternalLoad());
     }
 
     private static Metrics metrics(List<WorkoutSet> completed) {
@@ -87,12 +92,15 @@ public final class WorkoutHistoryQueryService {
 
     private record Cursor(Instant startedAt, UUID id) {}
     private record Metrics(BigDecimal volumeKg, int completedReps, boolean usesExternalLoad) {}
-    public record Item(UUID sessionId, String trainingDayCode, WorkoutStatus status, Instant startedAt,
+    public record Item(UUID sessionId, String trainingDayCode, String trainingDayName,
+                       WorkoutStatus status, Instant startedAt,
                        Instant completedAt, int completedWorkSets, BigDecimal completedVolumeKg,
                        int completedReps, boolean usesExternalLoad) {}
     public record Summary(
             UUID sessionId, WorkoutStatus status, int completedWorkSets, BigDecimal completedVolumeKg,
             int completedReps, boolean usesExternalLoad) {}
+
+    public static final class WorkoutNotTerminalException extends RuntimeException {}
     public record Page(List<Item> items, Optional<String> nextCursor, boolean hasMore) {
         public Page { items = List.copyOf(items); Objects.requireNonNull(nextCursor); }
     }

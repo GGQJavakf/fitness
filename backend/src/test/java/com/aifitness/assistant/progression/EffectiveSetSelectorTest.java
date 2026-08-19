@@ -75,8 +75,32 @@ class EffectiveSetSelectorTest {
                         ExclusionReason.USER_MISMATCH,
                         ExclusionReason.EXERCISE_MISMATCH,
                         ExclusionReason.INCOMPLETE_SET);
-        assertThat(selected.schemaVersion()).isEqualTo("progression-input-v1");
+        assertThat(selected.failedSets()).extracting(ProgressionInput.FailedSetFact::factId)
+                .containsExactly(new UUID(0, 112));
+        assertThat(selected.schemaVersion()).isEqualTo("progression-input-v2");
         assertThat(selected.selectedAt()).isEqualTo(SELECTED_AT);
+    }
+
+    @Test
+    void preservesWarmupSafetyButDoesNotCountWarmupFailureAsPerformanceFailure() {
+        RawSetFact warmup = fact(20, USER, EXERCISE, "STANDARD", "KG", SetKind.WARMUP,
+                SessionOutcome.COMPLETED, FactStatus.FAILED, new BigDecimal("20"), null, false, true,
+                Optional.of(ProgressionInput.SafetyFlag.DIZZINESS));
+        RawSetFact work = fact(21, USER, EXERCISE, "STANDARD", "KG", SetKind.WORK,
+                SessionOutcome.COMPLETED, FactStatus.FAILED, new BigDecimal("40"), null, false, true,
+                Optional.empty());
+
+        ProgressionInput selected = new EffectiveSetSelector().select(
+                new SelectionCriteria(USER, EXERCISE, "STANDARD", "KG"), List.of(warmup, work), SELECTED_AT);
+
+        assertThat(selected.effectiveSets()).isEmpty();
+        assertThat(selected.failedSets()).extracting(ProgressionInput.FailedSetFact::factId)
+                .containsExactly(work.factId());
+        assertThat(selected.safetyFlags()).singleElement().satisfies(flag -> {
+            assertThat(flag.factId()).isEqualTo(warmup.factId());
+            assertThat(flag.setType()).isEqualTo(ProgressionInput.FactSetType.WARMUP);
+            assertThat(flag.safetyFlag()).isEqualTo(ProgressionInput.SafetyFlag.DIZZINESS);
+        });
     }
 
     @Test
@@ -107,9 +131,17 @@ class EffectiveSetSelectorTest {
             long suffix, UUID userId, UUID exerciseId, String variant, String unit, SetKind kind,
             SessionOutcome sessionOutcome, FactStatus factStatus, BigDecimal weight, Integer rir,
             boolean anomalous, boolean currentRevision) {
+        return fact(suffix, userId, exerciseId, variant, unit, kind, sessionOutcome, factStatus, weight, rir,
+                anomalous, currentRevision, Optional.empty());
+    }
+
+    private static RawSetFact fact(
+            long suffix, UUID userId, UUID exerciseId, String variant, String unit, SetKind kind,
+            SessionOutcome sessionOutcome, FactStatus factStatus, BigDecimal weight, Integer rir,
+            boolean anomalous, boolean currentRevision, Optional<ProgressionInput.SafetyFlag> safetyFlag) {
         return new RawSetFact(
                 new UUID(0, 100 + suffix), SESSION, userId, exerciseId, variant, unit, kind,
-                1, sessionOutcome, factStatus, weight, 10, Optional.ofNullable(rir), anomalous,
+                1, sessionOutcome, factStatus, weight, 10, Optional.ofNullable(rir), safetyFlag, anomalous,
                 currentRevision, Instant.parse("2026-07-24T10:00:00Z").plusSeconds(suffix), suffix, DIGEST);
     }
 }

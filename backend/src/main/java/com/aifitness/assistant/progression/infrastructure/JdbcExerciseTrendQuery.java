@@ -36,6 +36,9 @@ public final class JdbcExerciseTrendQuery implements ExerciseTrendQuery {
                 JOIN workout_set wset ON wset.session_exercise_id = wes.id
                 WHERE ws.user_id = ?
                   AND ws.status = 'COMPLETED'
+                  AND NOT EXISTS (
+                      SELECT 1 FROM workout_set_void wv WHERE wv.workout_set_id = wset.id
+                  )
                   AND COALESCE(
                         JSON_UNQUOTE(JSON_EXTRACT(wes.replacement_snapshot_json, '$.exerciseCode')),
                         JSON_UNQUOTE(JSON_EXTRACT(wes.exercise_snapshot_json, '$.exerciseCode'))
@@ -45,6 +48,7 @@ public final class JdbcExerciseTrendQuery implements ExerciseTrendQuery {
                   AND wset.actual_weight IS NOT NULL
                   AND wset.actual_reps IS NOT NULL
                   AND wset.unit = 'KG'
+                  AND wset.safety_flag IS NULL
                   AND wset.anomaly_status IS NULL
                 GROUP BY ws.id, ws.completed_at
                 ORDER BY ws.completed_at DESC, ws.id DESC

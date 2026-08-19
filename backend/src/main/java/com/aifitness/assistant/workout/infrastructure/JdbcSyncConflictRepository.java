@@ -38,16 +38,30 @@ public final class JdbcSyncConflictRepository implements SyncConflictRepository 
 
     @Override
     public SyncConflict save(SyncConflict conflict) {
-        jdbc.update("""
-                INSERT INTO sync_conflict
-                    (id, user_id, entity_type, entity_key, local_payload_json, server_payload_json,
-                     status, resolution, sync_version, resolved_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, bytes(conflict.id()), bytes(conflict.userId()), conflict.entityType(), conflict.entityKey(),
-                write(conflict.localEvidence()), write(conflict.serverEvidence()), conflict.status().name(),
-                conflict.resolution().map(Enum::name).orElse(null), conflict.version(),
-                conflict.resolvedAt().map(Timestamp::from).orElse(null), Timestamp.from(conflict.createdAt()));
-        return conflict;
+        return Objects.requireNonNull(transactions.execute(ignored -> {
+            jdbc.queryForList(
+                    "SELECT id FROM user_account WHERE id = ? FOR UPDATE", byte[].class, bytes(conflict.userId()));
+            List<SyncConflict> existing = jdbc.query("""
+                    SELECT * FROM sync_conflict
+                    WHERE user_id = ? AND entity_type = ? AND entity_key = ? AND status = 'OPEN'
+                    FOR UPDATE
+                    """, (row, index) -> read(row), bytes(conflict.userId()),
+                    conflict.entityType(), conflict.entityKey());
+            Optional<SyncConflict> replay = existing.stream()
+                    .filter(item -> SyncConflictRepository.sameOpenIdentity(item, conflict))
+                    .findFirst();
+            if (replay.isPresent()) return replay.orElseThrow();
+            jdbc.update("""
+                    INSERT INTO sync_conflict
+                        (id, user_id, entity_type, entity_key, local_payload_json, server_payload_json,
+                         status, resolution, sync_version, resolved_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, bytes(conflict.id()), bytes(conflict.userId()), conflict.entityType(), conflict.entityKey(),
+                    write(conflict.localEvidence()), write(conflict.serverEvidence()), conflict.status().name(),
+                    conflict.resolution().map(Enum::name).orElse(null), conflict.version(),
+                    conflict.resolvedAt().map(Timestamp::from).orElse(null), Timestamp.from(conflict.createdAt()));
+            return conflict;
+        }));
     }
 
     @Override
@@ -60,26 +74,45 @@ public final class JdbcSyncConflictRepository implements SyncConflictRepository 
     }
 
     @Override
-    public SyncConflict resolve(
-            UUID userId, UUID conflictId, SyncConflict.Resolution resolution, long expectedVersion) {
+    public <T> ResolutionTransaction<T> resolve(
+            UUID userId,
+            UUID conflictId,
+            SyncConflict.Resolution resolution,
+            long expectedVersion,
+            ResolutionAction<T> action) {
+        Objects.requireNonNull(resolution, "resolution must not be null");
+        Objects.requireNonNull(action, "resolution action must not be null");
         return Objects.requireNonNull(transactions.execute(ignored -> {
             List<SyncConflict> found = jdbc.query("""
                     SELECT * FROM sync_conflict WHERE id = ? AND user_id = ? FOR UPDATE
                     """, (row, index) -> read(row), bytes(conflictId), bytes(userId));
             if (found.isEmpty()) throw new WorkoutSessionService.SessionNotFoundException();
             SyncConflict current = found.getFirst();
-            if (current.status() != SyncConflict.Status.OPEN || current.version() != expectedVersion) {
+            if (current.status() == SyncConflict.Status.RESOLVED) {
+                if (current.resolution().orElseThrow() != resolution || current.version() - 1 != expectedVersion) {
+                    throw new WorkoutSessionService.VersionConflictException(current.version());
+                }
+                ResolutionActionResult<T> replay = action.execute(current, true);
+                return new ResolutionTransaction<>(current, replay.value(), true);
+            }
+            if (current.version() != expectedVersion) {
                 throw new WorkoutSessionService.VersionConflictException(current.version());
             }
-            SyncConflict resolved = current.resolve(resolution, expectedVersion, clock.instant());
+            ResolutionActionResult<T> decision = action.execute(current, false);
+            SyncConflict withFinalEvidence = new SyncConflict(
+                    current.id(), current.userId(), current.entityType(), current.entityKey(),
+                    current.localEvidence(), decision.serverEvidence(), current.status(), current.resolution(),
+                    current.version(), current.createdAt(), current.resolvedAt());
+            SyncConflict resolved = withFinalEvidence.resolve(resolution, expectedVersion, clock.instant());
             int changed = jdbc.update("""
                     UPDATE sync_conflict
-                    SET status = 'RESOLVED', resolution = ?, sync_version = ?, resolved_at = ?
+                    SET status = 'RESOLVED', resolution = ?, sync_version = ?, resolved_at = ?,
+                        server_payload_json = ?
                     WHERE id = ? AND user_id = ? AND status = 'OPEN' AND sync_version = ?
                     """, resolution.name(), resolved.version(), Timestamp.from(resolved.resolvedAt().orElseThrow()),
-                    bytes(conflictId), bytes(userId), expectedVersion);
+                    write(decision.serverEvidence()), bytes(conflictId), bytes(userId), expectedVersion);
             if (changed != 1) throw new WorkoutSessionService.VersionConflictException(current.version());
-            return resolved;
+            return new ResolutionTransaction<>(resolved, decision.value(), false);
         }));
     }
 

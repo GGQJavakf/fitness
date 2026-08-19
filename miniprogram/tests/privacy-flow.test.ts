@@ -145,6 +145,68 @@ describe('privacy flow', () => {
     })
   })
 
+  it('preserves local user data while deletion is only pending or rejected', async () => {
+    const requestDeletion = vi.fn().mockResolvedValue({
+      id: 'request-1', status: 'REQUESTED', requestedAt: '2026-08-11T08:00:00Z', updatedAt: '2026-08-11T08:00:00Z',
+      deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
+    })
+    const getDeletionRequest = vi.fn().mockResolvedValue({
+      id: 'request-1', status: 'REJECTED', requestedAt: '2026-08-11T08:00:00Z', updatedAt: '2026-08-11T08:01:00Z',
+      deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
+    })
+    const onAccessRevoked = vi.fn()
+    const privacy = createVerifiedPrivacyUseCases(
+      { exportData: vi.fn(), requestDeletion, getDeletionRequest },
+      { getProof: vi.fn().mockResolvedValue('fresh-proof') },
+      { onAccessRevoked },
+    )
+
+    await privacy.requestDeletion('DELETE')
+    await privacy.getDeletionStatus('request-1')
+
+    expect(onAccessRevoked).not.toHaveBeenCalled()
+  })
+
+  it.each(['ACCESS_REVOKED', 'BUSINESS_DATA_ANONYMIZED', 'RETENTION_SEPARATED', 'COMPLETED'] as const)(
+    'purges local user data when deletion reaches %s',
+    async (status) => {
+      const onAccessRevoked = vi.fn()
+      const privacy = createVerifiedPrivacyUseCases(
+        {
+          exportData: vi.fn(),
+          requestDeletion: vi.fn().mockResolvedValue({
+            id: 'request-1', status, requestedAt: '2026-08-11T08:00:00Z', updatedAt: '2026-08-11T08:01:00Z',
+            deletionScope: ['PROFILE'], retainedCategories: ['SECURITY_AUDIT'],
+          }),
+          getDeletionRequest: vi.fn(),
+        },
+        { getProof: vi.fn().mockResolvedValue('fresh-proof') },
+        { onAccessRevoked },
+      )
+
+      await privacy.requestDeletion('DELETE')
+
+      expect(onAccessRevoked).toHaveBeenCalledExactlyOnceWith(status)
+    },
+  )
+
+  it('does not purge when deletion or status lookup fails before revocation is confirmed', async () => {
+    const onAccessRevoked = vi.fn()
+    const privacy = createVerifiedPrivacyUseCases(
+      {
+        exportData: vi.fn(),
+        requestDeletion: vi.fn().mockRejectedValue(new Error('request failed')),
+        getDeletionRequest: vi.fn().mockRejectedValue(new Error('lookup failed')),
+      },
+      { getProof: vi.fn().mockResolvedValue('fresh-proof') },
+      { onAccessRevoked },
+    )
+
+    await expect(privacy.requestDeletion('DELETE')).rejects.toThrow('request failed')
+    await expect(privacy.getDeletionStatus('request-1')).rejects.toThrow('lookup failed')
+    expect(onAccessRevoked).not.toHaveBeenCalled()
+  })
+
   it('obtains privacy proof from the authenticated server issuance endpoint', async () => {
     const request = vi.fn().mockResolvedValue({
       statusCode: 200,

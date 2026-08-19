@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.2.0", "ruleVersion": "1.2.0", "contentVersion": "1.2.0", "status": "AI_VALIDATED",
-    "generatedAt": "2026-08-05T03:07:27Z",
-    "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写", "仅自重模板不得引用外部器械动作", "每周四至六练的自重模板必须交替肌群以满足恢复窗口", "每个可选训练频率和器械范围都必须存在不超过三十分钟的有效模板"],
+    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.8.0", "ruleVersion": "1.6.0", "contentVersion": "1.7.1", "status": "AI_VALIDATED",
+    "generatedAt": "2026-08-15T10:15:00Z",
+    "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写", "可用器械支持时整周必须包含直接二头和直接三头训练", "仅自重模板不得引用外部器械动作", "每周四至六练的自重模板必须交替肌群以满足恢复窗口", "每个可选训练频率和器械范围都必须存在不超过四十五分钟的有效模板", "内容不足时必须返回候选不足，不得放宽四十八小时恢复窗口或重复动作"],
     "sourceReferences": [{ "id": "ACSM_PTR_11", "title": "ACSM Position Stand for Healthy Adults", "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/", "accessedAt": "2026-07-23", "usage": "用于模板频率和训练范围候选，不用于个体绝对重量" }],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "dc50cfc8f6d33b56f9ac757b96ff196403697f9796431c3b1ff7201add42cfc7"
+    "digestSha256": "b2d81805a62bf311aed19aacb9c297f273187ee0ac095e020f4d090757f3078e"
   },
   "templates": [
     {
@@ -15,13 +15,33 @@
           { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "SEATED_CABLE_ROW", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "DAY_B", "name": "全身 B", "exercises": [
           { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "LAT_PULLDOWN", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]}
+      ]
+    },
+    {
+      "code": "UPPER_LOWER_2_DAY_V1", "name": "上下肢二分化每周两练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 2,
+      "days": [
+        { "code": "UPPER_A", "name": "上肢 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]},
+        { "code": "LOWER_A", "name": "下肢 A", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]}
       ]
     },
@@ -32,13 +52,15 @@
           { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "SEATED_CABLE_ROW", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "DAY_B", "name": "全身 B", "exercises": [
           { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "LAT_PULLDOWN", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "DAY_C", "name": "全身 C", "exercises": [
           { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
@@ -49,60 +71,126 @@
       ]
     },
     {
+      "code": "PUSH_PULL_LEGS_3_DAY_V1", "name": "推拉腿三分化每周三练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 3,
+      "days": [
+        { "code": "PUSH_A", "name": "推 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]},
+        { "code": "PULL_A", "name": "拉 A", "exercises": [
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_REVERSE_FLY", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]},
+        { "code": "LEGS_A", "name": "腿 A", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]}
+      ]
+    },
+    {
       "code": "UPPER_LOWER_4_DAY_V1", "name": "上下肢分化每周四练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 4,
       "days": [
         { "code": "LOWER_A", "name": "下肢 A", "exercises": [
           { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
         { "code": "UPPER_A", "name": "上肢 A", "exercises": [
-          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "SEATED_CABLE_ROW", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "LAT_PULLDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" }
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "LOWER_B", "name": "下肢 B", "exercises": [
           { "exerciseCode": "DUMBBELL_FRONT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
           { "exerciseCode": "DUMBBELL_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
         { "code": "UPPER_B", "name": "上肢 B", "exercises": [
-          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "CABLE_HIGH_ROW", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "SEATED_DUMBBELL_PRESS", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" }
+          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "ONE_ARM_DUMBBELL_ROW", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_HAMMER_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "order": 5, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]}
+      ]
+    },
+    {
+      "code": "BODY_PART_5_DAY_V1", "name": "五分化进阶训练每周五练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 5,
+      "days": [
+        { "code": "CHEST_A", "name": "胸部重点 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "BACK_A", "name": "背部重点 A", "exercises": [
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_REVERSE_FLY", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_SHRUG", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]},
+        { "code": "LEGS_A", "name": "腿部重点 A", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "ARMS_A", "name": "手臂重点 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_HAMMER_CURL", "order": 2, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 3, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
+        ]},
+        { "code": "SHOULDERS_A", "name": "肩部重点 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "order": 2, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_REVERSE_FLY", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_SHRUG", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]}
       ]
     },
     {
       "code": "HYBRID_5_DAY_V1", "name": "推拉腿与上下肢每周五练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 5,
       "days": [
-        { "code": "PUSH", "name": "推与躯干", "exercises": [
-          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "PUSH_A", "name": "推 A", "exercises": [
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
-        { "code": "PULL", "name": "拉与躯干", "exercises": [
-          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "PULL_A", "name": "拉 A", "exercises": [
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_SHRUG", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
-        { "code": "LEGS", "name": "下肢与躯干", "exercises": [
-          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "LEGS", "name": "下肢", "exercises": [
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "UPPER", "name": "上肢综合", "exercises": [
-          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "CABLE_HIGH_ROW", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "SEATED_DUMBBELL_PRESS", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" }
+        { "code": "PUSH_B", "name": "推 B", "exercises": [
+          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "SEATED_DUMBBELL_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_LATERAL_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
-        { "code": "LOWER", "name": "下肢综合", "exercises": [
-          { "exerciseCode": "DUMBBELL_FRONT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "PULL_B", "name": "拉 B", "exercises": [
+          { "exerciseCode": "ONE_ARM_DUMBBELL_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_SHRUG", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_HAMMER_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]}
       ]
     },
@@ -110,34 +198,40 @@
       "code": "PUSH_PULL_LEGS_6_DAY_V1", "name": "推拉腿循环每周六练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 6,
       "days": [
         { "code": "PUSH_A", "name": "推 A", "exercises": [
-          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DUMBBELL_BENCH_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "PULL_A", "name": "拉 A", "exercises": [
-          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "SEATED_CABLE_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "LAT_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_SHRUG", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_BICEPS_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "LEGS_A", "name": "腿 A", "exercises": [
-          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "GOBLET_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
         { "code": "PUSH_B", "name": "推 B", "exercises": [
-          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "SEATED_DUMBBELL_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "SEATED_DUMBBELL_PRESS", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_LATERAL_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "PULL_B", "name": "拉 B", "exercises": [
-          { "exerciseCode": "CABLE_HIGH_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "ONE_ARM_DUMBBELL_ROW", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "CABLE_SHRUG", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_HAMMER_CURL", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "NEEDS_CALIBRATION" }
         ]},
         { "code": "LEGS_B", "name": "腿 B", "exercises": [
-          { "exerciseCode": "DUMBBELL_FRONT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DUMBBELL_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "initialWeightState": "NEEDS_CALIBRATION" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "DUMBBELL_FRONT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "DUMBBELL_DEADLIFT", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "NEEDS_CALIBRATION" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]}
       ]
     },
@@ -182,22 +276,26 @@
         { "code": "BODYWEIGHT_A", "name": "自重下肢与髋部 A", "exercises": [
           { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "PRISONER_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_B", "name": "自重推拉上肢 B", "exercises": [
+        { "code": "BODYWEIGHT_B", "name": "自重上肢与躯干 B", "exercises": [
           { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
         { "code": "BODYWEIGHT_C", "name": "自重下肢与髋部 C", "exercises": [
-          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PRISONER_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_D", "name": "自重推拉上肢 D", "exercises": [
-          { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "BODYWEIGHT_D", "name": "自重上肢与躯干 D", "exercises": [
+          { "exerciseCode": "WALL_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]}
       ]
     },
@@ -207,27 +305,32 @@
         { "code": "BODYWEIGHT_A", "name": "自重下肢与髋部 A", "exercises": [
           { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "PRISONER_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_B", "name": "自重推拉上肢 B", "exercises": [
+        { "code": "BODYWEIGHT_B", "name": "自重推 B", "exercises": [
           { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "WALL_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PUSH_UP", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_C", "name": "自重下肢与髋部 C", "exercises": [
-          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+        { "code": "BODYWEIGHT_C", "name": "自重背部与躯干 C", "exercises": [
+          { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PLANK", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "BODYWEIGHT_D", "name": "自重下肢与髋部 D", "exercises": [
+          { "exerciseCode": "PRISONER_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_D", "name": "自重推拉上肢 D", "exercises": [
-          { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
-        ]},
-        { "code": "BODYWEIGHT_E", "name": "自重下肢与髋部 E", "exercises": [
-          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "BODYWEIGHT_E", "name": "自重推 E", "exercises": [
+          { "exerciseCode": "WALL_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PUSH_UP", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "INCLINE_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]}
       ]
     },
@@ -237,32 +340,38 @@
         { "code": "BODYWEIGHT_A", "name": "自重下肢与髋部 A", "exercises": [
           { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "PRISONER_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_B", "name": "自重推拉上肢 B", "exercises": [
+        { "code": "BODYWEIGHT_B", "name": "自重推 B", "exercises": [
           { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "WALL_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PUSH_UP", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_C", "name": "自重下肢与髋部 C", "exercises": [
-          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+        { "code": "BODYWEIGHT_C", "name": "自重背部与躯干 C", "exercises": [
+          { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PLANK", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        ]},
+        { "code": "BODYWEIGHT_D", "name": "自重下肢与髋部 D", "exercises": [
+          { "exerciseCode": "PRISONER_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "BIRD_DOG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_D", "name": "自重推拉上肢 D", "exercises": [
-          { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "BODYWEIGHT_E", "name": "自重推 E", "exercises": [
+          { "exerciseCode": "WALL_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PUSH_UP", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "INCLINE_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_E", "name": "自重下肢与髋部 E", "exercises": [
-          { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
-        ]},
-        { "code": "BODYWEIGHT_F", "name": "自重推拉上肢 F", "exercises": [
-          { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_W_RAISE", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
-          { "exerciseCode": "PRONE_Y_RAISE", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
+        { "code": "BODYWEIGHT_F", "name": "自重背部与躯干 F", "exercises": [
+          { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "PLANK", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "DEAD_BUG", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
+          { "exerciseCode": "BIRD_DOG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]}
       ]
     }

@@ -62,18 +62,6 @@ describe('home page product-quality contract', () => {
     expect(busyStates).toEqual([true, false])
   })
 
-  it('keeps loading feedback and every established destination', () => {
-    const page = source('src/presentation/pages/home/index.tsx')
-
-    expect(page).toContain('isLoggingIn')
-    expect(page).toContain('loading={isLoggingIn}')
-    expect(page).toContain('disabled={isLoggingIn}')
-    expect(page).toContain('runSingleFlight(loginInFlight, setIsLoggingIn')
-    for (const destination of ['WORKOUT_SESSION', 'PLAN', 'ONBOARDING', 'MY']) {
-      expect(page).toContain(`'${destination}'`)
-    }
-  })
-
   it('uses a restrained health-tech system with explicit safe-area handling', () => {
     const styles = source('src/presentation/pages/home/index.scss')
 

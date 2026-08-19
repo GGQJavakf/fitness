@@ -41,6 +41,11 @@ public final class PlanValidationEngine {
             issues.add(error("SESSION_FREQUENCY_OUT_OF_RANGE", "/days"));
         }
         boolean calibrationRequired = false;
+        Set<String> availableMovementPatterns = facts.values().stream()
+                .map(ExerciseFacts::movementPattern)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> weeklyMovementPatterns = new HashSet<>();
+        Map<String, Integer> weeklyMovementPatternSessions = new HashMap<>();
         Map<String, Integer> firstPrimaryMuscleSession = new HashMap<>();
         Map<String, Integer> lastPrimaryMuscleSession = new HashMap<>();
         for (int dayIndex = 0; dayIndex < candidate.days().size(); dayIndex++) {
@@ -49,9 +54,19 @@ public final class PlanValidationEngine {
             if (day.exercises().isEmpty() || day.exercises().size() > limits.maximumExercisesPerSession()) {
                 issues.add(error("EXERCISE_COUNT_OUT_OF_RANGE", dayPath + "/exercises"));
             }
-            int estimatedSeconds = 0;
+            policy.sessionComposition().targetForMinutes(availableMinutes).ifPresent(target -> {
+                if (day.exercises().size() < target.minimumExercises()) {
+                    issues.add(error("SESSION_TARGET_UNDERFILLED", dayPath + "/exercises"));
+                } else if (day.exercises().size() > target.maximumExercises()) {
+                    issues.add(error("SESSION_TARGET_OVERFILLED", dayPath + "/exercises"));
+                }
+            });
+            boolean loadedExercisePresent = day.exercises().stream()
+                    .anyMatch(exercise -> exercise.weightStatus() != PlanGenerationEngine.WeightStatus.BODYWEIGHT);
+            int estimatedSeconds = policy.duration().sessionWarmupSeconds(loadedExercisePresent);
             Map<String, Integer> movementCounts = new HashMap<>();
             Map<String, Integer> primaryMuscleSets = new HashMap<>();
+            Set<String> movementPatterns = new HashSet<>();
             Set<String> dayMuscles = new HashSet<>();
             Set<String> exerciseCodes = new HashSet<>();
             for (PlanGenerationEngine.Exercise exercise : day.exercises()) {
@@ -65,6 +80,11 @@ public final class PlanValidationEngine {
                     issues.add(error("EXERCISE_NOT_ELIGIBLE", exercisePath));
                 } else {
                     movementCounts.merge(exerciseFacts.movementPattern(), 1, Integer::sum);
+                    movementPatterns.add(exerciseFacts.movementPattern());
+                    weeklyMovementPatterns.add(exerciseFacts.movementPattern());
+                    if (!day.focus().allows(exerciseFacts.movementPattern())) {
+                        issues.add(error("SESSION_FOCUS_MISMATCH", exercisePath + "/movementPattern"));
+                    }
                     exerciseFacts.primaryMuscles().forEach(muscle -> {
                         primaryMuscleSets.merge(muscle, exercise.workSets(), Integer::sum);
                         dayMuscles.add(muscle);
@@ -79,10 +99,17 @@ public final class PlanValidationEngine {
             movementCounts.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 String pattern = entry.getKey();
                 int count = entry.getValue();
-                if (count > policy.balance().maximumMovementPatternOccurrencesPerSession()) {
+                if (count > day.focus().maximumPatternOccurrences(
+                        pattern, policy.balance().maximumMovementPatternOccurrencesPerSession())) {
                     issues.add(error("DUPLICATE_MOVEMENT_PATTERN", dayPath + "/movementPatterns/" + pattern));
                 }
             });
+            movementPatterns.forEach(pattern -> weeklyMovementPatternSessions.merge(pattern, 1, Integer::sum));
+            day.focus().requiredPatterns().stream().sorted()
+                    .filter(pattern -> !movementPatterns.contains(pattern))
+                    .forEach(pattern -> issues.add(error(
+                            "SESSION_REQUIRED_PATTERN_MISSING",
+                            dayPath + "/requiredPatterns/" + pattern)));
             primaryMuscleSets.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
                 String muscle = entry.getKey();
                 int sets = entry.getValue();
@@ -105,6 +132,35 @@ public final class PlanValidationEngine {
             if (estimatedSeconds > maximumMinutes * 60) {
                 issues.add(error("SESSION_DURATION_EXCEEDED", dayPath));
             }
+        }
+        if (availableMinutes == 45) {
+            List.of("ELBOW_FLEXION", "ELBOW_EXTENSION").stream()
+                    .filter(availableMovementPatterns::contains)
+                    .filter(pattern -> !weeklyMovementPatterns.contains(pattern))
+                    .forEach(pattern -> issues.add(error(
+                            "WEEKLY_DIRECT_ARM_PATTERN_MISSING",
+                            "/weeklyRequiredPatterns/" + pattern)));
+        }
+        boolean fullBodyWeek = candidate.days().stream()
+                .allMatch(day -> day.focus() == PlanGenerationEngine.SessionFocus.FULL_BODY);
+        if (availableMinutes == 45 && fullBodyWeek) {
+            policy.balance().weeklyTargetsFor(candidate.days().size())
+                    .filter(targetSet -> targetSet.appliesTo(availableMovementPatterns))
+                    .ifPresent(targetSet -> targetSet.targets().stream()
+                            .sorted(java.util.Comparator.comparing(PlanRulePolicy.MovementPatternSessionTarget::movementPattern))
+                            .forEach(target -> {
+                                int actualSessions = weeklyMovementPatternSessions.getOrDefault(
+                                        target.movementPattern(), 0);
+                                if (actualSessions < target.minimumSessions()) {
+                                    issues.add(error(
+                                            "WEEKLY_MOVEMENT_PATTERN_UNDERFILLED",
+                                            "/weeklyMovementPatterns/" + target.movementPattern()));
+                                } else if (actualSessions > target.maximumSessions()) {
+                                    issues.add(error(
+                                            "WEEKLY_MOVEMENT_PATTERN_OVERFILLED",
+                                            "/weeklyMovementPatterns/" + target.movementPattern()));
+                                }
+                            }));
         }
         firstPrimaryMuscleSession.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
             String muscle = entry.getKey();

@@ -7,6 +7,7 @@ import type {
   PlanCandidateGenerationData,
   SessionMinutes,
   TrainingLocation,
+  TrainingSplit,
   UpdateEquipmentRequest,
   UpdatePreferencesRequest,
   UpdateProfileRequest,
@@ -16,11 +17,12 @@ import type {
   PlanGenerationContextData,
   PlanGenerationSource,
 } from './models'
-import type { AiPlanGenerator } from './cloudbaseAi'
 import {
-  AiPlanGenerationError,
-  AiPlanUnavailableError,
+  AiDiagnosticError,
+  isOrdinaryAiFallbackError,
+  type AiPlanGenerator,
 } from './cloudbaseAi'
+import type { UserScopedLocalDataPort } from './localPrivacyLifecycle'
 import { normalizeSafeTrainingPreference } from './trainingPreferenceSafety'
 
 export const ONBOARDING_STEPS = [
@@ -58,12 +60,14 @@ export const DEFAULT_GYM_EQUIPMENT: EquipmentItemRequest[] = [
 ]
 
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number]
+export type OnboardingAdjustmentRoute = 'ONBOARDING_EQUIPMENT' | 'ONBOARDING_SCHEDULE'
 
 export interface OnboardingDraft {
   adultConfirmed: boolean
   safetyAccepted: boolean
   goal?: FitnessGoal
   experience?: ExperienceLevel
+  trainingSplit?: TrainingSplit
   weeklyFrequency?: number
   sessionMinutes?: SessionMinutes
   location?: TrainingLocation
@@ -71,6 +75,7 @@ export interface OnboardingDraft {
   preferences: ExercisePreference[]
   preferencesTouched?: boolean
   additionalRequirements?: string
+  aiConsentGranted?: boolean
 }
 
 export interface OnboardingState {
@@ -95,6 +100,7 @@ export interface OnboardingPersistencePort {
   generateCandidate(
     request: {
       profileVersion: number
+      trainingSplit?: TrainingSplit
       lockedFields?: Record<string, number>
       additionalRequirements?: string
       aiProposal?: AiPlanProposal
@@ -119,10 +125,14 @@ export interface StartupPorts {
   }
   wechatLogin: { getCode(): Promise<string> }
   auth: { login(code: string): Promise<Session> }
-  workout: { hasActive(): Promise<boolean> }
+  workout: {
+    hasActive(): Promise<boolean>
+    getStartupState?(): Promise<'NONE' | 'ACTIVE' | 'RECOVERY_REQUIRED'>
+  }
   profile: { exists(): Promise<boolean> }
   plan: { hasActivePlan(): Promise<boolean> }
   navigation: { replace(destination: AppDestination): Promise<void> | void }
+  localUserData?: UserScopedLocalDataPort & { activate(): void }
 }
 
 export interface CandidateExerciseViewModel {
@@ -149,11 +159,41 @@ export interface CandidateViewModel {
   reason?: string
   action?: {
     label: string
-    route: 'ONBOARDING_EQUIPMENT'
+    route: OnboardingAdjustmentRoute
   }
 }
 
 const allowedDurations: readonly number[] = [30, 45, 60, 75, 90]
+
+const splitFrequencies: Readonly<Record<TrainingSplit, readonly number[]>> = {
+  UPPER_LOWER: [2, 4],
+  PUSH_PULL_LEGS: [3, 6],
+  BODY_PART_FIVE_DAY: [5],
+}
+
+export function recommendedTrainingSplit(experience: ExperienceLevel): TrainingSplit {
+  return ({
+    BEGINNER: 'UPPER_LOWER',
+    INTERMEDIATE: 'PUSH_PULL_LEGS',
+    ADVANCED: 'BODY_PART_FIVE_DAY',
+  } as const)[experience]
+}
+
+export function allowedFrequenciesForSplit(split: TrainingSplit): readonly number[] {
+  return splitFrequencies[split]
+}
+
+export function defaultFrequencyForSplit(split: TrainingSplit): number {
+  return splitFrequencies[split][0]
+}
+
+export function resolveTrainingSplit(draft: Pick<OnboardingDraft, 'trainingSplit' | 'weeklyFrequency' | 'experience'>): TrainingSplit {
+  if (draft.trainingSplit) return draft.trainingSplit
+  if (draft.weeklyFrequency === 2 || draft.weeklyFrequency === 4) return 'UPPER_LOWER'
+  if (draft.weeklyFrequency === 3 || draft.weeklyFrequency === 6) return 'PUSH_PULL_LEGS'
+  if (draft.weeklyFrequency === 5) return 'BODY_PART_FIVE_DAY'
+  return recommendedTrainingSplit(draft.experience ?? 'BEGINNER')
+}
 
 export function createOnboardingState(): OnboardingState {
   return {
@@ -164,6 +204,7 @@ export function createOnboardingState(): OnboardingState {
       safetyAccepted: false,
       equipment: [],
       preferences: [],
+      aiConsentGranted: false,
     },
     errors: [],
   }
@@ -256,67 +297,67 @@ export async function saveProfileAndGenerateCandidate(
     })
   }
 
-  const requirements = draft.additionalRequirements?.trim() ?? ''
+  const additionalRequirements = draft.additionalRequirements?.trim() ?? ''
+  const trainingSplit = resolveTrainingSplit(draft)
+  if (draft.aiConsentGranted !== true) {
+    return requestFallback(port, profile.version, trainingSplit, additionalRequirements)
+  }
   if (!aiGenerator || !port.getPlanGenerationContext) {
-    return port.generateCandidate({ profileVersion: profile.version })
+    throw new AiDiagnosticError(
+      'CONFIGURATION',
+      'AI_PLAN_GENERATOR_UNAVAILABLE',
+      'AI plan generation is not configured',
+    )
   }
 
-  const context = await port.getPlanGenerationContext(profile.version)
-  let firstProposal: AiPlanProposal
   try {
-    firstProposal = await aiGenerator.generate(context, requirements)
-  } catch (error) {
-    if (!isAiFallbackError(error)) throw error
-    return requestFallback(port, profile.version, requirements)
-  }
-  const firstResult = await port.generateCandidate({
-    profileVersion: profile.version,
-    additionalRequirements: requirements,
-    aiProposal: firstProposal,
-    fallbackAllowed: false,
-  })
-  if (firstResult.status === 'CANDIDATE_READY' && firstResult.candidate) {
-    return firstResult
-  }
-
-  let repairedProposal: AiPlanProposal
-  try {
-    repairedProposal = await aiGenerator.generate(
-      context,
-      requirements,
-      firstResult.validationIssues,
+    const loadedContext = await port.getPlanGenerationContext(profile.version)
+    const context: PlanGenerationContextData = {
+      ...loadedContext,
+      profile: { ...loadedContext.profile, trainingSplit },
+    }
+    let repairIssues: ValidationIssue[] | undefined
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const aiProposal = await aiGenerator.generate(context, {
+        consentGranted: true,
+        repairIssues,
+      })
+      const generated = await port.generateCandidate({
+        profileVersion: profile.version,
+        trainingSplit,
+        additionalRequirements,
+        aiProposal,
+        fallbackAllowed: false,
+      })
+      if (generated.status === 'CANDIDATE_READY' && generated.candidate) return generated
+      if (attempt === 1) return generated
+      repairIssues = generated.validationIssues
+    }
+    throw new AiDiagnosticError(
+      'CONTRACT',
+      'AI_PLAN_REPAIR_EXHAUSTED',
+      'AI plan repair attempts were exhausted without a validation result',
     )
   } catch (error) {
-    if (!isAiFallbackError(error)) throw error
-    return requestFallback(port, profile.version, requirements)
+    if (isOrdinaryAiFallbackError(error)) {
+      return requestFallback(port, profile.version, trainingSplit, additionalRequirements)
+    }
+    throw error
   }
-  const repairedResult = await port.generateCandidate({
-    profileVersion: profile.version,
-    additionalRequirements: requirements,
-    aiProposal: repairedProposal,
-    fallbackAllowed: false,
-  })
-  if (repairedResult.status === 'CANDIDATE_READY' && repairedResult.candidate) {
-    return repairedResult
-  }
-
-  return requestFallback(port, profile.version, requirements)
 }
 
 function requestFallback(
   port: OnboardingPersistencePort,
   profileVersion: number,
+  trainingSplit: TrainingSplit,
   additionalRequirements: string,
 ): Promise<PlanCandidateGenerationData> {
   return port.generateCandidate({
     profileVersion,
+    trainingSplit,
     additionalRequirements,
     fallbackAllowed: true,
   })
-}
-
-function isAiFallbackError(error: unknown): boolean {
-  return error instanceof AiPlanGenerationError || error instanceof AiPlanUnavailableError
 }
 
 export function buildCandidateViewModel(
@@ -331,10 +372,7 @@ export function buildCandidateViewModel(
       notices: [],
       days: [],
       reason: candidateUnavailableReason(reasonCodes),
-      action: {
-        label: '返回调整器械与频率',
-        route: 'ONBOARDING_EQUIPMENT',
-      },
+      action: candidateUnavailableAction(reasonCodes),
     }
   }
 
@@ -350,7 +388,7 @@ export function buildCandidateViewModel(
     generationSource,
     generationLabel: generationSource === 'AI_PERSONALIZED'
       ? 'AI 个性化计划 · 规则已校验'
-      : '基础保底计划 · AI 本次不可用',
+      : '规则生成计划 · 已通过安全校验',
     explanationMessage: explanationMessage(candidate.explanationStatus, candidate.explanation),
     notices: candidateNotices(candidate.validationIssues),
     days: candidate.plan.days.map((day) => ({
@@ -381,8 +419,17 @@ function candidateNotices(issues: ValidationIssue[]): string[] {
 }
 
 function candidateUnavailableReason(reasonCodes: string[]): string {
+  if (reasonCodes.includes('RECOVERY_WINDOW_TOO_SHORT')) {
+    return '当前每周训练频率会让相同主肌群恢复不足，请降低训练频率后重试。'
+  }
   if (reasonCodes.includes('NO_TEMPLATE_FOR_FREQUENCY')) {
     return '当前训练频率暂无可用模板，请调整每周训练天数后重试。'
+  }
+  if (reasonCodes.includes('SPLIT_FREQUENCY_MISMATCH')) {
+    return '当前训练分化与每周训练天数不匹配，请重新选择分化或训练频率。'
+  }
+  if (reasonCodes.includes('INSUFFICIENT_ELIGIBLE_EXERCISES')) {
+    return '当前器械和动作排除设置下，可用的安全动作不足以组成完整训练，请减少排除动作或补充可用器械后重试。'
   }
   if (reasonCodes.some((code) => (
     code === 'NO_ELIGIBLE_TEMPLATE'
@@ -394,9 +441,29 @@ function candidateUnavailableReason(reasonCodes: string[]): string {
   return '当前资料不足以生成安全候选，请调整器械或训练频率后重试。'
 }
 
+function candidateUnavailableAction(reasonCodes: string[]): CandidateViewModel['action'] {
+  if (reasonCodes.some((code) => (
+    code === 'RECOVERY_WINDOW_TOO_SHORT'
+    || code === 'NO_TEMPLATE_FOR_FREQUENCY'
+    || code === 'SPLIT_FREQUENCY_MISMATCH'
+  ))) {
+    return {
+      label: '返回调整训练频率',
+      route: 'ONBOARDING_SCHEDULE',
+    }
+  }
+  return {
+    label: '返回调整器械或排除设置',
+    route: 'ONBOARDING_EQUIPMENT',
+  }
+}
+
 export function createStartupUseCases(ports: StartupPorts) {
   async function resolveDestination(): Promise<AppDestination> {
-    if (await ports.workout.hasActive()) {
+    const workoutState = ports.workout.getStartupState
+      ? await ports.workout.getStartupState()
+      : await ports.workout.hasActive() ? 'ACTIVE' : 'NONE'
+    if (workoutState === 'ACTIVE' || workoutState === 'RECOVERY_REQUIRED') {
       return 'WORKOUT_SESSION'
     }
     if (!await ports.profile.exists()) {
@@ -421,9 +488,15 @@ export function createStartupUseCases(ports: StartupPorts) {
 
     async login(): Promise<AppDestination> {
       const code = await ports.wechatLogin.getCode()
-      const session = await ports.auth.login(code)
-      await ports.sessionStore.save(session)
-      return navigate(await resolveDestination())
+      ports.localUserData?.activate()
+      try {
+        const session = await ports.auth.login(code)
+        await ports.sessionStore.save(session)
+        return navigate(await resolveDestination())
+      } catch (error) {
+        await ports.localUserData?.purge('LOGIN_ROLLBACK').catch(() => undefined)
+        throw error
+      }
     },
 
     async authenticationExpired(): Promise<AppDestination> {
@@ -446,12 +519,20 @@ function validateStep(step: OnboardingStep, draft: OnboardingDraft): string[] {
         ...(!draft.experience ? ['请选择训练经验'] : []),
       ]
     case 'SCHEDULE':
+      const split = resolveTrainingSplit(draft)
       return [
         ...(draft.weeklyFrequency === undefined
           || !Number.isInteger(draft.weeklyFrequency)
           || draft.weeklyFrequency < 2
           || draft.weeklyFrequency > 6
           ? ['每周训练频率必须为 2～6 天']
+          : []),
+        ...(draft.weeklyFrequency !== undefined
+          && Number.isInteger(draft.weeklyFrequency)
+          && draft.weeklyFrequency >= 2
+          && draft.weeklyFrequency <= 6
+          && !allowedFrequenciesForSplit(split).includes(draft.weeklyFrequency)
+          ? ['当前分化与每周训练天数不匹配，请重新选择']
           : []),
         ...(draft.sessionMinutes === undefined || !allowedDurations.includes(draft.sessionMinutes)
           ? ['单次训练时长只能选择 30/45/60/75/90 分钟']
@@ -481,9 +562,9 @@ function explanationMessage(
     case 'READY':
       return explanation || '候选计划已由规则引擎生成。'
     case 'PENDING':
-      return 'AI 已结合你的资料与偏好生成计划，服务端规则校验已通过；详细解释仍在生成中。'
+      return explanation || '候选计划已通过服务端规则校验；详细说明仍在生成中。'
     case 'DEGRADED':
-      return 'AI 本次不可用，已切换为规则保底计划；仍可继续编辑和确认。'
+      return explanation || '候选计划已通过规则校验；详细说明暂不可用，不影响继续编辑和确认。'
   }
 }
 
@@ -494,9 +575,9 @@ function invalidAdditionalRequirements(value?: string): boolean {
 function weightLabel(status: WeightStatus): string {
   switch (status) {
     case 'KNOWN':
-      return '已采用现有校准重量'
+      return '训练时自动使用最近重量'
     case 'NEEDS_CALIBRATION':
-      return '需要在首次训练中校准重量'
+      return '训练时自动设置起始重量'
     case 'BODYWEIGHT':
       return '自重动作'
   }

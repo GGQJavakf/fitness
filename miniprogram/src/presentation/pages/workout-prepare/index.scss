@@ -30,7 +30,7 @@
 
 .prepare-hero__metric-label {
   color: rgba(255, 255, 255, 0.6);
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .prepare-hero__divider {
@@ -127,7 +127,7 @@
 
 .day-option__meta {
   color: #748078;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .day-option__selected-mark {
@@ -181,7 +181,7 @@
 
 .warmup-option__unit {
   color: #758078;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .warmup-option--selected {
@@ -215,7 +215,7 @@
 
 .prepare-exercise__index {
   color: #91a099;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .prepare-exercise__copy {
@@ -233,7 +233,7 @@
 .prepare-exercise__prescription,
 .prepare-exercise__rest {
   color: #6f7b74;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .prepare-note {
@@ -254,6 +254,51 @@
 
 .prepare-actions .primary-action {
   width: 100%;
+}
+
+.recovery-warning {
+  gap: 18px;
+  margin-top: 22px;
+  border: 1px solid #e5a44f;
+  background: #fff8eb;
+}
+
+.recovery-warning__title {
+  color: #784813;
+  font-size: 28px;
+  font-weight: 750;
+}
+
+.recovery-warning__facts,
+.recovery-warning__fact,
+.recovery-warning__actions {
+  display: grid;
+  gap: 10px;
+}
+
+.recovery-warning__fact {
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.recovery-warning__muscle {
+  color: #5d3912;
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.recovery-warning__duration,
+.recovery-warning__note {
+  color: #725b41;
+  font-size: 22px;
+  line-height: 1.55;
+}
+
+.recovery-warning__actions .primary-action,
+.recovery-warning__actions .secondary-action {
+  width: 100%;
+  margin: 0;
 }
 
 @media (max-width: 360px) {
@@ -284,6 +329,6 @@
   padding: 0;
   background: transparent;
   color: #0f6b57;
-  font-size: 19px;
+  font-size: 22px;
   line-height: 48px;
 }

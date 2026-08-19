@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ExerciseContent } from '../../../application/content'
 import type { ExercisePreference } from '../../../application/models'
@@ -14,22 +14,45 @@ export default function ExercisePreferencesPage() {
   const [preferences, setPreferences] = useState<readonly ExercisePreference[]>([])
   const [version, setVersion] = useState(0)
   const [message, setMessage] = useState('正在读取可选动作…')
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const loadRequestIdRef = useRef(0)
+  const loadInFlightRef = useRef(false)
+  const saveInFlightRef = useRef(false)
 
   const excluded = useMemo(
     () => new Set(preferences.filter((item) => item.preferenceType === 'EXCLUDED').map((item) => item.exerciseId)),
     [preferences],
   )
 
+  async function load(): Promise<void> {
+    if (loadInFlightRef.current) return
+    loadInFlightRef.current = true
+    const requestId = ++loadRequestIdRef.current
+    setLoading(true)
+    setMessage('正在读取可选动作…')
+    try {
+      const [available, profile] = await Promise.all([
+        application.listExercises(),
+        application.getExercisePreferences(),
+      ])
+      if (requestId !== loadRequestIdRef.current) return
+      setExercises(available)
+      setPreferences(profile.items)
+      setVersion(profile.version)
+      setMessage('')
+    } catch {
+      if (requestId !== loadRequestIdRef.current) return
+      setMessage('动作偏好暂时无法读取，请检查网络后重试。')
+    } finally {
+      loadInFlightRef.current = false
+      if (requestId === loadRequestIdRef.current) setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    Promise.all([application.listExercises(), application.getExercisePreferences()])
-      .then(([available, profile]) => {
-        setExercises(available)
-        setPreferences(profile.items)
-        setVersion(profile.version)
-        setMessage('')
-      })
-      .catch(() => setMessage('动作偏好暂时无法读取，请检查网络后重试。'))
+    void load()
+    return () => { loadRequestIdRef.current += 1 }
   }, [])
 
   function toggle(exerciseId: string): void {
@@ -44,7 +67,8 @@ export default function ExercisePreferencesPage() {
   }
 
   async function savePreferences(): Promise<void> {
-    if (saving) return
+    if (saveInFlightRef.current) return
+    saveInFlightRef.current = true
     setSaving(true)
     setMessage('')
     try {
@@ -57,6 +81,7 @@ export default function ExercisePreferencesPage() {
     } catch {
       setMessage('保存失败，档案可能已在其他设备更新，请返回后重新进入。')
     } finally {
+      saveInFlightRef.current = false
       setSaving(false)
     }
   }
@@ -92,6 +117,9 @@ export default function ExercisePreferencesPage() {
           )
         })}
         {!exercises.length && <Text className='preference-empty'>{message}</Text>}
+        {!exercises.length && message.includes('无法读取') && (
+          <Button className='secondary-action' loading={loading} onClick={() => void load()}>重新加载动作偏好</Button>
+        )}
       </View>
 
       {message && exercises.length > 0 && <View className='profile-message'><Text>{message}</Text></View>}

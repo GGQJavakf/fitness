@@ -111,6 +111,48 @@ class WorkoutCompletionTest {
                 .isInstanceOf(WorkoutCompletionService.IncompleteWorkoutException.class);
     }
 
+    @Test
+    void failedAttemptsRemainAvailableForProgressionAfterSuccessfulPrescribedSetsComplete() {
+        WorkoutSetTestFixture.Fixture fixture = WorkoutSetTestFixture.fixture();
+        saveFact(fixture, "failed-attempt-01", 1, 1, 1, WorkoutSet.CompletionStatus.FAILED, Optional.empty());
+        saveFact(fixture, "failed-attempt-02", 2, 2, 2, WorkoutSet.CompletionStatus.FAILED, Optional.empty());
+        saveFact(fixture, "completed-set-01", 3, 3, 1, WorkoutSet.CompletionStatus.COMPLETED, Optional.empty());
+        saveFact(fixture, "completed-set-02", 4, 4, 2, WorkoutSet.CompletionStatus.COMPLETED, Optional.empty());
+        saveFact(fixture, "completed-set-03", 5, 5, 3, WorkoutSet.CompletionStatus.COMPLETED, Optional.empty());
+        AtomicInteger factsSeen = new AtomicInteger();
+        WorkoutCompletionObserver observer = (user, session, facts) -> factsSeen.set(facts.size());
+        WorkoutCompletionService service = new WorkoutCompletionService(
+                fixture.sessions(), fixture.repository(),
+                Clock.fixed(Instant.parse("2026-07-24T08:05:00Z"), ZoneOffset.UTC), java.util.List.of(observer));
+
+        WorkoutCompletionService.Result result = service.complete(
+                new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID,
+                6, WorkoutCompletionService.CompletionType.FULL);
+
+        assertThat(result.complete()).isTrue();
+        assertThat(result.completedWorkSets()).isEqualTo(3);
+        assertThat(factsSeen).hasValue(5);
+    }
+
+    @Test
+    void safetyFactKeepsCompletedWorkoutButDisablesAutomaticProgressionEligibility() {
+        WorkoutSetTestFixture.Fixture fixture = WorkoutSetTestFixture.fixture();
+        saveFact(fixture, "safety-complete-1", 1, 1, 1, WorkoutSet.CompletionStatus.COMPLETED,
+                Optional.of(WorkoutSet.SafetyFlag.CHEST_DISCOMFORT));
+        saveFact(fixture, "safety-complete-2", 2, 2, 2, WorkoutSet.CompletionStatus.COMPLETED, Optional.empty());
+        saveFact(fixture, "safety-complete-3", 3, 3, 3, WorkoutSet.CompletionStatus.COMPLETED, Optional.empty());
+        WorkoutCompletionService service = new WorkoutCompletionService(
+                fixture.sessions(), fixture.repository(),
+                Clock.fixed(Instant.parse("2026-07-24T08:05:00Z"), ZoneOffset.UTC));
+
+        WorkoutCompletionService.Result result = service.complete(
+                new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID,
+                4, WorkoutCompletionService.CompletionType.FULL);
+
+        assertThat(result.complete()).isTrue();
+        assertThat(result.automaticProgressionEligible()).isFalse();
+    }
+
     private static void saveCompleted(
             WorkoutSetTestFixture.Fixture fixture, String key, long sequence, long expectedVersion) {
         fixture.service().upsert(
@@ -122,5 +164,28 @@ class WorkoutCompletionTest {
                         new WorkoutSet.Performance(new BigDecimal("40"), "KG", 10), null,
                         WorkoutSet.CompletionStatus.COMPLETED,
                         Optional.of(Instant.parse("2026-07-24T08:00:00Z").plusSeconds(sequence)), false));
+    }
+
+    private static void saveFact(
+            WorkoutSetTestFixture.Fixture fixture,
+            String key,
+            long sequence,
+            long expectedVersion,
+            int setOrder,
+            WorkoutSet.CompletionStatus status,
+            Optional<WorkoutSet.SafetyFlag> safetyFlag) {
+        WorkoutSet.Performance target = new WorkoutSet.Performance(new BigDecimal("40"), "KG", 10);
+        WorkoutSet.Performance actual = new WorkoutSet.Performance(
+                new BigDecimal("40"), "KG", status == WorkoutSet.CompletionStatus.COMPLETED ? 10 : 0);
+        fixture.service().upsert(
+                new AuthenticatedUserId(WorkoutSetTestFixture.USER_ID), WorkoutSetTestFixture.SESSION_ID,
+                key, expectedVersion,
+                new WorkoutSetService.Command(
+                        WorkoutSetTestFixture.EXERCISE_ID, sequence, WorkoutSet.SetType.WORK, setOrder,
+                        target, actual, 0, status,
+                        status == WorkoutSet.CompletionStatus.COMPLETED
+                                ? Optional.of(Instant.parse("2026-07-24T08:00:00Z").plusSeconds(sequence))
+                                : Optional.empty(),
+                        safetyFlag, false));
     }
 }

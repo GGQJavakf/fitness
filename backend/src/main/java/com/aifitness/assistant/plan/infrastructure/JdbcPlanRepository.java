@@ -153,13 +153,14 @@ public final class JdbcPlanRepository implements PlanRepository {
         summary.put("name", plan.name());
         summary.put("contentVersion", version.ruleReference().contentVersion());
         summary.put("confirmedWarnings", version.confirmedWarningCodes());
+        summary.put("templateCode", plan.templateCode());
         jdbc.update("""
                 INSERT INTO training_plan_version
                     (id, plan_id, version_no, source_type, split_type, frequency,
                      template_version, rule_version, change_summary_json, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, bytes(version.id()), bytes(version.planId()), version.versionNumber(),
-                version.sourceType().name(), plan.templateCode(), Math.max(2, plan.days().size()),
+                version.sourceType().name(), persistedSplit(plan), Math.max(2, plan.days().size()),
                 version.ruleReference().templateVersion(), version.ruleReference().ruleVersion(),
                 writeJson(summary), Timestamp.from(version.createdAt()));
 
@@ -228,8 +229,13 @@ public final class JdbcPlanRepository implements PlanRepository {
                 WHERE pe.plan_version_id = ?
                 """, (org.springframework.jdbc.core.RowCallbackHandler) result -> locks.put(
                         result.getString(1), FieldLock.Status.valueOf(result.getString(2))), bytes(versionId));
+        String persistedSplit = row.getString("split_type");
+        String templateCode = summary.get("templateCode") instanceof String value && !value.isBlank()
+                ? value
+                : persistedSplit;
         PlanDraft plan = new PlanDraft(
-                row.getString("split_type"), String.valueOf(summary.get("name")), days, locks);
+                templateCode, parseSplit(persistedSplit, templateCode),
+                String.valueOf(summary.get("name")), days, locks);
         Object warnings = summary.get("confirmedWarnings");
         Set<String> confirmed = warnings instanceof List<?> values
                 ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet())
@@ -262,6 +268,18 @@ public final class JdbcPlanRepository implements PlanRepository {
         }
         String dayCode = stored.isEmpty() ? null : String.valueOf(stored.getFirst().values().get("dayCode"));
         return new PlanDraft.Day(dayCode, dayRow.getString("name"), exercises);
+    }
+
+    private static String persistedSplit(PlanDraft plan) {
+        return plan.trainingSplit() == null ? "LEGACY_UNSPECIFIED" : plan.trainingSplit().name();
+    }
+
+    private static PlanDraft.TrainingSplit parseSplit(String persistedSplit, String templateCode) {
+        try {
+            return PlanDraft.TrainingSplit.valueOf(persistedSplit);
+        } catch (IllegalArgumentException ignored) {
+            return PlanDraft.inferTrainingSplit(templateCode);
+        }
     }
 
     private String writeJson(Object value) {

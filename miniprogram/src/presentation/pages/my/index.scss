@@ -9,7 +9,7 @@
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 999px;
   color: rgba(255, 255, 255, 0.76);
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .profile-hero__status-dot {
@@ -42,7 +42,7 @@
 
 .profile-overview__label {
   color: #77837c;
-  font-size: 19px;
+  font-size: 22px;
 }
 
 .profile-overview__value {
@@ -68,7 +68,7 @@
 
 .settings-row__mark {
   color: #0f6b57;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .settings-row__copy {
@@ -85,7 +85,7 @@
 
 .settings-row__description {
   color: #6c7971;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .settings-edit {
@@ -126,7 +126,7 @@
   display: block;
   margin-top: 6px;
   color: #6c7971;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .profile-boundary {
@@ -146,7 +146,7 @@
   display: block;
   margin-top: 7px;
   color: #6b7770;
-  font-size: 21px;
+  font-size: 22px;
   line-height: 1.55;
 }
 
@@ -159,6 +159,16 @@
   background: transparent;
   color: #707b75;
   font-size: 22px;
+}
+
+.account-actions {
+  gap: 16px;
+}
+
+.account-actions__buttons {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .deletion-disclosure__indicator {
@@ -210,6 +220,10 @@
   .privacy-card__heading {
     align-items: flex-start;
   }
+
+  .account-actions__buttons {
+    grid-template-columns: 1fr;
+  }
 }
 .privacy-export {
   display: flex;
@@ -227,7 +241,7 @@
 
 .privacy-export__category {
   color: #0b2f28;
-  font-size: 21px;
+  font-size: 22px;
   font-weight: 700;
 }
 
@@ -236,12 +250,12 @@
   border-radius: 12px;
   background: #f3f7f4;
   color: #56655d;
-  font-size: 19px;
+  font-size: 22px;
   line-height: 1.45;
 }
 
 .privacy-export__expiry {
   color: #78847e;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.45;
 }

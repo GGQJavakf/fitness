@@ -24,6 +24,8 @@ public final class InMemorySessionStore implements SessionStore {
     private final Map<String, SessionState> byAccessHash = new HashMap<>();
     private final Map<String, SessionState> byRefreshHash = new HashMap<>();
     private final Set<AuthenticatedUserId> blockedUsers = new HashSet<>();
+    private final Set<String> terminalAccessHashes = new HashSet<>();
+    private final Set<String> terminalRefreshHashes = new HashSet<>();
     private final Set<RevocationKey> completedRevocations = new HashSet<>();
 
     public InMemorySessionStore() {
@@ -45,6 +47,9 @@ public final class InMemorySessionStore implements SessionStore {
     @Override
     public synchronized WechatLoginService.SessionTokens refresh(String refreshToken, Instant now) {
         String refreshHash = hash(refreshToken);
+        if (terminalRefreshHashes.contains(refreshHash)) {
+            throw new WechatLoginService.AccessRevokedException();
+        }
         SessionState state = byRefreshHash.remove(refreshHash);
         if (state == null || state.revoked || !now.isBefore(state.refreshExpiresAt)) {
             if (state != null) {
@@ -82,6 +87,8 @@ public final class InMemorySessionStore implements SessionStore {
                 .toList()
                 .forEach(state -> {
                     state.revoked = true;
+                    terminalAccessHashes.add(state.accessHash);
+                    terminalRefreshHashes.add(state.refreshHash);
                     byAccessHash.remove(state.accessHash);
                     byRefreshHash.remove(state.refreshHash);
                 });
@@ -90,7 +97,11 @@ public final class InMemorySessionStore implements SessionStore {
 
     @Override
     public synchronized AuthenticatedUserId authenticate(String accessToken, Instant now) {
-        SessionState state = byAccessHash.get(hash(accessToken));
+        String accessHash = hash(accessToken);
+        if (terminalAccessHashes.contains(accessHash)) {
+            throw new WechatLoginService.AccessRevokedException();
+        }
+        SessionState state = byAccessHash.get(accessHash);
         if (state == null || state.revoked || !now.isBefore(state.accessExpiresAt)) {
             if (state != null && !now.isBefore(state.accessExpiresAt)) {
                 byAccessHash.remove(state.accessHash);

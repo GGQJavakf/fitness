@@ -1,7 +1,7 @@
 import { Button, Text, View } from '@tarojs/components'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { ActivePlanData } from '../../../application/models'
+import type { ActivePlanData, TrainingSplit } from '../../../application/models'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { resolveActivePlanLoadFailure } from '../../activePlanLoadFailure'
 import MainNavigation from '../../components/main-navigation'
@@ -11,18 +11,30 @@ import './index.scss'
 
 const application = getWeappApplication()
 
+function trainingSplitLabel(split: TrainingSplit | undefined): string {
+  if (split === 'UPPER_LOWER') return '上下肢'
+  if (split === 'PUSH_PULL_LEGS') return '推拉腿'
+  if (split === 'BODY_PART_FIVE_DAY') return '五分化'
+  return '未记录'
+}
+
 export default function PlanPage() {
   const [plan, setPlan] = useState<ActivePlanData | null>(() => application.getActivePlan())
   const [loading, setLoading] = useState(() => application.getActivePlan() === null)
   const [error, setError] = useState('')
   const mounted = useRef(true)
+  const loadInFlight = useRef(false)
+  const loadRequestId = useRef(0)
 
   const loadPlan = useCallback(async () => {
+    if (loadInFlight.current) return
+    loadInFlight.current = true
+    const requestId = ++loadRequestId.current
     setLoading(true)
     setError('')
     try {
       const nextPlan = await application.loadActivePlan()
-      if (mounted.current) setPlan(nextPlan)
+      if (mounted.current && requestId === loadRequestId.current) setPlan(nextPlan)
     } catch (error: unknown) {
       const failure = resolveActivePlanLoadFailure(error)
       if (failure.kind === 'AUTHENTICATION_REQUIRED') {
@@ -34,9 +46,10 @@ export default function PlanPage() {
         }
         return
       }
-      if (mounted.current) setError(failure.message)
+      if (mounted.current && requestId === loadRequestId.current) setError(failure.message)
     } finally {
-      if (mounted.current) setLoading(false)
+      loadInFlight.current = false
+      if (mounted.current && requestId === loadRequestId.current) setLoading(false)
     }
   }, [])
 
@@ -45,6 +58,7 @@ export default function PlanPage() {
     void loadPlan()
     return () => {
       mounted.current = false
+      loadRequestId.current += 1
     }
   }, [loadPlan])
 
@@ -97,7 +111,7 @@ export default function PlanPage() {
         <View className='plan-overview__brand'>
           <View className='plan-overview__status-dot' />
           <Text className='plan-overview__eyebrow'>
-            {aiPersonalized ? 'AI 个性化计划 · 规则已校验' : '基础保底计划 · 规则已校验'}
+            {aiPersonalized ? 'AI 个性化计划 · 规则已校验' : '规则生成计划 · 已通过安全校验'}
             {' · 第 '}{activeVersion.versionNumber} 版
           </Text>
         </View>
@@ -105,7 +119,7 @@ export default function PlanPage() {
         <Text className='plan-overview__subtitle'>
           {aiPersonalized
             ? '已结合你的档案与训练偏好生成；训练后的真实反馈会帮助下一次调整更准确。'
-            : 'AI 生成暂不可用时采用的安全保底版本，可继续修改或稍后重新生成。'}
+            : '已按你的档案、训练目标和可用器械由确定性规则引擎生成；训练后的真实反馈会帮助下一次调整更准确。'}
         </Text>
         <View className='plan-overview__metrics'>
           <View className='plan-overview__metric'>
@@ -119,8 +133,8 @@ export default function PlanPage() {
           </View>
           <View className='plan-overview__metric-divider' />
           <View className='plan-overview__metric'>
-            <Text className='plan-overview__metric-value'>{aiPersonalized ? 'AI' : '保底'}</Text>
-            <Text className='plan-overview__metric-label'>计划来源</Text>
+            <Text className='plan-overview__metric-value'>{trainingSplitLabel(activeVersion.plan.trainingSplit)}</Text>
+            <Text className='plan-overview__metric-label'>训练分化</Text>
           </View>
         </View>
         <Button className='plan-overview__start' onClick={() => void application.navigation.open('WORKOUT_PREPARE')}>开始今日训练</Button>

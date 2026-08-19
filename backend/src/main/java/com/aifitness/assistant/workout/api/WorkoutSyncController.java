@@ -53,12 +53,13 @@ public final class WorkoutSyncController {
     }
 
     @PostMapping("/conflicts/{id}/resolve")
-    public ApiResponse<ConflictData> resolve(
+    public ApiResponse<ConflictResolutionData> resolve(
             AuthenticatedUserId user, @PathVariable UUID id, @RequestBody ResolveRequest request) {
         if (request == null || request.resolution() == null || request.expectedVersion() == null) {
             throw new IllegalArgumentException("conflict resolution and version are required");
         }
-        return response(ConflictData.from(sync.resolveConflict(user, id, request.resolution(), request.expectedVersion())));
+        return response(ConflictResolutionData.from(
+                sync.resolveConflict(user, id, request.resolution(), request.expectedVersion())));
     }
 
     private WorkoutSyncService.Operation toOperation(OperationData operation) {
@@ -98,15 +99,50 @@ public final class WorkoutSyncController {
             UUID sessionId, UUID sessionExerciseId, WorkoutSet.SetType setType, int setOrder,
             WorkoutSetController.PerformanceData target, WorkoutSetController.PerformanceData actual,
             Integer remainingReps, WorkoutSet.CompletionStatus completionStatus, Optional<Instant> completedAt,
+            Optional<WorkoutSet.SafetyFlag> safetyFlag,
             Long expectedSessionVersion, boolean confirmAnomaly) {
+
+        public SetPayload(
+                UUID sessionId,
+                UUID sessionExerciseId,
+                WorkoutSet.SetType setType,
+                int setOrder,
+                WorkoutSetController.PerformanceData target,
+                WorkoutSetController.PerformanceData actual,
+                Integer remainingReps,
+                WorkoutSet.CompletionStatus completionStatus,
+                Optional<Instant> completedAt,
+                Long expectedSessionVersion,
+                boolean confirmAnomaly) {
+            this(sessionId, sessionExerciseId, setType, setOrder, target, actual, remainingReps,
+                    completionStatus, completedAt, Optional.empty(), expectedSessionVersion, confirmAnomaly);
+        }
+
         WorkoutSetService.Command toCommand(long sequence) {
             return new WorkoutSetService.Command(sessionExerciseId, sequence, setType, setOrder,
                     target.toDomain(), actual.toDomain(), remainingReps, completionStatus,
-                    completedAt == null ? Optional.empty() : completedAt, confirmAnomaly);
+                    completedAt == null ? Optional.empty() : completedAt,
+                    safetyFlag == null ? Optional.empty() : safetyFlag, confirmAnomaly);
         }
     }
 
     public record ConflictListData(List<ConflictData> items) {}
+    public record ConflictResolutionData(
+            UUID conflictId,
+            long clientOperationSeq,
+            String clientKey,
+            SyncConflict.Resolution resolution,
+            WorkoutSyncService.ConflictResolutionOutcome outcome,
+            long authoritativeSessionVersion,
+            Map<String, Object> authoritativePayload,
+            Optional<Map<String, Object>> rebuiltPayload) {
+        static ConflictResolutionData from(WorkoutSyncService.ConflictResolutionResult value) {
+            return new ConflictResolutionData(
+                    value.conflictId(), value.clientOperationSeq(), value.clientKey(), value.resolution(),
+                    value.outcome(), value.authoritativeSessionVersion(), value.authoritativePayload(),
+                    value.rebuiltPayload());
+        }
+    }
     public record ConflictData(
             UUID id, String entityType, String entityKey, Map<String, String> localEvidence,
             Map<String, String> serverEvidence, SyncConflict.Status status,

@@ -30,6 +30,7 @@ const validDraft = {
   safetyAccepted: true,
   goal: 'GENERAL_FITNESS' as const,
   experience: 'BEGINNER' as const,
+  trainingSplit: 'PUSH_PULL_LEGS' as const,
   weeklyFrequency: 3,
   sessionMinutes: 45 as const,
   location: 'GYM' as const,
@@ -170,10 +171,15 @@ describe('P0 onboarding flow', () => {
     expect(calls[0][1]).toMatchObject({ expectedVersion: 0, weeklyFrequency: 3 })
     expect(calls[1][1]).toMatchObject({ expectedVersion: 0 })
     expect(calls[2][1]).toMatchObject({ expectedVersion: 0 })
-    expect(calls[3][1]).toEqual({ profileVersion: 1 })
+    expect(calls[3][1]).toEqual({
+      profileVersion: 1,
+      trainingSplit: 'PUSH_PULL_LEGS',
+      additionalRequirements: '',
+      fallbackAllowed: true,
+    })
   })
 
-  it('keeps degraded AI candidates usable and exposes calibration or no-candidate actions', () => {
+  it('keeps rule candidates usable, preserves their explanation, and exposes calibration or no-candidate actions', () => {
     const degraded = buildCandidateViewModel({
       status: 'CANDIDATE_READY',
       candidate: {
@@ -207,7 +213,7 @@ describe('P0 onboarding flow', () => {
         },
         lockedFieldOutcomes: {},
         explanationStatus: 'DEGRADED',
-        explanation: '',
+        explanation: '已按你的资料、训练目标和可用器械生成规则计划。',
         expiresAt: '2026-07-25T00:00:00Z',
       },
       validationIssues: [],
@@ -215,11 +221,12 @@ describe('P0 onboarding flow', () => {
     })
 
     expect(degraded.canContinue).toBe(true)
-    expect(degraded.explanationMessage).toContain('保底计划')
+    expect(degraded.generationLabel).toBe('规则生成计划 · 已通过安全校验')
+    expect(degraded.explanationMessage).toBe('已按你的资料、训练目标和可用器械生成规则计划。')
     expect(degraded.notices).toEqual([
       expect.stringContaining('充分恢复'),
     ])
-    expect(degraded.days[0].exercises[0].weightLabel).toContain('首次训练中校准')
+    expect(degraded.days[0].exercises[0].weightLabel).toContain('自动设置起始重量')
 
     const noCandidate = buildCandidateViewModel({
       status: 'NO_CANDIDATE',
@@ -232,13 +239,39 @@ describe('P0 onboarding flow', () => {
     })
     expect(noCandidate.canContinue).toBe(false)
     expect(noCandidate.action).toEqual({
-      label: '返回调整器械与频率',
+      label: '返回调整器械或排除设置',
       route: 'ONBOARDING_EQUIPMENT',
     })
     expect(noCandidate.reason).toBe('当前器械或动作排除设置无法组成安全计划，请调整后重试。')
+
+    const insufficientRecovery = buildCandidateViewModel({
+      status: 'NO_CANDIDATE',
+      validationIssues: [{
+        severity: 'ERROR',
+        reasonCode: 'RECOVERY_WINDOW_TOO_SHORT',
+        fieldPath: 'weeklyFrequency',
+      }],
+      lockedFieldOutcomes: {},
+    })
+    expect(insufficientRecovery.action).toEqual({
+      label: '返回调整训练频率',
+      route: 'ONBOARDING_SCHEDULE',
+    })
+    expect(insufficientRecovery.reason).toContain('相同主肌群恢复不足')
+
+    const insufficientExercises = buildCandidateViewModel({
+      status: 'NO_CANDIDATE',
+      validationIssues: [{
+        severity: 'ERROR',
+        reasonCode: 'INSUFFICIENT_ELIGIBLE_EXERCISES',
+        fieldPath: 'exercises',
+      }],
+      lockedFieldOutcomes: {},
+    })
+    expect(insufficientExercises.reason).toContain('安全动作不足以组成完整训练')
   })
 
-  it('resumes a NO_CANDIDATE adjustment at equipment without dropping the submitted draft', async () => {
+  it('resumes a recovery NO_CANDIDATE at schedule without dropping the submitted draft', async () => {
     const port: OnboardingPersistencePort = {
       getProfileVersion: vi.fn().mockResolvedValue(0),
       getEquipmentVersion: vi.fn().mockResolvedValue(0),
@@ -248,7 +281,11 @@ describe('P0 onboarding flow', () => {
       savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
       generateCandidate: vi.fn().mockResolvedValue({
         status: 'NO_CANDIDATE',
-        validationIssues: [],
+        validationIssues: [{
+          severity: 'ERROR',
+          reasonCode: 'RECOVERY_WINDOW_TOO_SHORT',
+          fieldPath: 'weeklyFrequency',
+        }],
         lockedFieldOutcomes: {},
       }),
     }
@@ -262,14 +299,34 @@ describe('P0 onboarding flow', () => {
 
     const candidate = await application.completeOnboarding(validDraft)
     const resumed = application.resumeOnboarding(candidate.action!.route)
+    const remountedPage = application.resumeOnboarding()
 
     expect(resumed).toMatchObject({
-      stepIndex: 3,
-      step: 'LOCATION_AND_EQUIPMENT',
+      stepIndex: 2,
+      step: 'SCHEDULE',
       draft: validDraft,
       errors: [],
     })
     expect(resumed.draft).not.toBe(validDraft)
+    expect(remountedPage).toMatchObject({
+      stepIndex: 2,
+      step: 'SCHEDULE',
+      draft: validDraft,
+    })
+    expect(application.resumeOnboarding()).toMatchObject({
+      stepIndex: 3,
+      step: 'LOCATION_AND_EQUIPMENT',
+    })
+
+    application.clearUserState()
+
+    expect(application.getCandidate()).toBeNull()
+    expect(application.getActivePlan()).toBeNull()
+    expect(application.resumeOnboarding()).toMatchObject({
+      stepIndex: 0,
+      step: 'SAFETY',
+      draft: { adultConfirmed: false, safetyAccepted: false },
+    })
   })
 })
 
@@ -389,6 +446,50 @@ describe('P0 startup and WeChat session', () => {
     expect(login).toHaveBeenCalledWith('temporary-wechat-code')
     expect(save).toHaveBeenCalledWith(session)
     expect(save).not.toHaveBeenCalledWith(expect.stringContaining('temporary-wechat-code'))
+  })
+
+  it('checks local-data activation before issuing a remote session and rolls back failed login', async () => {
+    const activate = vi.fn()
+    const purge = vi.fn().mockResolvedValue(undefined)
+    const login = vi.fn().mockRejectedValue(new Error('remote login failed'))
+    const ports: StartupPorts = {
+      sessionStore: { load: vi.fn(), save: vi.fn(), clear: vi.fn() },
+      wechatLogin: { getCode: vi.fn().mockResolvedValue('temporary-wechat-code') },
+      auth: { login },
+      workout: { hasActive: vi.fn() },
+      profile: { exists: vi.fn() },
+      plan: { hasActivePlan: vi.fn() },
+      navigation: { replace: vi.fn() },
+      localUserData: { activate, purge },
+    }
+
+    await expect(createStartupUseCases(ports).login()).rejects.toThrow('remote login failed')
+
+    expect(activate).toHaveBeenCalledOnce()
+    expect(activate.mock.invocationCallOrder[0]).toBeLessThan(login.mock.invocationCallOrder[0])
+    expect(purge).toHaveBeenCalledWith('LOGIN_ROLLBACK')
+    expect(ports.sessionStore.save).not.toHaveBeenCalled()
+  })
+
+  it('does not issue a remote session while local user storage remains blocked', async () => {
+    const login = vi.fn()
+    const blocked = new Error('local storage blocked')
+    const ports: StartupPorts = {
+      sessionStore: { load: vi.fn(), save: vi.fn(), clear: vi.fn() },
+      wechatLogin: { getCode: vi.fn().mockResolvedValue('temporary-wechat-code') },
+      auth: { login },
+      workout: { hasActive: vi.fn() },
+      profile: { exists: vi.fn() },
+      plan: { hasActivePlan: vi.fn() },
+      navigation: { replace: vi.fn() },
+      localUserData: {
+        activate: vi.fn(() => { throw blocked }),
+        purge: vi.fn(),
+      },
+    }
+
+    await expect(createStartupUseCases(ports).login()).rejects.toBe(blocked)
+    expect(login).not.toHaveBeenCalled()
   })
 
   it('resumes an active local workout before requesting remote profile or plan state', async () => {

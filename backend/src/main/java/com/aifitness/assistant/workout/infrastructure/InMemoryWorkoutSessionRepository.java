@@ -27,6 +27,16 @@ public final class InMemoryWorkoutSessionRepository implements WorkoutSessionRep
     }
 
     @Override
+    public synchronized StartState findStartStateForUpdate(UUID userId, String clientSessionKey) {
+        Optional<WorkoutSession> exact = findByUserAndClientKey(userId, clientSessionKey);
+        Optional<WorkoutSession> active = sessions.values().stream()
+                .filter(session -> session.userId().equals(userId) && !session.status().terminal())
+                .sorted(Comparator.comparing(WorkoutSession::startedAt).thenComparing(WorkoutSession::id))
+                .findFirst();
+        return new StartState(exact, active);
+    }
+
+    @Override
     public synchronized WorkoutSession create(WorkoutSession session) {
         UserKey key = new UserKey(session.userId(), session.clientSessionKey());
         UUID existingId = keys.putIfAbsent(key, session.id());
@@ -85,7 +95,8 @@ public final class InMemoryWorkoutSessionRepository implements WorkoutSessionRep
                 current.planVersionNumber(), current.trainingDayId(), current.trainingDayCode(),
                 current.clientSessionKey(), current.status(), current.startedAt(), current.completedAt(),
                 current.version() + 1, current.exercises().stream()
-                        .map(exercise -> exercise.id().equals(snapshotId) ? replacement : exercise).toList());
+                        .map(exercise -> exercise.id().equals(snapshotId) ? replacement : exercise).toList(),
+                current.warmupPrescription());
         sessions.put(sessionId, updated);
         return updated;
     }

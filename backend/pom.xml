@@ -13,12 +13,17 @@
 
     <groupId>com.aifitness</groupId>
     <artifactId>fitness-assistant-backend</artifactId>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <name>fitness-assistant-backend</name>
     <description>AI 健身助手后端</description>
 
     <properties>
         <java.version>21</java.version>
+        <jackson-bom.version>2.21.5</jackson-bom.version>
+        <log4j2.version>2.25.5</log4j2.version>
+        <jacoco.version>0.8.13</jacoco.version>
+        <jacoco.line.minimum>0.60</jacoco.line.minimum>
+        <jacoco.branch.minimum>0.50</jacoco.branch.minimum>
     </properties>
 
     <dependencies>
@@ -98,6 +103,7 @@
                     <include>rule-config-v1.json</include>
                     <include>exercises-v1.json</include>
                     <include>plan-templates-v1.json</include>
+                    <include>archive/exercises-v1.6.0.json</include>
                 </includes>
             </resource>
         </resources>
@@ -132,6 +138,83 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <failIfNoTests>true</failIfNoTests>
+                    <systemPropertyVariables>
+                        <fitness.verification.run-id>${maven.build.timestamp}</fitness.verification.run-id>
+                        <fitness.verification.marker>${project.build.directory}/external-mysql-validation-marker.json</fitness.verification.marker>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <systemPropertyVariables>
+                        <packaged.application.jar>${project.build.directory}/${project.build.finalName}.jar</packaged.application.jar>
+                        <fitness.verification.run-id>${maven.build.timestamp}</fitness.verification.run-id>
+                        <fitness.verification.marker>${project.build.directory}/external-mysql-validation-marker.json</fitness.verification.marker>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <execution>
+                        <id>prepare-coverage-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report-and-check-coverage</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.line.minimum}</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>${jacoco.branch.minimum}</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

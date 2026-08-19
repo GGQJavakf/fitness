@@ -1,0 +1,55 @@
+name: verify
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - codex/**
+
+permissions:
+  contents: read
+
+jobs:
+  repository-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SPRING_PROFILES_ACTIVE: staging-experience
+      WECHAT_APP_SECRET: ci-placeholder
+      FITNESS_DB_URL: jdbc:mysql://127.0.0.1:3306/ci-placeholder
+      FITNESS_DB_USERNAME: ci-placeholder
+      FITNESS_DB_PASSWORD: ci-placeholder
+      FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS: 'true'
+      TARO_APP_CLOUDBASE_ENV_ID: ci-placeholder
+      TARO_APP_CLOUDBASE_SERVICE_NAME: ci-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: miniprogram/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+      - name: Prepare non-secret CI project configuration
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs')
+          const source = JSON.parse(fs.readFileSync('miniprogram/project.config.json', 'utf8'))
+          const root = { ...source, miniprogramRoot: 'miniprogram/dist/' }
+          fs.writeFileSync('project.config.json', `${JSON.stringify(root, null, 2)}\n`)
+          fs.appendFileSync(process.env.GITHUB_ENV, `WECHAT_APP_ID=${source.appid}\n`)
+          NODE
+      - name: Install mini-program dependencies
+        working-directory: miniprogram
+        run: npm ci --ignore-scripts
+      - name: Audit packaged mini-program dependencies
+        working-directory: miniprogram
+        run: npm run audit:packaged
+      - name: Run repository verification
+        run: node scripts/verify.mjs --target staging-experience

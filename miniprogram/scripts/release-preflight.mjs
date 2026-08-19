@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, resolve } from 'node:path'
 
+import { loadMergedReleaseEnvironment } from '../../scripts/release-environment.mjs'
+
 export const RELEASE_TARGETS = ['staging-experience', 'public']
+export const SUPPORTED_SPRING_PROFILES = ['staging-experience']
+export const MINIMUM_BASE_LIBRARY_VERSION = '3.7.1'
 
 export const REQUIRED_BACKEND_ENVIRONMENT = [
   'WECHAT_APP_ID',
@@ -25,6 +29,32 @@ const CONTENT_DOCUMENTS = [
 
 function result(level, code, message) {
   return { level, code, message }
+}
+
+function numericVersion(value) {
+  if (typeof value !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.trim())) return undefined
+  return value.trim().split('.').map(Number)
+}
+
+export function inspectBaseLibraryVersion(projectConfiguration) {
+  const configured = numericVersion(projectConfiguration?.libVersion)
+  const minimum = numericVersion(MINIMUM_BASE_LIBRARY_VERSION)
+  let supported = Boolean(configured && minimum)
+  if (configured && minimum) {
+    for (let index = 0; index < configured.length; index += 1) {
+      if (configured[index] === minimum[index]) continue
+      supported = configured[index] > minimum[index]
+      break
+    }
+  }
+  if (!supported) {
+    return [result(
+      'BLOCKED',
+      'BASE_LIBRARY_VERSION',
+      `微信基础库 libVersion 必须显式配置为 ${MINIMUM_BASE_LIBRARY_VERSION} 或更高版本`
+    )]
+  }
+  return [result('PASS', 'BASE_LIBRARY_VERSION', '微信基础库版本满足发布要求')]
 }
 
 export function parseReleaseTarget(argumentsList) {
@@ -114,6 +144,34 @@ export function inspectBackendEnvironment(environment) {
   )]
 }
 
+export function inspectTrustedCloudBaseIdentityIngress(environment) {
+  if (environment.FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS?.trim().toLowerCase() !== 'true') {
+    return [result(
+      'BLOCKED',
+      'TRUSTED_CLOUDBASE_IDENTITY_INGRESS',
+      'CloudBase 发布必须显式确认 MINIAPP 私有入口后才能信任平台身份头'
+    )]
+  }
+  return [result(
+    'PASS',
+    'TRUSTED_CLOUDBASE_IDENTITY_INGRESS',
+    '已显式启用经 MINIAPP 私有入口注入的 CloudBase 身份头'
+  )]
+}
+
+export function inspectSpringProfile(environment, target) {
+  if (!RELEASE_TARGETS.includes(target)) throw new Error(`Unsupported target: ${target}`)
+  const profile = environment.SPRING_PROFILES_ACTIVE?.trim()
+  if (!profile || !SUPPORTED_SPRING_PROFILES.includes(profile)) {
+    return [result(
+      'BLOCKED',
+      'SPRING_PROFILE',
+      `SPRING_PROFILES_ACTIVE 必须显式配置为受支持的发布 profile：${SUPPORTED_SPRING_PROFILES.join(', ')}`
+    )]
+  }
+  return [result('PASS', 'SPRING_PROFILE', `${target} 使用受支持的非本地 Spring profile`)]
+}
+
 export function inspectMiniProgramCloudEnvironment(environment) {
   const missing = REQUIRED_MINIPROGRAM_CLOUD_ENVIRONMENT.filter((key) => !environment[key]?.trim())
   if (missing.length > 0) {
@@ -127,6 +185,39 @@ export function inspectMiniProgramCloudEnvironment(environment) {
     'PASS',
     'MINIPROGRAM_CLOUD_ENVIRONMENT',
     '小程序云环境和云托管服务名均已配置（值已隐藏）'
+  )]
+}
+
+export function inspectMiniProgramAiEnvironment(environment) {
+  if (environment.TARO_APP_CLOUDBASE_AI_ENABLED?.trim().toLowerCase() !== 'true') {
+    return [result(
+      'PASS',
+      'MINIPROGRAM_AI_DISABLED',
+      '小程序在线 AI 已关闭，使用确定性规则与模板路径'
+    )]
+  }
+
+  const booleanReadiness = [
+    'TARO_APP_CLOUDBASE_AI_APPROVED',
+    'TARO_APP_CLOUDBASE_AI_ELIGIBLE',
+    'TARO_APP_CLOUDBASE_AI_MODEL_READY'
+  ].every((key) => environment[key]?.trim().toLowerCase() === 'true')
+  const providerGroup = environment.TARO_APP_CLOUDBASE_AI_PROVIDER_GROUP?.trim()
+  const validProviderGroup = providerGroup === 'cloudbase'
+    || providerGroup === 'hunyuan-exp'
+    || /^custom-[A-Za-z0-9][A-Za-z0-9_-]{0,62}$/.test(providerGroup ?? '')
+  const modelConfigured = Boolean(environment.TARO_APP_CLOUDBASE_AI_MODEL?.trim())
+  if (!booleanReadiness || !validProviderGroup || !modelConfigured) {
+    return [result(
+      'BLOCKED',
+      'MINIPROGRAM_AI_READINESS',
+      '在线 AI 已启用，但审批、计费资格、Provider Group 或模型就绪证明不完整（值已隐藏）'
+    )]
+  }
+  return [result(
+    'PASS',
+    'MINIPROGRAM_AI_READINESS',
+    '在线 AI 审批、计费资格、Provider Group 和模型就绪证明均已配置（值已隐藏）'
   )]
 }
 
@@ -213,8 +304,12 @@ export function inspectReleaseReadiness({
   if (!RELEASE_TARGETS.includes(target)) throw new Error(`Unsupported target: ${target}`)
   const findings = [
     ...inspectProjectConfiguration(projectConfiguration, environment, sourceProjectConfiguration),
+    ...inspectBaseLibraryVersion(sourceProjectConfiguration ?? projectConfiguration),
     ...inspectBackendEnvironment(environment),
-    ...inspectMiniProgramCloudEnvironment(environment)
+    ...inspectTrustedCloudBaseIdentityIngress(environment),
+    ...inspectSpringProfile(environment, target),
+    ...inspectMiniProgramCloudEnvironment(environment),
+    ...inspectMiniProgramAiEnvironment(environment)
   ]
   for (const [label, document] of contentDocuments) {
     findings.push(...inspectContentDocument(label, document, target))
@@ -250,7 +345,7 @@ function run() {
     const inputs = loadWorkspaceInputs()
     const findings = inspectReleaseReadiness({
       target,
-      environment: process.env,
+      environment: loadMergedReleaseEnvironment(process.env),
       ...inputs
     })
 

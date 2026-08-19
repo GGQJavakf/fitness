@@ -58,7 +58,8 @@ public final class PlanCandidateController {
                 lockedFields,
                 validAdditionalRequirements(request.additionalRequirements()),
                 request.aiProposal(),
-                request.fallbackAllowed() == null || request.fallbackAllowed());
+                request.fallbackAllowed() == null || request.fallbackAllowed(),
+                request.trainingSplit());
         return response(new GenerationData(
                 generated.status(),
                 generated.candidate().map(candidate -> CandidateData.from(
@@ -114,6 +115,7 @@ public final class PlanCandidateController {
 
     public record CandidateRequest(
             Long profileVersion,
+            PlanCandidateService.TrainingSplit trainingSplit,
             Map<String, Integer> lockedFields,
             String additionalRequirements,
             PlanCandidateService.AiPlanProposal aiProposal,

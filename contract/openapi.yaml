@@ -30,6 +30,9 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/Success'}
         '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+        '503': {$ref: '#/components/responses/DefaultError'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/auth/refresh:
     post:
@@ -40,6 +43,7 @@ paths:
       responses:
         '200': {$ref: '#/components/responses/Success'}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/auth/logout:
     post:
@@ -152,16 +156,34 @@ paths:
     get:
       tags: [Content, Workouts]
       operationId: listExerciseReplacements
-      description: 仅返回当前用户器械可用、未排除且审核状态合格的同模式、同难度、目标肌群替代动作；不修改计划或训练快照。
+      description: 仅返回当前用户器械可用、未排除且审核状态合格，并且动作模式、难度、主要肌群、负重模式与处方转换兼容的替代动作；不修改计划或训练快照。
       parameters:
         - {name: sourceCode, in: path, required: true, schema: {type: string, pattern: '^[A-Z0-9_]+$'}}
       responses:
         '200':
-          description: 2 至 4 个安全替代候选；合法候选不足时宁缺毋滥
+          description: 1 至 4 个通用安全替代候选；无合法候选时宁缺毋滥
           content:
             application/json:
               schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseReplacementResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/DefaultError'}
+        default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/workout-sessions/{sessionId}/exercises/{snapshotId}/replacements:
+    get:
+      tags: [Workouts]
+      operationId: listWorkoutExerciseReplacements
+      description: 绑定当前用户的训练会话和快照，排除本次训练已有动作后返回安全替代候选。
+      parameters:
+        - {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: snapshotId, in: path, required: true, schema: {type: string, format: uuid}}
+      responses:
+        '200':
+          description: 1 至 4 个不与本次训练其他动作重复的安全候选
+          content:
+            application/json:
+              schema: {$ref: './schemas/content.yaml#/components/schemas/ExerciseReplacementResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/DefaultError'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plan-templates:
     get:
@@ -228,6 +250,25 @@ paths:
               schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanExerciseOptionListResponse'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/{planId}/exercise-replacements:
+    get:
+      tags: [Plans]
+      operationId: listPlanExerciseReplacements
+      description: 返回指定计划日内原动作的已审核严格等价替换；候选保持原组数、次数和休息，仅在负重模式变化时要求重新校准。
+      parameters:
+        - {name: planId, in: path, required: true, schema: {type: string, format: uuid}}
+        - {name: dayCode, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Z0-9_]+$'}}
+        - {name: sourceExerciseCode, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Z0-9_]+$'}}
+      responses:
+        '200':
+          description: 同动作模式、主要肌群和难度且符合当前器械与排除偏好的替换候选；无合格项时 items 为空。
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanExerciseReplacementOptionListResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/{planId}/day-options:
     get:
       tags: [Plans]
@@ -264,7 +305,7 @@ paths:
       requestBody: {$ref: '#/components/requestBodies/PlanCreation'}
       responses:
         '201':
-          description: 已创建不可变的首个计划版本
+          description: 已激活候选计划；首次创建计划，已有计划时追加不可变的新版本
           content:
             application/json:
               schema: {$ref: './schemas/plan.yaml#/components/schemas/ActivePlanResponse'}
@@ -333,12 +374,27 @@ paths:
               schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
-  /api/v1/workouts/today:
+  /api/v1/workout-recovery-checks:
     get:
       tags: [Workouts]
-      operationId: getTodayWorkout
+      operationId: checkWorkoutRecovery
+      description: >-
+        在创建新训练会话前，用当前用户最近已完成且未作废的实际训练事实检查主要肌群恢复窗口；
+        该接口只读，不自动重排训练日、不自动减量，也不提供医疗判断。
+      parameters:
+        - {name: planId, in: query, required: true, schema: {type: string, format: uuid}}
+        - {name: planVersionNo, in: query, required: true, schema: {type: integer, minimum: 1}}
+        - {name: trainingDayCode, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 128}}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 版本化恢复窗口检查结果；CONFIRMATION_REQUIRED 需要用户明确决定后客户端才可启动
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutRecoveryCheckResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '503': {$ref: '#/components/responses/DefaultError'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions:
     post:
@@ -349,10 +405,17 @@ paths:
       requestBody: {$ref: '#/components/requestBodies/WorkoutSessionStart'}
       responses:
         '201':
-          description: 会话已创建；同一用户和 clientSessionKey 重试返回首次创建结果
+          description: 会话已创建；同一用户和 clientSessionKey 仅在原会话仍为 CREATED 时返回首次创建结果
           content:
             application/json:
               schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409':
+          description: 服务端原子重算后需要恢复确认、幂等键冲突、已有未结束训练，或该启动键对应会话已经结束；均不会创建第二个会话。
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionStartConflictResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
     get:
       tags: [Workouts]
@@ -394,6 +457,8 @@ paths:
           content:
             application/json:
               schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/exercises/{exerciseId}:
@@ -410,15 +475,21 @@ paths:
           content:
             application/json:
               schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionResponse'}
-        '409': {$ref: '#/components/responses/VersionConflict'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409':
+          description: 版本冲突，或当前训练已无不重复且安全的替代动作
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutExerciseUpdateConflictResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
-  /api/v1/workout-sessions/{id}/sets/{clientSetKey}:
+  /api/v1/workout-sessions/{sessionId}/sets/{setId}:
     put:
       tags: [Workouts]
       operationId: upsertWorkoutSet
       parameters:
-        - {$ref: '#/components/parameters/IdPath'}
-        - {$ref: '#/components/parameters/ClientSetKeyPath'}
+        - {$ref: '#/components/parameters/SessionIdPath'}
+        - {$ref: '#/components/parameters/ClientSetKeyAsSetIdPath'}
         - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/SetUpsert'}
       responses:
@@ -427,17 +498,28 @@ paths:
           content:
             application/json:
               schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSetResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
     delete:
       tags: [Workouts]
-      operationId: deleteUnfinishedWorkoutSet
+      operationId: voidWorkoutSet
+      description: 追加不可变作废审计事实；原训练组事实保留，但汇总、历史和进阶读取不再计入该组。
       parameters:
-        - {$ref: '#/components/parameters/IdPath'}
-        - {$ref: '#/components/parameters/ClientSetKeyPath'}
+        - {$ref: '#/components/parameters/SessionIdPath'}
+        - {$ref: '#/components/parameters/SetIdPath'}
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
       requestBody: {$ref: '#/components/requestBodies/SetDeletion'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 首次追加或幂等重放的作废审计事实
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSetVoidResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/complete:
@@ -454,6 +536,8 @@ paths:
           content:
             application/json:
               schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutCompletionResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/sync/workout-operations:
@@ -484,15 +568,21 @@ paths:
     post:
       tags: [Sync]
       operationId: resolveSyncConflict
+      description: |
+        KEEP_LOCAL applies only correctable local workout-set facts as an append-only revision.
+        KEEP_SERVER abandons the queued local operation and returns server authority. KEEP_BOTH
+        keeps both versions as audit evidence but creates no duplicate set/session and only the
+        active server fact contributes to training statistics. An identical decision with the
+        original expected conflict version is replayed idempotently.
       parameters:
         - {$ref: '#/components/parameters/IdPath'}
       requestBody: {$ref: '#/components/requestBodies/SyncConflictResolution'}
       responses:
         '200':
-          description: 已显式裁决的同步冲突
+          description: 已裁决且携带客户端收敛所需服务器权威快照
           content:
             application/json:
-              schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncConflictResponse'}
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/SyncConflictResolutionResponse'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/workout-sessions/{id}/summary:
@@ -502,7 +592,18 @@ paths:
       parameters:
         - {$ref: '#/components/parameters/IdPath'}
       responses:
-        '200': {$ref: '#/components/responses/Success'}
+        '200':
+          description: 已完成或提前结束训练的汇总事实
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutSessionSummaryResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: 训练尚未进入终态，错误码为 WORKOUT_NOT_TERMINAL。
+          content:
+            application/json:
+              schema: {$ref: './schemas/workout.yaml#/components/schemas/WorkoutNotTerminalErrorResponse'}
         default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/progress/exercises/{exerciseId}:
     get:
@@ -523,9 +624,18 @@ paths:
       operationId: listProgressionRecommendations
       parameters:
         - {name: status, in: query, required: false, schema: {$ref: './schemas/progression.yaml#/components/schemas/RecommendationStatus'}}
+        - {name: cursor, in: query, required: false, description: Base64URL 编码的稳定游标, schema: {type: string, maxLength: 256}}
+        - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
       responses:
         '200':
-          description: 建议列表
+          description: 有界建议列表，按 createdAt、id 倒序
+          headers:
+            X-Has-More:
+              required: true
+              schema: {type: boolean}
+            X-Next-Cursor:
+              required: false
+              schema: {type: string}
           content:
             application/json:
               schema: {$ref: './schemas/progression.yaml#/components/schemas/ProgressionRecommendationListResponse'}
@@ -728,6 +838,14 @@ components:
     VersionNoPath: {name: versionNo, in: path, required: true, schema: {type: integer, minimum: 1}}
     ExerciseIdPath: {name: exerciseId, in: path, required: true, schema: {type: string}}
     ClientSetKeyPath: {name: clientSetKey, in: path, required: true, schema: {type: string, minLength: 8, maxLength: 128}}
+    SessionIdPath: {name: sessionId, in: path, required: true, schema: {type: string, format: uuid}}
+    ClientSetKeyAsSetIdPath:
+      name: setId
+      in: path
+      required: true
+      description: PUT 兼容路径参数，值为客户端生成的 clientSetKey。
+      schema: {type: string, minLength: 8, maxLength: 128}
+    SetIdPath: {name: setId, in: path, required: true, schema: {type: string, format: uuid}}
   requestBodies:
     WechatLogin: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/WechatLoginRequest'}}}}
     RefreshSession: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/RefreshSessionRequest'}}}}

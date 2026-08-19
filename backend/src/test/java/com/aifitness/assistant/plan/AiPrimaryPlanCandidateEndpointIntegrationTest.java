@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -74,6 +76,164 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void preservesTheRequestedAiSplitWhenConfirmingAndEditingThePlan() throws Exception {
+        String token = login();
+        configureProfile(token);
+        configureEquipment(token);
+
+        String candidateResponse = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(professionalPushPullLegsAiRequest())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andExpect(jsonPath("$.data.candidate.plan.trainingSplit").value("PUSH_PULL_LEGS"))
+                .andReturn().getResponse().getContentAsString();
+        String candidateId = objectMapper.readTree(candidateResponse)
+                .at("/data/candidate/candidateId").asText();
+
+        String activeResponse = mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + candidateId + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.activeVersion.plan.templateCode").value("AI_PERSONALIZED"))
+                .andExpect(jsonPath("$.data.activeVersion.plan.trainingSplit").value("PUSH_PULL_LEGS"))
+                .andReturn().getResponse().getContentAsString();
+        String planId = objectMapper.readTree(activeResponse).at("/data/planId").asText();
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-options", planId)
+                        .queryParam("dayCode", "DAY_1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("DUMBBELL_BENCH_PRESS")))
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItems(
+                                "SEATED_CABLE_ROW", "LAT_PULLDOWN", "GOBLET_SQUAT"))));
+
+        com.fasterxml.jackson.databind.node.ObjectNode legacyPlan = objectMapper.readTree(activeResponse)
+                .at("/data/activeVersion/plan").deepCopy();
+        legacyPlan.remove("trainingSplit");
+        legacyPlan.put("name", "旧客户端编辑后的专业推拉腿计划");
+        Map<String, Object> legacyEdit = new LinkedHashMap<>();
+        legacyEdit.put("baseVersionNumber", 1);
+        legacyEdit.put("plan", legacyPlan);
+        legacyEdit.put("locks", Map.of());
+
+        String warningResponse = mvc.perform(post("/api/v1/plans/{planId}/versions", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(legacyEdit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("WARNING_CONFIRMATION_REQUIRED"))
+                .andExpect(jsonPath("$.data.plan.trainingSplit").value("PUSH_PULL_LEGS"))
+                .andReturn().getResponse().getContentAsString();
+        legacyEdit.put("warningConfirmationToken", objectMapper.readTree(warningResponse)
+                .at("/data/warningConfirmationToken").asText());
+
+        mvc.perform(post("/api/v1/plans/{planId}/versions", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(legacyEdit)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("CREATED"))
+                .andExpect(jsonPath("$.data.plan.trainingSplit").value("PUSH_PULL_LEGS"))
+                .andExpect(jsonPath("$.data.version.plan.trainingSplit").value("PUSH_PULL_LEGS"));
+
+        mvc.perform(get("/api/v1/plans/active")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.activeVersion.plan.trainingSplit").value("PUSH_PULL_LEGS"));
+
+        com.fasterxml.jackson.databind.node.ObjectNode renamedPushDayPlan = legacyPlan.deepCopy();
+        renamedPushDayPlan.put("templateCode", "CLIENT_RELABELED_TEMPLATE");
+        com.fasterxml.jackson.databind.node.ObjectNode renamedPushDay =
+                (com.fasterxml.jackson.databind.node.ObjectNode) renamedPushDayPlan.at("/days/0");
+        renamedPushDay.put("name", "上肢训练");
+        com.fasterxml.jackson.databind.node.ArrayNode upperBodyExercises = objectMapper.createArrayNode();
+        upperBodyExercises.add(renamedPushDayPlan.at("/days/0/exercises/0").deepCopy());
+        upperBodyExercises.add(renamedPushDayPlan.at("/days/1/exercises/0").deepCopy());
+        upperBodyExercises.add(renamedPushDayPlan.at("/days/1/exercises/3").deepCopy());
+        upperBodyExercises.add(renamedPushDayPlan.at("/days/0/exercises/3").deepCopy());
+        renamedPushDay.set("exercises", upperBodyExercises);
+        Map<String, Object> focusOverrideEdit = new LinkedHashMap<>();
+        focusOverrideEdit.put("baseVersionNumber", 2);
+        focusOverrideEdit.put("plan", renamedPushDayPlan);
+        focusOverrideEdit.put("locks", Map.of());
+
+        mvc.perform(post("/api/v1/plans/{planId}/versions", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(focusOverrideEdit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("SESSION_FOCUS_MISMATCH")));
+
+        com.fasterxml.jackson.databind.node.ObjectNode invalidFrequencyPlan = legacyPlan.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ArrayNode) invalidFrequencyPlan.path("days")).remove(2);
+        Map<String, Object> invalidFrequencyEdit = new LinkedHashMap<>();
+        invalidFrequencyEdit.put("baseVersionNumber", 2);
+        invalidFrequencyEdit.put("plan", invalidFrequencyPlan);
+        invalidFrequencyEdit.put("locks", Map.of());
+
+        mvc.perform(post("/api/v1/plans/{planId}/versions", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidFrequencyEdit)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("SPLIT_FREQUENCY_MISMATCH")));
+    }
+
+    @Test
+    void rejectsAThreeExerciseAiPlanAsUnderfilledForFortyFiveMinutes() throws Exception {
+        String token = login();
+        configureProfile(token);
+        configureEquipment(token);
+
+        assertNoCandidate(token, aiRequest(3), "SESSION_TARGET_UNDERFILLED");
+    }
+
+    @Test
+    void rejectsAnUnprofessionalFiveDayAiSplitAndAcceptsDirectArmWork() throws Exception {
+        String token = login();
+        configureProfile(token, "HYPERTROPHY", 5);
+        configureEquipment(token);
+
+        Map<String, Object> unprofessional = professionalFiveDayAiRequest();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> days = (List<Map<String, Object>>) ((Map<String, Object>)
+                unprofessional.get("aiProposal")).get("days");
+        days.set(0, day("DAY_1", List.of(
+                "DUMBBELL_BENCH_PRESS",
+                "DUMBBELL_OVERHEAD_PRESS",
+                "SEATED_DUMBBELL_PRESS",
+                "GOBLET_SQUAT")));
+
+        assertNoCandidate(token, unprofessional, "DUPLICATE_MOVEMENT_PATTERN");
+
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(professionalFiveDayAiRequest())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andExpect(jsonPath("$.data.candidate.generationSource").value("AI_PERSONALIZED"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("CABLE_TRICEPS_PUSHDOWN")))
+                .andExpect(jsonPath("$.data.candidate.plan.days[1].exercises[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("DUMBBELL_BICEPS_CURL")))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+        assertThat(candidate.at("/plan/days/0/exercises")).hasSize(4);
+        assertThat(candidate.at("/plan/days/1/exercises")).hasSize(4);
+    }
+
+    @Test
     void appliesTheConservativeGeneralFitnessPrescriptionToFatLossAiCandidates() throws Exception {
         String token = login();
         configureProfile(token, "FAT_LOSS");
@@ -85,6 +245,49 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
         assertThat(exercise.path("repMin").asInt()).isEqualTo(10);
         assertThat(exercise.path("repMax").asInt()).isEqualTo(15);
         assertThat(exercise.path("restSeconds").asInt()).isEqualTo(75);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "STRENGTH,3,5,8,120",
+            "HYPERTROPHY,3,8,12,90",
+            "GENERAL_FITNESS,3,10,15,75",
+            "FAT_LOSS,3,10,15,75"
+    })
+    void ruleEngineOwnsEveryNumericPrescriptionForAiSelectedExercises(
+            String goal, int workSets, int repMin, int repMax, int restSeconds) throws Exception {
+        String token = login();
+        configureProfile(token, goal);
+        configureEquipment(token);
+        Map<String, Object> request = aiRequest(4);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> days = (List<Map<String, Object>>) ((Map<String, Object>)
+                request.get("aiProposal")).get("days");
+        days.forEach(day -> {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> exercises = (List<Map<String, Object>>) day.get("exercises");
+            exercises.forEach(exercise -> {
+                exercise.put("workSets", 2);
+                exercise.put("repMin", 5);
+                exercise.put("repMax", 5);
+                exercise.put("restSeconds", 45);
+            });
+        });
+
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode exercise = objectMapper.readTree(response)
+                .at("/data/candidate/plan/days/0/exercises/0");
+
+        assertThat(exercise.path("workSets").asInt()).isEqualTo(workSets);
+        assertThat(exercise.path("repMin").asInt()).isEqualTo(repMin);
+        assertThat(exercise.path("repMax").asInt()).isEqualTo(repMax);
+        assertThat(exercise.path("restSeconds").asInt()).isEqualTo(restSeconds);
     }
 
     @Test
@@ -308,21 +511,6 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
         wrongFrequency.put("aiProposal", wrongFrequencyProposal);
         assertNoCandidate(token, wrongFrequency, "SESSION_FREQUENCY_MISMATCH");
 
-        Map<String, Object> overDuration = aiRequest(4);
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> durationDays = (List<Map<String, Object>>) ((Map<String, Object>)
-                overDuration.get("aiProposal")).get("days");
-        durationDays.forEach(day -> {
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> dayExercises =
-                    (List<Map<String, Object>>) day.get("exercises");
-            dayExercises.forEach(exercise -> {
-                exercise.put("workSets", 4);
-                exercise.put("restSeconds", 240);
-            });
-        });
-        assertNoCandidate(token, overDuration, "SESSION_DURATION_EXCEEDED");
-
         Map<String, Object> missingLockTarget = aiRequest(4);
         missingLockTarget.put("lockedFields", Map.of(
                 "/days/DAY_1/exercises/UNKNOWN/restSeconds", 120));
@@ -426,18 +614,80 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
         return request;
     }
 
+    private static Map<String, Object> professionalFiveDayAiRequest() {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("profileVersion", 1);
+        request.put("trainingSplit", "BODY_PART_FIVE_DAY");
+        request.put("additionalRequirements", "推日含三头，拉日含二头，动作模式不重复");
+        request.put("fallbackAllowed", false);
+        request.put("lockedFields", Map.of());
+        request.put("aiProposal", Map.of(
+                "name", "专业五日推拉腿计划",
+                "days", new ArrayList<>(List.of(
+                        day("DAY_1", List.of(
+                                "DUMBBELL_BENCH_PRESS", "DUMBBELL_FLOOR_PRESS",
+                                "CABLE_TRICEPS_PUSHDOWN", "DEAD_BUG")),
+                        day("DAY_2", List.of(
+                                "SEATED_CABLE_ROW", "LAT_PULLDOWN",
+                                "DUMBBELL_SHRUG", "DUMBBELL_BICEPS_CURL")),
+                        day("DAY_3", List.of(
+                                "GOBLET_SQUAT", "DUMBBELL_ROMANIAN_DEADLIFT",
+                                "STANDING_WALL_CALF_RAISE", "DEAD_BUG")),
+                        day("DAY_4", List.of(
+                                "DUMBBELL_BICEPS_CURL", "DUMBBELL_HAMMER_CURL",
+                                "CABLE_TRICEPS_PUSHDOWN", "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION")),
+                        day("DAY_5", List.of(
+                                "DUMBBELL_OVERHEAD_PRESS", "DUMBBELL_LATERAL_RAISE",
+                                "DUMBBELL_REVERSE_FLY", "DUMBBELL_SHRUG"))))));
+        return request;
+    }
+
+    private static Map<String, Object> professionalPushPullLegsAiRequest() {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("profileVersion", 1);
+        request.put("trainingSplit", "PUSH_PULL_LEGS");
+        request.put("fallbackAllowed", false);
+        request.put("lockedFields", Map.of());
+        request.put("aiProposal", Map.of(
+                "name", "专业推拉腿计划",
+                "days", List.of(
+                        day("DAY_1", List.of(
+                                "DUMBBELL_FLOOR_PRESS", "DUMBBELL_OVERHEAD_PRESS",
+                                "DUMBBELL_LATERAL_RAISE", "CABLE_TRICEPS_PUSHDOWN")),
+                        day("DAY_2", List.of(
+                                "SEATED_CABLE_ROW", "LAT_PULLDOWN",
+                                "DUMBBELL_SHRUG", "DUMBBELL_BICEPS_CURL")),
+                        day("DAY_3", List.of(
+                                "GOBLET_SQUAT", "DUMBBELL_ROMANIAN_DEADLIFT",
+                                "STANDING_WALL_CALF_RAISE", "DEAD_BUG")))));
+        return request;
+    }
+
     private static Map<String, Object> day(String code, int exerciseCount) {
-        String[] codes = {
-                "GOBLET_SQUAT",
-                "DUMBBELL_ROMANIAN_DEADLIFT",
-                "DUMBBELL_BENCH_PRESS",
-                "SEATED_CABLE_ROW",
-                "DEAD_BUG"
+        List<String> codes = switch (code) {
+            case "DAY_1" -> List.of(
+                    "GOBLET_SQUAT",
+                    "DUMBBELL_BENCH_PRESS",
+                    "SEATED_CABLE_ROW",
+                    "DUMBBELL_BICEPS_CURL",
+                    "DEAD_BUG");
+            case "DAY_2" -> List.of(
+                    "DUMBBELL_ROMANIAN_DEADLIFT",
+                    "DUMBBELL_OVERHEAD_PRESS",
+                    "LAT_PULLDOWN",
+                    "CABLE_TRICEPS_PUSHDOWN",
+                    "DEAD_BUG");
+            default -> List.of(
+                    "GOBLET_SQUAT",
+                    "DUMBBELL_FLOOR_PRESS",
+                    "ONE_ARM_DUMBBELL_ROW",
+                    "DEAD_BUG",
+                    "STANDING_WALL_CALF_RAISE");
         };
         List<Map<String, Object>> exercises = new ArrayList<>();
         for (int index = 0; index < exerciseCount; index++) {
             Map<String, Object> exercise = new LinkedHashMap<>();
-            exercise.put("exerciseCode", codes[index]);
+            exercise.put("exerciseCode", codes.get(index));
             exercise.put("workSets", 3);
             exercise.put("repMin", 8);
             exercise.put("repMax", 12);
@@ -451,19 +701,42 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
         return day;
     }
 
+    private static Map<String, Object> day(String code, List<String> exerciseCodes) {
+        List<Map<String, Object>> exercises = exerciseCodes.stream()
+                .map(exerciseCode -> {
+                    Map<String, Object> exercise = new LinkedHashMap<String, Object>();
+                    exercise.put("exerciseCode", exerciseCode);
+                    exercise.put("workSets", 3);
+                    exercise.put("repMin", 8);
+                    exercise.put("repMax", 12);
+                    exercise.put("restSeconds", 75);
+                    return exercise;
+                })
+                .toList();
+        Map<String, Object> day = new LinkedHashMap<>();
+        day.put("code", code);
+        day.put("name", code);
+        day.put("exercises", exercises);
+        return day;
+    }
+
     private void configureProfile(String token) throws Exception {
         configureProfile(token, "HYPERTROPHY");
     }
 
     private void configureProfile(String token, String goal) throws Exception {
+        configureProfile(token, goal, 3);
+    }
+
+    private void configureProfile(String token, String goal, int weeklyFrequency) throws Exception {
         mvc.perform(put("/api/v1/profile")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"experience":"INTERMEDIATE","goal":"%s",
-                                 "weeklyFrequency":3,"sessionMinutes":45,"location":"GYM",
+                                 "weeklyFrequency":%d,"sessionMinutes":45,"location":"GYM",
                                  "expectedVersion":0}
-                                """.formatted(goal)))
+                                """.formatted(goal, weeklyFrequency)))
                 .andExpect(status().isOk());
     }
 

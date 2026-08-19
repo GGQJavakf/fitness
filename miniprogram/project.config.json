@@ -3,6 +3,7 @@
   "projectname": "ai-fitness-miniprogram",
   "description": "AI 健身助手微信小程序",
   "appid": "wx7539126da1daeb8c",
+  "libVersion": "3.15.1",
   "setting": {
     "urlCheck": true,
     "es6": false,

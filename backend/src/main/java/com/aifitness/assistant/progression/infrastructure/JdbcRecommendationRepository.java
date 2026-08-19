@@ -92,6 +92,37 @@ public final class JdbcRecommendationRepository implements RecommendationReposit
     }
 
     @Override
+    public Page pageByUser(
+            UUID userId,
+            Optional<ProgressionRecommendation.Status> status,
+            Optional<Cursor> cursor,
+            int limit) {
+        if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+        List<Object> arguments = new java.util.ArrayList<>();
+        StringBuilder clause = new StringBuilder("WHERE user_id = ?");
+        arguments.add(bytes(userId));
+        status.ifPresent(value -> {
+            clause.append(" AND user_decision = ?");
+            arguments.add(value.name());
+        });
+        cursor.ifPresent(value -> {
+            clause.append(" AND (created_at < ? OR (created_at = ? AND id < ?))");
+            arguments.add(Timestamp.from(value.createdAt()));
+            arguments.add(Timestamp.from(value.createdAt()));
+            arguments.add(bytes(value.id()));
+        });
+        clause.append(" ORDER BY created_at DESC, id DESC LIMIT ?");
+        arguments.add(limit + 1);
+        List<ProgressionRecommendation> matches = query(clause.toString(), arguments.toArray());
+        boolean hasMore = matches.size() > limit;
+        List<ProgressionRecommendation> items = hasMore ? matches.subList(0, limit) : matches;
+        Optional<Cursor> next = hasMore
+                ? Optional.of(new Cursor(items.getLast().createdAt(), items.getLast().id()))
+                : Optional.empty();
+        return new Page(items, hasMore, next);
+    }
+
+    @Override
     public ProgressionRecommendation updatePending(
             ProgressionRecommendation recommendation, Optional<String> decisionIdempotencyKey) {
         int updated;
@@ -117,6 +148,43 @@ public final class JdbcRecommendationRepository implements RecommendationReposit
             throw new IllegalStateException("recommendation is already decided");
         }
         return findByIdAndUser(recommendation.id(), recommendation.userId()).orElseThrow();
+    }
+
+    @Override
+    public DecisionClaim claimDecision(
+            UUID userId, String operation, String idempotencyKey, String payloadFingerprint) {
+        jdbc.update("""
+                INSERT INTO progression_decision_idempotency
+                    (id, user_id, operation, idempotency_key, payload_fingerprint, created_at)
+                VALUES (?, ?, ?, ?, ?, UTC_TIMESTAMP(6))
+                ON DUPLICATE KEY UPDATE id = id
+                """, bytes(UUID.randomUUID()), bytes(userId), operation, idempotencyKey, payloadFingerprint);
+        DecisionRow row = jdbc.query("""
+                SELECT payload_fingerprint, result_recommendation_id
+                FROM progression_decision_idempotency
+                WHERE user_id = ? AND operation = ? AND idempotency_key = ?
+                FOR UPDATE
+                """, (result, ignored) -> new DecisionRow(
+                        result.getString("payload_fingerprint"),
+                        optionalUuid(result, "result_recommendation_id")),
+                bytes(userId), operation, idempotencyKey).stream().findFirst().orElseThrow();
+        if (!row.payloadFingerprint().equals(payloadFingerprint)) {
+            throw new com.aifitness.assistant.progression.application.RecommendationService
+                    .IdempotencyKeyReusedException();
+        }
+        return new DecisionClaim(row.recommendationId().flatMap(id -> findByIdAndUser(id, userId)));
+    }
+
+    @Override
+    public void completeDecision(
+            UUID userId, String operation, String idempotencyKey, String payloadFingerprint, UUID recommendationId) {
+        int updated = jdbc.update("""
+                UPDATE progression_decision_idempotency
+                SET result_recommendation_id = ?, completed_at = UTC_TIMESTAMP(6)
+                WHERE user_id = ? AND operation = ? AND idempotency_key = ?
+                  AND payload_fingerprint = ? AND result_recommendation_id IS NULL
+                """, bytes(recommendationId), bytes(userId), operation, idempotencyKey, payloadFingerprint);
+        if (updated != 1) throw new IllegalStateException("progression decision was not claimed");
     }
 
     @Override
@@ -233,5 +301,7 @@ public final class JdbcRecommendationRepository implements RecommendationReposit
         ByteBuffer buffer = ByteBuffer.wrap(value);
         return new UUID(buffer.getLong(), buffer.getLong());
     }
+
+    private record DecisionRow(String payloadFingerprint, Optional<UUID> recommendationId) {}
 
 }

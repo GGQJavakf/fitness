@@ -21,6 +21,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
 class RecommendationPlanVersionTest {
@@ -30,7 +34,7 @@ class RecommendationPlanVersionTest {
     private static final String WEIGHT_PATH = "/days/DAY_A/exercises/GOBLET_SQUAT/targetWeightKg";
 
     @Test
-    void applyingRecommendationCreatesOneProgressionVersionAndDuplicateApplyIsRejected() {
+    void sameIdempotencyKeyAndPayloadReplaysTheOriginalResultAndCreatesOnePlanVersion() {
         Fixture fixture = fixture(Map.of());
         ProgressionRecommendation recommendation = fixture.saveRecommendation();
 
@@ -46,9 +50,79 @@ class RecommendationPlanVersionTest {
                 value -> assertThat(value).isEqualByComparingTo("42.5"));
         assertThat(fixture.plans.getVersion(USER, active.planId(), 1).plan().weightAt(WEIGHT_PATH))
                 .hasValueSatisfying(value -> assertThat(value).isEqualByComparingTo("40"));
+        ProgressionRecommendation replay = fixture.service.apply(
+                USER, recommendation.id(), 1, new BigDecimal("42.50"), "apply-once");
+
+        assertThat(replay).isEqualTo(applied);
+        assertThat(fixture.plans.getActive(USER).activeVersionNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void reusingTheKeyWithADifferentDecisionFingerprintIsRejected() {
+        Fixture fixture = fixture(Map.of());
+        ProgressionRecommendation recommendation = fixture.saveRecommendation();
+        fixture.service.apply(USER, recommendation.id(), 1, new BigDecimal("42.5"), "same-key");
+
         assertThatThrownBy(() -> fixture.service.apply(
-                USER, recommendation.id(), 2, new BigDecimal("42.5"), "apply-twice"))
-                .isInstanceOf(RecommendationService.RecommendationAlreadyDecidedException.class);
+                USER, recommendation.id(), 1, new BigDecimal("45"), "same-key"))
+                .isInstanceOf(RecommendationService.IdempotencyKeyReusedException.class);
+        assertThat(fixture.plans.getActive(USER).activeVersionNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentRetriesWithTheSameKeyConvergeOnOneResultAndOnePlanVersion() throws Exception {
+        Fixture fixture = fixture(Map.of());
+        ProgressionRecommendation recommendation = fixture.saveRecommendation();
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<ProgressionRecommendation> apply = () -> {
+                start.await();
+                return fixture.service.apply(
+                        USER, recommendation.id(), 1, new BigDecimal("42.5"), "concurrent-key");
+            };
+            Future<ProgressionRecommendation> first = executor.submit(apply);
+            Future<ProgressionRecommendation> second = executor.submit(apply);
+            start.countDown();
+
+            assertThat(first.get()).isEqualTo(second.get());
+        }
+        assertThat(fixture.plans.getActive(USER).activeVersionNumber()).isEqualTo(2);
+    }
+
+    @Test
+    void concurrentDifferentFingerprintsWithTheSameKeyAllowOneWinnerAndRejectTheReuse() throws Exception {
+        Fixture fixture = fixture(Map.of());
+        ProgressionRecommendation recommendation = fixture.saveRecommendation();
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            Future<ProgressionRecommendation> first = executor.submit(() -> {
+                start.await();
+                return fixture.service.apply(
+                        USER, recommendation.id(), 1, new BigDecimal("42.5"), "raced-reused-key");
+            });
+            Future<ProgressionRecommendation> second = executor.submit(() -> {
+                start.await();
+                return fixture.service.apply(
+                        USER, recommendation.id(), 1, new BigDecimal("45"), "raced-reused-key");
+            });
+            start.countDown();
+
+            List<Future<ProgressionRecommendation>> results = List.of(first, second);
+            long successes = 0;
+            long reused = 0;
+            for (Future<ProgressionRecommendation> result : results) {
+                try {
+                    result.get();
+                    successes++;
+                } catch (ExecutionException exception) {
+                    assertThat(exception.getCause())
+                            .isInstanceOf(RecommendationService.IdempotencyKeyReusedException.class);
+                    reused++;
+                }
+            }
+            assertThat(successes).isEqualTo(1);
+            assertThat(reused).isEqualTo(1);
+        }
         assertThat(fixture.plans.getActive(USER).activeVersionNumber()).isEqualTo(2);
     }
 
@@ -82,7 +156,7 @@ class RecommendationPlanVersionTest {
         assertThatThrownBy(() -> fixture.service.apply(
                 USER, recommendation.id(), 1, new BigDecimal("41.25"), "invalid-increment"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("equipment increment");
+                .hasMessageContaining("equipment level");
         assertThat(fixture.plans.getActive(USER).activeVersionNumber()).isEqualTo(1);
         assertThat(fixture.service.get(USER, recommendation.id()).status())
                 .isEqualTo(ProgressionRecommendation.Status.PENDING);

@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import type { components } from '../../../infrastructure/api/schema.generated'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
@@ -16,35 +16,73 @@ export default function SyncConflictsPage() {
   const [message, setMessage] = useState('正在检查训练记录…')
   const [busyId, setBusyId] = useState('')
   const [loading, setLoading] = useState(false)
+  const reloadActiveRef = useRef(false)
+  const reloadRequestIdRef = useRef(0)
+  const resolutionActiveRef = useRef(false)
 
   async function reload(): Promise<void> {
+    if (reloadActiveRef.current) return
+    reloadActiveRef.current = true
+    const requestId = ++reloadRequestIdRef.current
     setLoading(true)
     try {
+      const remembered = await application.workouts.pendingConflictResolutions()
+      for (const intent of remembered) {
+        const result = await application.resolveSyncConflict(intent.conflictId, {
+          resolution: intent.resolution,
+          expectedVersion: intent.expectedConflictVersion,
+        })
+        await application.workouts.convergeConflict(result)
+      }
       const value = await application.listSyncConflicts()
+      if (requestId !== reloadRequestIdRef.current) return
       setItems(value)
       setMessage(value.length ? '发现不同版本的训练记录，请选择要保留的内容。' : '所有训练记录都已同步。')
     } catch {
-      setMessage('暂时无法检查同步状态，设备中的训练记录仍会保留。')
+      if (requestId !== reloadRequestIdRef.current) return
+      setMessage('暂时无法完成上次选择或检查同步状态，设备中的训练记录仍会保留。')
     } finally {
-      setLoading(false)
+      if (requestId === reloadRequestIdRef.current) {
+        reloadActiveRef.current = false
+        setLoading(false)
+      }
     }
   }
 
-  useEffect(() => { void reload() }, [])
+  useEffect(() => {
+    void reload()
+    return () => {
+      reloadRequestIdRef.current += 1
+      reloadActiveRef.current = false
+      resolutionActiveRef.current = false
+    }
+  }, [])
 
   async function resolve(conflict: Conflict, resolution: Resolution): Promise<void> {
-    if (busyId) return
+    if (resolutionActiveRef.current) return
+    resolutionActiveRef.current = true
     setBusyId(conflict.id)
     setMessage('正在保存你的选择…')
     try {
-      await application.resolveSyncConflict(conflict.id, { resolution, expectedVersion: conflict.version })
+      await application.workouts.rememberConflictResolution({
+        conflictId: conflict.id,
+        clientKey: conflict.entityKey,
+        resolution,
+        expectedConflictVersion: conflict.version,
+      })
+      const result = await application.resolveSyncConflict(
+        conflict.id,
+        { resolution, expectedVersion: conflict.version },
+      )
+      await application.workouts.convergeConflict(result)
       application.telemetry.track('sync_conflict_resolved', {
         resolution: ({ KEEP_LOCAL: 'keep_local', KEEP_SERVER: 'keep_server', KEEP_BOTH: 'keep_both' } as const)[resolution],
       })
       await reload()
     } catch {
-      setMessage('这次选择暂未保存，两份记录都还在，请稍后重试。')
+      setMessage('服务端裁决或本机记录更新尚未完整完成；记录不会丢失，请稍后重试同一选择。')
     } finally {
+      resolutionActiveRef.current = false
       setBusyId('')
     }
   }
@@ -58,7 +96,7 @@ export default function SyncConflictsPage() {
         {items.length > 0 && <Text className='conflict-hero__count data-number'>{items.length} 项待处理</Text>}
       </View>
 
-      {items.length === 0 && !loading && (
+      {items.length === 0 && !loading && !message.includes('无法') && (
         <View className='surface-card empty-state conflict-empty'>
           <View className='conflict-empty__mark'>
             <View className='conflict-empty__check' />
@@ -108,19 +146,19 @@ export default function SyncConflictsPage() {
 
           <View className='conflict-recommendation'>
             <View className='conflict-recommendation__line' />
-            <Text>如果不确定，建议两份都保留，之后再根据训练回顾判断。</Text>
+            <Text>系统会按你的选择完成服务端裁决，并使用返回的权威记录同步更新本机训练状态。</Text>
           </View>
           <View className='conflict-actions'>
-            <Button className='primary-action' loading={busyId === item.id} disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_BOTH')}>两份都保留</Button>
+            <Button className='primary-action' loading={busyId === item.id} disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_SERVER')}>使用已同步记录</Button>
             <View className='conflict-actions__alternatives'>
-              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_LOCAL')}>使用设备记录</Button>
-              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_SERVER')}>使用已同步记录</Button>
+              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_LOCAL')}>尝试保留设备记录</Button>
+              <Button className='secondary-action' disabled={Boolean(busyId)} onClick={() => void resolve(item, 'KEEP_BOTH')}>尝试两份都保留</Button>
             </View>
           </View>
         </View>
       ))}
 
-      {message.includes('无法检查') && <Button className='secondary-action conflict-retry' loading={loading} onClick={() => void reload()}>重新检查</Button>}
+      {message.includes('无法') && <Button className='secondary-action conflict-retry' loading={loading} onClick={() => void reload()}>重新检查</Button>}
     </View>
   )
 }

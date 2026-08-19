@@ -29,6 +29,7 @@ interface StaticStage {
   readonly description: string
   readonly file: string
   readonly phase: number
+  readonly sourceFile: string
   readonly sourceGridIndex?: number
   readonly sha256: string
   readonly sizeBytes: number
@@ -73,7 +74,14 @@ describe('original golden-cat static exercise breakdown pack', () => {
     const pack = manifest()
     const byCode = new Map(pack.assets.map((entry) => [entry.exerciseCode, entry]))
 
-    expect(exercises).toHaveLength(23)
+    expect(exercises).toHaveLength(47)
+    expect([...byCode.keys()]).toEqual(expect.arrayContaining([
+      'DUMBBELL_BICEPS_CURL',
+      'CABLE_TRICEPS_PUSHDOWN',
+      'DUMBBELL_LATERAL_RAISE',
+      'ONE_ARM_DUMBBELL_ROW',
+      'DUMBBELL_SHRUG'
+    ]))
     expect(pack.format).toBe('static-keyframes-v1')
     expect(pack.character.id).toBe('golden-shaded-cat-coach-v4-rigged')
     expect(pack.assets).toHaveLength(exercises.length)
@@ -132,10 +140,19 @@ describe('original golden-cat static exercise breakdown pack', () => {
 
     expect(byCode.get('INCLINE_PUSH_UP')?.stages.map((stage) => stage.sourceGridIndex))
       .toEqual([0, 2, 4])
-    expect(byCode.get('DUMBBELL_FLOOR_PRESS')?.stages.map((stage) => stage.sourceGridIndex))
-      .toEqual([0, 2, 3])
+    const floorPressStages = byCode.get('DUMBBELL_FLOOR_PRESS')?.stages ?? []
+    expect(floorPressStages.map((stage) => stage.sourceGridIndex))
+      .toEqual([2, 5, 3])
+    expect(floorPressStages.map((stage) => stage.sourceFile))
+      .toEqual([
+        'assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png',
+        'assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png',
+        'assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png',
+      ])
     expect(byCode.get('SINGLE_ARM_DUMBBELL_PRESS')?.stages.map((stage) => stage.sourceGridIndex))
       .toEqual([0, 8, 3])
+    expect(byCode.get('STANDING_WALL_CALF_RAISE')?.stages.map((stage) => stage.sourceGridIndex))
+      .toEqual([0, 1, 2])
   })
 
   it('rebuilds the complete static pack byte-for-byte from the approved locked rig', () => {

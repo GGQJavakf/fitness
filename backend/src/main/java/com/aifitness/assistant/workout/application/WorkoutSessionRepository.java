@@ -12,6 +12,9 @@ public interface WorkoutSessionRepository {
 
     Optional<WorkoutSession> findByUserAndClientKey(UUID userId, String clientSessionKey);
 
+    /** Locks one user's start scope and reads exact replay plus any active session from the same snapshot. */
+    StartState findStartStateForUpdate(UUID userId, String clientSessionKey);
+
     WorkoutSession create(WorkoutSession session);
 
     WorkoutSession update(WorkoutSession session, long expectedVersion);
@@ -25,4 +28,11 @@ public interface WorkoutSessionRepository {
 
     List<WorkoutSession> findHistory(
             UUID userId, Optional<Instant> beforeStartedAt, Optional<UUID> beforeId, int limit);
+
+    record StartState(Optional<WorkoutSession> exactReplay, Optional<WorkoutSession> active) {
+        public StartState {
+            exactReplay = java.util.Objects.requireNonNull(exactReplay, "exact replay must not be null");
+            active = java.util.Objects.requireNonNull(active, "active session must not be null");
+        }
+    }
 }

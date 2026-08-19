@@ -20,4 +20,10 @@ public interface WechatIdentityProvider {
             super("wechat credential exchange rejected");
         }
     }
+
+    final class ProviderUnavailableException extends RuntimeException {
+        public ProviderUnavailableException() {
+            super("wechat identity provider unavailable");
+        }
+    }
 }

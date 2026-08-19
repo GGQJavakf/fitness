@@ -12,6 +12,9 @@ components:
     PlanGenerationSource:
       type: string
       enum: [AI_PERSONALIZED, FALLBACK_RULE_PLAN]
+    TrainingSplit:
+      type: string
+      enum: [UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY]
     WeightStatus:
       type: string
       enum: [KNOWN, NEEDS_CALIBRATION, BODYWEIGHT]
@@ -57,6 +60,7 @@ components:
       required: [templateCode, name, days, locks]
       properties:
         templateCode: {type: string, minLength: 1}
+        trainingSplit: {$ref: '#/components/schemas/TrainingSplit'}
         name: {type: string, minLength: 1}
         days:
           type: array
@@ -119,6 +123,50 @@ components:
       properties:
         data: {$ref: '#/components/schemas/PlanExerciseOptionListData'}
         meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
+    PlanExerciseReplacementMatchReason:
+      type: string
+      enum: [SAME_PATTERN_MUSCLES_DIFFICULTY]
+    PlanExerciseReplacementOption:
+      type: object
+      additionalProperties: false
+      required: [exerciseCode, name, workSets, repMin, repMax, restSeconds, weightStatus, movementPattern, primaryMuscles, equipment, matchReason]
+      properties:
+        exerciseCode: {type: string, minLength: 1, maxLength: 64, pattern: '^[A-Z0-9_]+$'}
+        name: {type: string, minLength: 2}
+        workSets: {type: integer, minimum: 1}
+        repMin: {type: integer, minimum: 1}
+        repMax: {type: integer, minimum: 1}
+        restSeconds: {type: integer, minimum: 1}
+        weightStatus: {$ref: '#/components/schemas/WeightStatus'}
+        targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
+        movementPattern: {type: string, minLength: 1, maxLength: 64}
+        primaryMuscles:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, minLength: 1, maxLength: 64}
+        equipment:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: {type: string, minLength: 1, maxLength: 64}
+        matchReason: {$ref: '#/components/schemas/PlanExerciseReplacementMatchReason'}
+    PlanExerciseReplacementOptionListData:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 4
+          items: {$ref: '#/components/schemas/PlanExerciseReplacementOption'}
+    PlanExerciseReplacementOptionListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanExerciseReplacementOptionListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     PlanDayOption:
       type: object
       additionalProperties: false
@@ -154,6 +202,8 @@ components:
       properties:
         profileVersion:
           $ref: './common.yaml#/components/schemas/ExpectedVersion'
+        trainingSplit:
+          $ref: '#/components/schemas/TrainingSplit'
         additionalRequirements:
           type: string
           maxLength: 300
@@ -179,7 +229,7 @@ components:
       additionalProperties: false
       required: [candidateId, generationSource, plan, validationIssues, ruleReference, lockedFieldOutcomes, explanationStatus, explanation, expiresAt]
       properties:
-        candidateId: {type: string}
+        candidateId: {type: string, format: uuid, minLength: 36, maxLength: 36}
         generationSource: {$ref: '#/components/schemas/PlanGenerationSource'}
         plan: {$ref: '#/components/schemas/PlanDraft'}
         validationIssues:
@@ -309,6 +359,7 @@ components:
       required: [templateCode, name, days]
       properties:
         templateCode: {type: string, minLength: 1}
+        trainingSplit: {$ref: '#/components/schemas/TrainingSplit'}
         name: {type: string, minLength: 1}
         days:
           type: array
@@ -356,7 +407,7 @@ components:
       additionalProperties: false
       required: [candidateId]
       properties:
-        candidateId: {type: string}
+        candidateId: {type: string, format: uuid, minLength: 36, maxLength: 36}
     CreatePlanVersionRequest:
       type: object
       additionalProperties: false

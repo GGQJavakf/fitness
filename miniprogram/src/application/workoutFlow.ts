@@ -5,13 +5,20 @@ export type WorkoutSetStatus = 'COMPLETED' | 'FAILED' | 'SKIPPED'
 export type WorkoutRir = '0' | '1' | '2' | '3_PLUS' | 'UNKNOWN'
 export type WorkoutSyncStatus = 'LOCAL_ONLY' | 'OFFLINE_PENDING' | 'SYNCED' | 'CONFLICT' | 'SYNC_REJECTED'
 export type WarmupPhase = 'GENERAL' | 'RAMP' | 'WORK'
+export type RampWarmupStatus = 'READY' | 'CALIBRATION_REQUIRED' | 'NOT_REQUIRED'
+export type WorkoutSafetyFlag = 'PAIN' | 'INJURY' | 'CHEST_DISCOMFORT' | 'DIZZINESS' | 'SEVERE_UNWELL'
 
 export interface WarmupExecutionState {
   readonly phase: WarmupPhase
-  readonly generalDurationSeconds: 180 | 300 | 480
+  readonly prescriptionVersion: string
+  readonly ruleVersion: string
+  readonly generalDurationSeconds: number
   readonly generalTimer: RestTimerState | null
-  readonly rampExerciseIndex: number
-  readonly maximumRampSets: 2 | 3
+  readonly rampExerciseIndex: number | null
+  readonly rampStatus: RampWarmupStatus
+  readonly rampSets: readonly RampWarmupSet[]
+  readonly calibrationMessage: string | null
+  readonly maximumRampSets: number
 }
 
 export interface WorkoutExerciseSnapshot {
@@ -32,6 +39,8 @@ export interface WorkoutSetRecord {
   readonly actualWeightKg: number | null
   readonly actualReps: number | null
   readonly rir: WorkoutRir
+  readonly safetyFlag: WorkoutSafetyFlag | null
+  /** Legacy local-only field retained so schemaVersion 1 drafts remain recoverable. */
   readonly discomfort: 'NONE' | 'DISCOMFORT' | 'PAIN'
 }
 
@@ -44,6 +53,24 @@ export interface WorkoutExerciseState extends WorkoutExerciseSnapshot {
 export interface RampWarmupSet {
   readonly weightKg: number
   readonly reps: number
+}
+
+export interface WorkoutWarmupPrescriptionSnapshot {
+  readonly schemaVersion: 'workout-warmup-prescription-v1'
+  readonly ruleVersion: string
+  readonly generalWarmup: {
+    readonly occurrences: 1
+    readonly durationSeconds: number
+  }
+  readonly rampWarmup?: {
+    readonly exerciseId: string
+    readonly exerciseOrder: number
+    readonly status: 'READY' | 'CALIBRATION_REQUIRED'
+    readonly sets: readonly RampWarmupSet[]
+    readonly calibrationMessage?: string
+  }
+  readonly countsTowardTrainingVolume: false
+  readonly countsTowardProgression: false
 }
 
 export interface WorkoutFlowState {
@@ -68,6 +95,7 @@ export interface RecordWorkoutSetInput {
   readonly actualWeightKg?: number
   readonly actualReps?: number
   readonly rir?: WorkoutRir
+  readonly safetyFlag?: WorkoutSafetyFlag
   readonly discomfort?: 'NONE' | 'DISCOMFORT' | 'PAIN'
 }
 
@@ -76,13 +104,15 @@ export function createWorkoutFlow(input: {
   planVersionId: string
   exercises: readonly WorkoutExerciseSnapshot[]
   warmupDurationSeconds?: 180 | 300 | 480
+  warmupPrescription?: WorkoutWarmupPrescriptionSnapshot
 }): WorkoutFlowState {
   if (input.clientSessionKey.trim().length === 0 || input.planVersionId.trim().length === 0) {
     throw new Error('workout session and plan version are required')
   }
   if (input.exercises.length === 0) throw new Error('workout requires at least one exercise')
   input.exercises.forEach(validateExercise)
-  return {
+  const warmup = createWarmupState(input)
+  const state: WorkoutFlowState = {
     schemaVersion: 1,
     clientSessionKey: input.clientSessionKey,
     planVersionId: input.planVersionId,
@@ -90,17 +120,13 @@ export function createWorkoutFlow(input: {
     currentExerciseIndex: 0,
     currentSetIndex: 0,
     restTimer: null,
-    warmup: {
-      phase: 'GENERAL',
-      generalDurationSeconds: input.warmupDurationSeconds ?? 180,
-      generalTimer: null,
-      rampExerciseIndex: 0,
-      maximumRampSets: 2,
-    },
+    warmup,
     syncStatus: 'LOCAL_ONLY',
     automaticProgressionEligible: true,
     safetyNotice: null,
   }
+  validateStateShape(state)
+  return state
 }
 
 export function completeGeneralWarmup(state: WorkoutFlowState): WorkoutFlowState {
@@ -109,8 +135,7 @@ export function completeGeneralWarmup(state: WorkoutFlowState): WorkoutFlowState
   const generalTimer = state.warmup.generalTimer?.timerStatus === 'RUNNING'
     ? { ...state.warmup.generalTimer, timerStatus: 'SKIPPED' as const }
     : state.warmup.generalTimer
-  const rampExercise = state.exercises[state.warmup.rampExerciseIndex]
-  const nextPhase: WarmupPhase = rampExercise?.weightStatus === 'BODYWEIGHT' ? 'WORK' : 'RAMP'
+  const nextPhase: WarmupPhase = state.warmup.rampExerciseIndex === null ? 'WORK' : 'RAMP'
   return { ...state, warmup: { ...state.warmup, phase: nextPhase, generalTimer } }
 }
 
@@ -123,31 +148,26 @@ export function beginWorkSets(state: WorkoutFlowState): WorkoutFlowState {
 
 export function completedRampSets(state: WorkoutFlowState): number {
   validateStateShape(state)
+  if (state.warmup.rampExerciseIndex === null) return 0
   return state.exercises[state.warmup.rampExerciseIndex].sets
     .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED').length
 }
 
-export function buildRampWarmupSets(formalWeightKg: number): readonly RampWarmupSet[] {
-  if (!Number.isFinite(formalWeightKg) || formalWeightKg <= 0) return []
-  const candidates = formalWeightKg <= 10
-    ? [2, 5]
-    : [roundToHalfKg(formalWeightKg * 0.5), roundToHalfKg(formalWeightKg * 0.7)]
-  const reps = [10, 6] as const
-  return candidates
-    .filter((weightKg, index, weights) =>
-      weightKg > 0 && weightKg < formalWeightKg && weights.indexOf(weightKg) === index)
-    .map((weightKg, index) => ({ weightKg, reps: reps[index] ?? reps[reps.length - 1] }))
-}
-
-export function buildRemainingRampWarmupSets(
-  formalWeightKg: number,
-  completedWeightKg: readonly number[],
-): readonly RampWarmupSet[] {
-  const completed = completedWeightKg.filter((weightKg) => Number.isFinite(weightKg) && weightKg >= 0)
-  const highestCompletedWeight = completed.length === 0 ? 0 : Math.max(...completed)
-  return buildRampWarmupSets(formalWeightKg)
-    .slice(Math.min(completed.length, 2))
+export function remainingRampWarmupSets(state: WorkoutFlowState): readonly RampWarmupSet[] {
+  validateStateShape(state)
+  const exerciseIndex = state.warmup.rampExerciseIndex
+  if (exerciseIndex === null || state.warmup.rampStatus !== 'READY') return []
+  const exercise = state.exercises[exerciseIndex]
+  const completed = exercise.sets
+    .filter((set) => set.setType === 'WARMUP' && set.status === 'COMPLETED')
+  const highestCompletedWeight = completed
+    .map((set) => set.actualWeightKg)
+    .filter((weight): weight is number => weight !== null)
+    .reduce((highest, weight) => Math.max(highest, weight), 0)
+  return state.warmup.rampSets
+    .slice(Math.min(completed.length, state.warmup.rampSets.length))
     .filter((set) => set.weightKg > highestCompletedWeight)
+    .filter((set) => exercise.sessionWeightKg === undefined || set.weightKg < exercise.sessionWeightKg)
 }
 
 export function setWorkoutExerciseWeight(
@@ -204,8 +224,8 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   }
   if (record.setType === 'WARMUP') {
     if (state.warmup.phase !== 'RAMP') throw new Error('ramp warmup sets can only be recorded during ramp warmup')
-    if (input.exerciseIndex !== state.warmup.rampExerciseIndex) {
-      throw new Error('ramp warmup sets belong to the first prescribed exercise')
+    if (state.warmup.rampExerciseIndex === null || input.exerciseIndex !== state.warmup.rampExerciseIndex) {
+      throw new Error('ramp warmup sets belong to the server-prescribed exercise')
     }
     const rampSetCount = exercise.sets.filter((set) => set.setType === 'WARMUP').length
     if (rampSetCount >= state.warmup.maximumRampSets) throw new Error('maximum ramp warmup sets exceeded')
@@ -217,14 +237,14 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
     ? { ...item, sets: [...item.sets, record] }
     : item)
   const position = derivePosition(exercises)
-  const unsafe = record.discomfort === 'PAIN' || record.discomfort === 'DISCOMFORT'
+  const unsafe = record.safetyFlag !== null || record.discomfort !== 'NONE'
   return {
     ...state,
     exercises,
     ...position,
     syncStatus: 'LOCAL_ONLY',
     automaticProgressionEligible: state.automaticProgressionEligible && !unsafe,
-    safetyNotice: unsafe ? '出现疼痛或明显不适，请停止训练；必要时寻求专业医疗帮助。' : state.safetyNotice,
+    safetyNotice: unsafe ? workoutSafetyNotice(record.safetyFlag) : state.safetyNotice,
   }
 }
 
@@ -268,17 +288,22 @@ export function restoreWorkoutFlow(value: unknown): WorkoutFlowState {
     || !(typeof value.safetyNotice === 'string' || value.safetyNotice === null)) {
     throw new Error('workout state is invalid')
   }
-  const state = value as unknown as WorkoutFlowState
+  const candidate = value as unknown as WorkoutFlowState
+  const warmup = normalizeRestoredWarmup(candidate.warmup)
+  const state = { ...candidate, warmup }
   try {
     validateStateShape(state)
   } catch {
     throw new Error('workout state is invalid')
   }
-  const exercises = state.exercises.map((exercise) => exercise.weightStatus !== 'BODYWEIGHT'
-      && exercise.sessionWeightKg === undefined
-      && initialSessionWeight(exercise) !== undefined
-    ? { ...exercise, sessionWeightKg: initialSessionWeight(exercise) }
-    : exercise)
+  const exercises = state.exercises.map((exercise) => {
+    const normalized = { ...exercise, sets: exercise.sets.map((set) => normalizeSet(set)) }
+    return normalized.weightStatus !== 'BODYWEIGHT'
+        && normalized.sessionWeightKg === undefined
+        && initialSessionWeight(normalized) !== undefined
+      ? { ...normalized, sessionWeightKg: initialSessionWeight(normalized) }
+      : normalized
+  })
   return { ...state, exercises, ...derivePosition(exercises) }
 }
 
@@ -318,6 +343,7 @@ function normalizeSet(input: {
   readonly actualWeightKg?: number | null
   readonly actualReps?: number | null
   readonly rir?: WorkoutRir
+  readonly safetyFlag?: WorkoutSafetyFlag | null
   readonly discomfort?: 'NONE' | 'DISCOMFORT' | 'PAIN'
 }): WorkoutSetRecord {
   if (input.clientSetKey.trim().length === 0) throw new Error('clientSetKey is required')
@@ -339,8 +365,19 @@ function normalizeSet(input: {
     actualWeightKg,
     actualReps,
     rir: input.rir ?? 'UNKNOWN',
+    safetyFlag: input.safetyFlag ?? (input.discomfort === 'PAIN' ? 'PAIN' : null),
     discomfort: input.discomfort ?? 'NONE',
   }
+}
+
+export function workoutSafetyNotice(flag: WorkoutSafetyFlag | null): string {
+  if (flag === 'CHEST_DISCOMFORT' || flag === 'DIZZINESS' || flag === 'SEVERE_UNWELL') {
+    return '请立即停止训练并寻求身边帮助；如情况严重、持续或加重，请联系当地急救服务。本提示不作诊断。'
+  }
+  if (flag === 'PAIN' || flag === 'INJURY') {
+    return '请立即停止训练，不要勉强继续；如需帮助，请咨询合格专业人员。本提示不作诊断。'
+  }
+  return '出现明显不适，请停止训练；如需帮助，请咨询合格专业人员。本提示不作诊断。'
 }
 
 function derivePosition(exercises: readonly WorkoutExerciseState[]): Pick<WorkoutFlowState, 'currentExerciseIndex' | 'currentSetIndex'> {
@@ -361,10 +398,41 @@ function validateStateShape(state: WorkoutFlowState): void {
   }
   if (!Array.isArray(state.exercises) || state.exercises.length === 0) throw new Error('workout state is invalid')
   if (!['GENERAL', 'RAMP', 'WORK'].includes(state.warmup.phase)
-    || ![180, 300, 480].includes(state.warmup.generalDurationSeconds)
+    || typeof state.warmup.prescriptionVersion !== 'string' || state.warmup.prescriptionVersion.length === 0
+    || typeof state.warmup.ruleVersion !== 'string' || state.warmup.ruleVersion.length === 0
+    || !Number.isSafeInteger(state.warmup.generalDurationSeconds) || state.warmup.generalDurationSeconds <= 0
     || !(state.warmup.generalTimer === null || isRecord(state.warmup.generalTimer))
-    || state.warmup.rampExerciseIndex !== 0
-    || ![2, 3].includes(state.warmup.maximumRampSets)) throw new Error('workout state is invalid')
+    || !(state.warmup.rampExerciseIndex === null
+      || Number.isSafeInteger(state.warmup.rampExerciseIndex)
+        && state.warmup.rampExerciseIndex >= 0
+        && state.warmup.rampExerciseIndex < state.exercises.length)
+    || !['READY', 'CALIBRATION_REQUIRED', 'NOT_REQUIRED'].includes(state.warmup.rampStatus)
+    || !Array.isArray(state.warmup.rampSets)
+    || !Number.isSafeInteger(state.warmup.maximumRampSets) || state.warmup.maximumRampSets < 0
+    || !(typeof state.warmup.calibrationMessage === 'string' || state.warmup.calibrationMessage === null)) {
+    throw new Error('workout state is invalid')
+  }
+  state.warmup.rampSets.forEach((set) => {
+    if (!Number.isFinite(set.weightKg) || set.weightKg <= 0
+      || !Number.isSafeInteger(set.reps) || set.reps <= 0) throw new Error('workout state is invalid')
+  })
+  if (state.warmup.rampStatus === 'READY'
+    && (state.warmup.rampExerciseIndex === null || state.warmup.rampSets.length === 0)) {
+    throw new Error('workout state is invalid')
+  }
+  if (state.warmup.rampStatus === 'CALIBRATION_REQUIRED'
+    && (state.warmup.rampExerciseIndex === null || state.warmup.rampSets.length !== 0
+      || state.warmup.calibrationMessage === null)) {
+    throw new Error('workout state is invalid')
+  }
+  if (state.warmup.rampStatus === 'NOT_REQUIRED'
+    && (state.warmup.rampExerciseIndex !== null || state.warmup.rampSets.length !== 0)) {
+    throw new Error('workout state is invalid')
+  }
+  if (state.warmup.prescriptionVersion !== 'legacy-client-v1'
+    && state.warmup.maximumRampSets !== state.warmup.rampSets.length) {
+    throw new Error('workout state is invalid')
+  }
   state.exercises.forEach((exercise) => {
     validateExercise(exercise)
     if (exercise.sessionWeightKg !== undefined
@@ -404,8 +472,78 @@ function initialSessionWeight(exercise: WorkoutExerciseSnapshot): number | undef
     : undefined
 }
 
-function roundToHalfKg(value: number): number {
-  return Math.round(value * 2) / 2
+function createWarmupState(input: {
+  readonly exercises: readonly WorkoutExerciseSnapshot[]
+  readonly warmupDurationSeconds?: 180 | 300 | 480
+  readonly warmupPrescription?: WorkoutWarmupPrescriptionSnapshot
+}): WarmupExecutionState {
+  const prescription = input.warmupPrescription
+  if (!prescription) return legacyWarmupState(input.warmupDurationSeconds)
+  if (prescription.schemaVersion !== 'workout-warmup-prescription-v1'
+    || typeof prescription.ruleVersion !== 'string'
+    || prescription.ruleVersion.trim().length === 0
+    || prescription.generalWarmup.occurrences !== 1
+    || !Number.isSafeInteger(prescription.generalWarmup.durationSeconds)
+    || prescription.generalWarmup.durationSeconds <= 0
+    || prescription.countsTowardTrainingVolume !== false
+    || prescription.countsTowardProgression !== false) {
+    throw new Error('server warmup prescription is invalid')
+  }
+  const ramp = prescription.rampWarmup
+  if (!ramp) {
+    return {
+      phase: 'GENERAL',
+      prescriptionVersion: prescription.schemaVersion,
+      ruleVersion: prescription.ruleVersion,
+      generalDurationSeconds: prescription.generalWarmup.durationSeconds,
+      generalTimer: null,
+      rampExerciseIndex: null,
+      rampStatus: 'NOT_REQUIRED',
+      rampSets: [],
+      calibrationMessage: null,
+      maximumRampSets: 0,
+    }
+  }
+  const rampExerciseIndex = input.exercises.findIndex((exercise) => exercise.snapshotExerciseKey === ramp.exerciseId)
+  if (rampExerciseIndex < 0) throw new Error('server warmup exercise is missing from workout snapshot')
+  const rampSets = ramp.sets.map((set) => ({ weightKg: set.weightKg, reps: set.reps }))
+  return {
+    phase: 'GENERAL',
+    prescriptionVersion: prescription.schemaVersion,
+    ruleVersion: prescription.ruleVersion,
+    generalDurationSeconds: prescription.generalWarmup.durationSeconds,
+    generalTimer: null,
+    rampExerciseIndex,
+    rampStatus: ramp.status,
+    rampSets,
+    calibrationMessage: ramp.calibrationMessage ?? (ramp.status === 'CALIBRATION_REQUIRED'
+      ? '当前无法确定精确器械档位，请先校准正式重量；不会自动生成热身重量。'
+      : null),
+    maximumRampSets: rampSets.length,
+  }
+}
+
+function legacyWarmupState(durationSeconds: 180 | 300 | 480 = 180): WarmupExecutionState {
+  return {
+    phase: 'GENERAL', prescriptionVersion: 'legacy-client-v1', ruleVersion: 'legacy',
+    generalDurationSeconds: durationSeconds, generalTimer: null, rampExerciseIndex: null,
+    rampStatus: 'NOT_REQUIRED', rampSets: [], calibrationMessage: null, maximumRampSets: 0,
+  }
+}
+
+function normalizeRestoredWarmup(value: WarmupExecutionState): WarmupExecutionState {
+  if (typeof value.prescriptionVersion === 'string') return value
+  const legacy = legacyWarmupState(
+    Number.isSafeInteger(value.generalDurationSeconds) && value.generalDurationSeconds > 0
+      ? value.generalDurationSeconds as 180 | 300 | 480
+      : 180,
+  )
+  const restoredPhase = ['GENERAL', 'WORK'].includes(String(value.phase)) ? value.phase : 'WORK'
+  return {
+    ...legacy,
+    phase: restoredPhase,
+    generalTimer: value.generalTimer ?? null,
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

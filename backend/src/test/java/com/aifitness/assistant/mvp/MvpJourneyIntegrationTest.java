@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.aifitness.assistant.FitnessAssistantApplication;
+import com.aifitness.assistant.workout.application.WorkoutCompletionOutboxProcessor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
@@ -29,6 +30,7 @@ class MvpJourneyIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private WorkoutCompletionOutboxProcessor completionOutboxProcessor;
 
     @Test
     void completesTheRuleOwnedMvpJourneyWithAiSafelyDegraded() throws Exception {
@@ -74,10 +76,14 @@ class MvpJourneyIntegrationTest {
                 .andExpect(jsonPath("$.data.automaticProgressionEligible").value(true))
                 .andExpect(jsonPath("$.data.completedWorkSets").value(completedWorkSets));
 
+        // Completion commits before asynchronous progression delivery; drive one durable delivery deterministically.
+        completionOutboxProcessor.processNext();
+
         mvc.perform(get("/api/v1/workout-sessions")
                         .header("Authorization", bearer(token)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].sessionId").value(sessionId))
+                .andExpect(jsonPath("$.data.items[0].trainingDayName").value("DAY_A"))
                 .andExpect(jsonPath("$.data.items[0].status").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.items[0].completedWorkSets").value(completedWorkSets));
         mvc.perform(get("/api/v1/progression-recommendations")

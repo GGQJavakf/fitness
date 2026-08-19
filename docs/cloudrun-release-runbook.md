@@ -22,9 +22,10 @@
    - `FITNESS_DB_URL`
    - `FITNESS_DB_USERNAME`
    - `FITNESS_DB_PASSWORD`
+   - 仅在回读确认 `OpenAccessTypes=["MINIAPP"]` 后配置 `FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS=true`
    - 小程序构建阶段配置 `TARO_APP_CLOUDBASE_ENV_ID`
    - 小程序构建阶段配置 `TARO_APP_CLOUDBASE_SERVICE_NAME`
-5. CloudBase Run 部署参数同时配置 `OpenAccessTypes=["MINIAPP"]` 和真实 `VpcConf`。
+5. CloudBase Run 部署参数同时配置 `OpenAccessTypes=["MINIAPP"]` 和真实 `VpcConf`；如果存在公网入口，不得启用身份头信任开关。
 6. 小程序通过 `wx.cloud.callContainer` 私有链路调用服务，不依赖公网域名。
 
 ## 部署后验证

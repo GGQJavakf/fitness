@@ -22,8 +22,9 @@ The deterministic generator is retained only as an availability and old-client f
 5. validate time, movement duplication, primary-muscle volume, locks, and equipment.
 
 Any generated addition reuses a conservative, versioned accessory prescription from the rule
-policy. There is no duration-to-exercise-count target. AI-primary generation, one bounded
-repair, and explicit fallback provenance are defined in the superseding design.
+policy. The post-audit policy now requires four or five safe exercises for a 45-minute day and
+uses a complete warm-up/work/rest/transition estimate. AI proposal repair and explicit fallback
+provenance remain defined in the superseding designs.
 
 ## Workout execution
 

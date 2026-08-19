@@ -19,10 +19,12 @@ fitness:
     wechat:
       app-id: ${WECHAT_APP_ID}
       app-secret: ${WECHAT_APP_SECRET}
+      trust-cloudbase-identity-headers: ${FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS:false}
   content:
     environment: staging-experience
   plan:
     repository: mysql
+    candidate-cache-capacity: ${FITNESS_PLAN_CANDIDATE_CACHE_CAPACITY:512}
   workout:
     repository: mysql
   progression:

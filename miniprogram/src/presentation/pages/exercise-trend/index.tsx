@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { toExerciseTrendRows, type ExerciseTrendRow } from '../../../application/progression'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
@@ -14,27 +14,39 @@ export default function ExerciseTrendPage() {
   const [rows, setRows] = useState<ExerciseTrendRow[]>([])
   const [message, setMessage] = useState('正在读取训练变化…')
   const [loading, setLoading] = useState(false)
+  const requestIdRef = useRef(0)
+  const loadInFlightRef = useRef(false)
 
   async function load(): Promise<void> {
+    if (loadInFlightRef.current) return
+    loadInFlightRef.current = true
+    const requestId = ++requestIdRef.current
     if (!exerciseCode) {
       setMessage('缺少动作信息，请从训练进展页重新进入。')
+      loadInFlightRef.current = false
       return
     }
     setLoading(true)
     setMessage('正在读取训练变化…')
     try {
       const trend = await application.getExerciseTrend(exerciseCode)
+      if (requestId !== requestIdRef.current) return
       const nextRows = toExerciseTrendRows(trend.points)
       setRows(nextRows)
       setMessage(nextRows.length ? '这里只统计完整训练中的有效正式组。' : '继续完成训练，趋势会逐步变得清晰。')
     } catch {
+      if (requestId !== requestIdRef.current) return
       setMessage('训练趋势暂时无法加载，请稍后重试。')
     } finally {
-      setLoading(false)
+      loadInFlightRef.current = false
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }
 
-  useEffect(() => { void load() }, [exerciseCode])
+  useEffect(() => {
+    void load()
+    return () => { requestIdRef.current += 1 }
+  }, [exerciseCode])
 
   const latest = rows[rows.length - 1]
 

@@ -13,6 +13,7 @@ import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,6 +40,11 @@ public final class WorkoutHistoryController {
                 page.items().stream().map(HistoryItem::from).toList(), page.nextCursor(), page.hasMore()));
     }
 
+    @GetMapping("/{id}/summary")
+    public ApiResponse<SummaryData> summary(AuthenticatedUserId user, @PathVariable UUID id) {
+        return response(SummaryData.from(history.summary(user, id)));
+    }
+
     private <T> ApiResponse<T> response(T data) {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) requestId = UUID.randomUUID().toString();
@@ -46,12 +52,24 @@ public final class WorkoutHistoryController {
     }
 
     public record HistoryData(List<HistoryItem> items, Optional<String> nextCursor, boolean hasMore) {}
+    public record SummaryData(
+            UUID sessionId, String status, int completedWorkSets, BigDecimal completedVolumeKg,
+            int completedReps, boolean usesExternalLoad) {
+        static SummaryData from(WorkoutHistoryQueryService.Summary summary) {
+            return new SummaryData(
+                    summary.sessionId(), summary.status().name(), summary.completedWorkSets(),
+                    summary.completedVolumeKg(), summary.completedReps(), summary.usesExternalLoad());
+        }
+    }
+
     public record HistoryItem(
-            UUID sessionId, String trainingDayCode, String status, Instant startedAt, Instant completedAt,
+            UUID sessionId, String trainingDayCode, String trainingDayName,
+            String status, Instant startedAt, Instant completedAt,
             int completedWorkSets, BigDecimal completedVolumeKg, int completedReps, boolean usesExternalLoad) {
         static HistoryItem from(WorkoutHistoryQueryService.Item item) {
-            return new HistoryItem(item.sessionId(), item.trainingDayCode(), item.status().name(), item.startedAt(),
-                    item.completedAt(), item.completedWorkSets(), item.completedVolumeKg(),
+            return new HistoryItem(item.sessionId(), item.trainingDayCode(), item.trainingDayName(),
+                    item.status().name(), item.startedAt(), item.completedAt(),
+                    item.completedWorkSets(), item.completedVolumeKg(),
                     item.completedReps(), item.usesExternalLoad());
         }
     }

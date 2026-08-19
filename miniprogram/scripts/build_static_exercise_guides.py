@@ -14,11 +14,13 @@ import hashlib
 import json
 from collections import deque
 from dataclasses import dataclass
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 from typing import Sequence
 
 from PIL import Image, ImageChops, ImageFilter, ImageOps
+from build_identity_locked_exercise_guides import PartLibrary, RENDERERS
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_ROOT = PROJECT_ROOT / "src/subpackages/exercise-guide/assets/exercise-guides"
@@ -51,15 +53,23 @@ class ExerciseSpec:
     code: str
     slug: str
     renderer: str
+    variant: str = ""
 
 
 EXERCISES: tuple[ExerciseSpec, ...] = (
     ExerciseSpec("GOBLET_SQUAT", "goblet-squat", "squat"),
     ExerciseSpec("DUMBBELL_FRONT_SQUAT", "dumbbell-front-squat", "squat"),
     ExerciseSpec("BODYWEIGHT_SQUAT", "bodyweight-squat", "squat"),
+    ExerciseSpec("PRISONER_SQUAT", "prisoner-squat", "prisoner-squat"),
+    ExerciseSpec(
+        "STANDING_WALL_CALF_RAISE",
+        "standing-wall-calf-raise",
+        "calf-raise",
+    ),
     ExerciseSpec("DUMBBELL_ROMANIAN_DEADLIFT", "dumbbell-romanian-deadlift", "hinge"),
     ExerciseSpec("DUMBBELL_DEADLIFT", "dumbbell-deadlift", "deadlift-from-floor"),
     ExerciseSpec("BODYWEIGHT_HIP_HINGE", "bodyweight-hip-hinge", "hinge"),
+    ExerciseSpec("GLUTE_BRIDGE_EXERCISE", "glute-bridge-exercise", "glute-bridge"),
     ExerciseSpec(
         "DUMBBELL_BENCH_PRESS",
         "dumbbell-bench-press",
@@ -67,9 +77,13 @@ EXERCISES: tuple[ExerciseSpec, ...] = (
     ),
     ExerciseSpec("DUMBBELL_FLOOR_PRESS", "dumbbell-floor-press", "horizontal-press"),
     ExerciseSpec("INCLINE_PUSH_UP", "incline-push-up", "incline-push-up"),
+    ExerciseSpec("BENT_KNEE_PUSH_UP", "bent-knee-push-up", "bent-knee-push-up"),
+    ExerciseSpec("PUSH_UP", "push-up", "push-up"),
+    ExerciseSpec("WALL_PUSH_UP", "wall-push-up", "wall-push-up"),
     ExerciseSpec("SEATED_CABLE_ROW", "seated-cable-row", "row"),
     ExerciseSpec("CABLE_HIGH_ROW", "cable-high-row", "row"),
     ExerciseSpec("CABLE_SINGLE_ARM_ROW", "cable-single-arm-row", "row"),
+    ExerciseSpec("ONE_ARM_DUMBBELL_ROW", "one-arm-dumbbell-row", "dumbbell-row", "single"),
     ExerciseSpec(
         "DUMBBELL_OVERHEAD_PRESS",
         "dumbbell-overhead-press",
@@ -81,6 +95,21 @@ EXERCISES: tuple[ExerciseSpec, ...] = (
         "single-arm-dumbbell-press",
         "overhead-press",
     ),
+    ExerciseSpec("DUMBBELL_LATERAL_RAISE", "dumbbell-lateral-raise", "lateral-raise", "dumbbell"),
+    ExerciseSpec("SINGLE_ARM_DUMBBELL_LATERAL_RAISE", "single-arm-dumbbell-lateral-raise", "lateral-raise", "single"),
+    ExerciseSpec("CABLE_LATERAL_RAISE", "cable-lateral-raise", "lateral-raise", "cable"),
+    ExerciseSpec("DUMBBELL_BICEPS_CURL", "dumbbell-biceps-curl", "biceps-curl", "dumbbell"),
+    ExerciseSpec("DUMBBELL_HAMMER_CURL", "dumbbell-hammer-curl", "biceps-curl", "hammer"),
+    ExerciseSpec("CABLE_BICEPS_CURL", "cable-biceps-curl", "biceps-curl", "cable"),
+    ExerciseSpec("CABLE_TRICEPS_PUSHDOWN", "cable-triceps-pushdown", "triceps-extension", "pushdown"),
+    ExerciseSpec("DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "dumbbell-overhead-triceps-extension", "triceps-extension", "overhead"),
+    ExerciseSpec("DUMBBELL_LYING_TRICEPS_EXTENSION", "dumbbell-lying-triceps-extension", "triceps-extension", "lying"),
+    ExerciseSpec("DUMBBELL_REVERSE_FLY", "dumbbell-reverse-fly", "rear-delt", "dumbbell"),
+    ExerciseSpec("CABLE_REVERSE_FLY", "cable-reverse-fly", "rear-delt", "cable"),
+    ExerciseSpec("CABLE_FACE_PULL", "cable-face-pull", "rear-delt", "face-pull"),
+    ExerciseSpec("DUMBBELL_SHRUG", "dumbbell-shrug", "shrug", "dumbbell"),
+    ExerciseSpec("CABLE_SHRUG", "cable-shrug", "shrug", "cable"),
+    ExerciseSpec("MACHINE_SHRUG", "machine-shrug", "shrug", "machine"),
     ExerciseSpec("LAT_PULLDOWN", "lat-pulldown", "pulldown"),
     ExerciseSpec(
         "CABLE_STRAIGHT_ARM_PULLDOWN",
@@ -90,6 +119,12 @@ EXERCISES: tuple[ExerciseSpec, ...] = (
     ExerciseSpec("NEUTRAL_GRIP_PULLDOWN", "neutral-grip-pulldown", "pulldown"),
     ExerciseSpec("PRONE_W_RAISE", "prone-w-raise", "prone-raise"),
     ExerciseSpec("PRONE_Y_RAISE", "prone-y-raise", "prone-raise"),
+    ExerciseSpec("FLOOR_PRONE_COBRA", "floor-prone-cobra", "floor-prone-cobra"),
+    ExerciseSpec(
+        "CONTRALATERAL_LIMB_RAISE",
+        "contralateral-limb-raise",
+        "contralateral-limb-raise",
+    ),
     ExerciseSpec("DEAD_BUG", "dead-bug", "dead-bug"),
     ExerciseSpec("BIRD_DOG", "bird-dog", "bird-dog"),
     ExerciseSpec("PLANK", "plank", "plank"),
@@ -122,6 +157,26 @@ THREE_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
         StageSpec("drive", "下降", "屈肘让胸口靠近支撑面。", 0.5),
         StageSpec("finish", "最低点", "核心收紧，不塌腰或耸肩。", 1.0),
     ),
+    "prisoner-squat": (
+        StageSpec("setup", "站稳", "双手轻放头后，脚掌稳定并保持胸口自然。", 0.0),
+        StageSpec("drive", "下蹲", "屈髋屈膝，膝盖跟随脚尖方向。", 0.5),
+        StageSpec("finish", "到位", "在躯干稳定的可控深度停住。", 1.0),
+    ),
+    "calf-raise": (
+        StageSpec("setup", "脚跟落地", "双手轻扶墙面，双脚平行站稳。", 0.0),
+        StageSpec("drive", "提起脚跟", "缓慢抬起脚跟，把重心保持在前脚掌。", 0.5),
+        StageSpec("finish", "稳定顶端", "身体保持直立，再缓慢放下脚跟。", 1.0),
+    ),
+    "push-up": (
+        StageSpec("setup", "直臂支撑", "双手与双脚压稳，头背髋保持接近直线。", 0.0),
+        StageSpec("drive", "控制下降", "屈肘约四十五度，身体整体靠近地面。", 0.5),
+        StageSpec("finish", "最低点", "核心持续收紧，不塌腰或耸肩。", 1.0),
+    ),
+    "wall-push-up": (
+        StageSpec("setup", "扶墙支撑", "双手撑墙，双脚后移并让身体保持直线。", 0.0),
+        StageSpec("drive", "靠近墙面", "屈肘让胸口缓慢靠近墙面。", 0.5),
+        StageSpec("finish", "控制返回", "推回起点，避免耸肩或身体折叠。", 1.0),
+    ),
     "row": (
         StageSpec("setup", "伸臂", "躯干稳定，肩膀自然下沉。", 0.0),
         StageSpec("drive", "后拉", "肘部向后，肩胛向中间收拢。", 0.5),
@@ -147,6 +202,36 @@ THREE_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
         StageSpec("drive", "抬臂", "肩胛先稳定，再小幅抬起手臂。", 0.5),
         StageSpec("finish", "收紧", "保持 W 或 Y 形，不耸肩。", 1.0),
     ),
+    "dumbbell-row": (
+        StageSpec("setup", "稳定支撑", "一手一膝压稳训练凳，负重手自然伸展。", 0.0),
+        StageSpec("drive", "向后划船", "肘部朝髋部方向移动，躯干不要旋转。", 0.5),
+        StageSpec("finish", "背部收紧", "哑铃靠近身体后停稳，再受控放下。", 1.0),
+    ),
+    "biceps-curl": (
+        StageSpec("setup", "手臂下垂", "站稳并让上臂贴近身体。", 0.0),
+        StageSpec("drive", "屈肘举起", "固定上臂，用手臂前侧带动负重。", 0.5),
+        StageSpec("finish", "顶端停稳", "接近肩部后停稳，不用身体甩动。", 1.0),
+    ),
+    "lateral-raise": (
+        StageSpec("setup", "手臂下垂", "站稳并让手肘保持轻微弯曲。", 0.0),
+        StageSpec("drive", "向侧面抬起", "肩部带动手臂平稳向两侧移动。", 0.5),
+        StageSpec("finish", "肩部高度", "抬到肩部附近停稳，避免耸肩。", 1.0),
+    ),
+    "triceps-extension": (
+        StageSpec("setup", "屈肘准备", "固定上臂，让手肘处于可控弯曲位置。", 0.0),
+        StageSpec("drive", "伸直手肘", "只移动前臂，避免身体借力。", 0.5),
+        StageSpec("finish", "手臂伸展", "在手肘接近伸直时停稳，不锁死关节。", 1.0),
+    ),
+    "rear-delt": (
+        StageSpec("setup", "肩胛稳定", "站稳或俯身后先保持躯干稳定。", 0.0),
+        StageSpec("drive", "向外展开", "肘部向外移动，肩部不要耸起。", 0.5),
+        StageSpec("finish", "上背收紧", "肩部后侧和上背收紧后受控返回。", 1.0),
+    ),
+    "shrug": (
+        StageSpec("setup", "肩部放松", "站稳并让双臂自然下垂。", 0.0),
+        StageSpec("drive", "垂直耸肩", "保持手肘伸展，将肩部垂直抬高。", 0.5),
+        StageSpec("finish", "顶端停稳", "肩部抬高后短暂停稳，不转动肩膀。", 1.0),
+    ),
 }
 
 FOUR_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
@@ -165,6 +250,22 @@ FOUR_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
 }
 
 TWO_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
+    "glute-bridge": (
+        StageSpec("setup", "仰卧准备", "双脚踩稳，屈膝并保持腰背自然。", 0.0),
+        StageSpec("lift", "抬髋", "臀部发力抬起髋部，避免腰部过度后仰。", 1.0),
+    ),
+    "bent-knee-push-up": (
+        StageSpec("setup", "跪姿支撑", "双手和双膝压稳，头背髋保持稳定。", 0.0),
+        StageSpec("lower", "控制下降", "屈肘降低身体，不塌腰或抬高臀部。", 1.0),
+    ),
+    "floor-prone-cobra": (
+        StageSpec("setup", "俯卧准备", "双臂放在身体两侧，颈部保持自然。", 0.0),
+        StageSpec("lift", "收紧抬起", "肩胛轻轻收拢并小幅抬起上胸，不用腰部后仰借力。", 1.0),
+    ),
+    "contralateral-limb-raise": (
+        StageSpec("setup", "俯卧准备", "手臂和双腿自然伸展，骨盆保持稳定。", 0.0),
+        StageSpec("raise", "对侧抬起", "一侧手臂与对侧腿小幅抬起，躯干不要旋转。", 1.0),
+    ),
     "plank": (
         StageSpec("setup", "支撑定位", "前臂和脚尖压稳，身体接近直线。", 0.0),
         StageSpec("hold", "稳定保持", "收紧腹部并自然呼吸，不塌腰。", 1.0),
@@ -188,11 +289,16 @@ CURATED_SOURCE_INDICES: dict[str, tuple[int, ...]] = {
     # The generic 0/2/5 selection catches the return path instead of the
     # lowest position on this cyclic source sheet.
     "incline-push-up": (0, 2, 4),
-    # Cell 5 has already started lowering again; cell 3 is the clear lockout.
-    "dumbbell-floor-press": (0, 2, 3),
+    # Cell 0 overlaps both dumbbells at thumbnail size. Cell 2 is the clear
+    # low position, cell 5 keeps both arms synchronized in mid-range, and
+    # cell 3 is the stable lockout.
+    "dumbbell-floor-press": (2, 5, 3),
     # Cells 0 and 2 are effectively the same setup pose. Cell 8 supplies the
     # missing controlled mid-range before the stable overhead position.
     "single-arm-dumbbell-press": (0, 8, 3),
+    # The edited source intentionally places a flat-footed setup in cell 0
+    # and two clearly elevated-heel phases in cells 1 and 2.
+    "standing-wall-calf-raise": (0, 1, 2),
 }
 
 
@@ -211,13 +317,30 @@ def source_image(
     exercise_slug: str,
     renderer: str,
     stage_index: int,
+    variant: str = "",
 ) -> tuple[Image.Image, Path, int | None]:
+    if renderer in {"dumbbell-row", "biceps-curl", "lateral-raise", "triceps-extension", "rear-delt", "shrug"}:
+        stage = stages_for(renderer)[stage_index]
+        rendered = RENDERERS[renderer](rig_parts(), stage.phase, variant)
+        return rendered.image, RIG_PART_SHEET, None
+
     if exercise_slug == "dumbbell-bench-press":
         path = BENCH_PRESS_SOURCE_FRAMES[stage_index]
         with Image.open(path) as opened:
             return opened.convert("RGB"), path, None
 
-    path = SOURCE_ROOT / f"{exercise_slug}-sprite-v3.png"
+    if renderer in {
+        "glute-bridge",
+        "bent-knee-push-up",
+        "floor-prone-cobra",
+        "contralateral-limb-raise",
+    }:
+        path = SOURCE_ROOT / f"{exercise_slug}-keyframe-{stage_index + 1:02d}.png"
+        with Image.open(path) as opened:
+            return opened.convert("RGB"), path, None
+
+    version = "v4" if exercise_slug == "standing-wall-calf-raise" else "v3"
+    path = SOURCE_ROOT / f"{exercise_slug}-sprite-{version}.png"
     source_index = source_indices(exercise_slug, renderer)[stage_index]
     row, column = divmod(source_index, GRID_COLUMNS)
     with Image.open(path) as opened:
@@ -231,6 +354,11 @@ def source_image(
         path,
         source_index,
     )
+
+
+@lru_cache(maxsize=1)
+def rig_parts() -> PartLibrary:
+    return PartLibrary(RIG_PART_SHEET)
 
 
 def isolate_primary_subject(image: Image.Image) -> Image.Image:
@@ -408,6 +536,7 @@ def build(output: Path) -> list[dict[str, object]]:
                 exercise.slug,
                 exercise.renderer,
                 index - 1,
+                exercise.variant,
             )
             file = (
                 f"{exercise.slug}-{index:02d}-{stage.id}.jpg"
@@ -455,7 +584,7 @@ def build(output: Path) -> list[dict[str, object]]:
             "rigPartSheet": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
             "rigPartSheetSha256": sha256(RIG_PART_SHEET),
         },
-        "renderMode": "approved-static-source-crops",
+        "renderMode": "approved-static-source-crops-and-rigid-project-renderer",
         "assets": entries,
     }
     (output / "static-manifest.json").write_text(

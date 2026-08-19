@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/exercises/{sourceCode}/replacements")
+@RequestMapping("/api/v1")
 @Profile({"local", "test", "staging-experience"})
 public final class ExerciseReplacementController {
     private final ExerciseReplacementService replacements;
@@ -27,10 +27,26 @@ public final class ExerciseReplacementController {
         this.clock = clock;
     }
 
-    @GetMapping
+    @GetMapping("/exercises/{sourceCode}/replacements")
     public ApiResponse<ReplacementData> list(
             AuthenticatedUserId user, @PathVariable String sourceCode) {
-        List<ReplacementItem> items = replacements.candidates(user, sourceCode).stream()
+        return response(sourceCode, replacements.candidates(user, sourceCode));
+    }
+
+    @GetMapping("/workout-sessions/{sessionId}/exercises/{snapshotId}/replacements")
+    public ApiResponse<ReplacementData> listForWorkout(
+            AuthenticatedUserId user,
+            @PathVariable UUID sessionId,
+            @PathVariable UUID snapshotId) {
+        List<ExerciseCatalog.Exercise> items = replacements
+                .candidates(user, sessionId, snapshotId, null);
+        String sourceCode = items.isEmpty() ? "" : replacements.sourceCode(user, sessionId, snapshotId);
+        return response(sourceCode, items);
+    }
+
+    private ApiResponse<ReplacementData> response(
+            String sourceCode, List<ExerciseCatalog.Exercise> candidates) {
+        List<ReplacementItem> items = candidates.stream()
                 .map(ReplacementItem::from).toList();
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) requestId = UUID.randomUUID().toString();

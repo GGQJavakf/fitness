@@ -1,4 +1,4 @@
-import { Button, Text, Textarea, View } from '@tarojs/components'
+import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import type { ExerciseContent } from '../../../application/content'
@@ -6,19 +6,22 @@ import {
   DEFAULT_GYM_EQUIPMENT,
   ONBOARDING_STEPS,
   advanceOnboarding,
+  allowedFrequenciesForSplit,
+  defaultFrequencyForSplit,
   goToOnboardingStep,
   previousOnboardingStep,
+  recommendedTrainingSplit,
+  resolveTrainingSplit,
   updateOnboardingDraft,
   type OnboardingDraft,
 } from '../../../application/onboarding'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { experienceDisplayName, goalDisplayName, locationDisplayName } from '../../copy'
+import type { ExperienceLevel, TrainingSplit } from '../../../application/models'
 
 import './index.scss'
 
 const application = getWeappApplication()
-const primaryFrequencies = [2, 3, 4] as const
-const moreFrequencies = [5, 6] as const
 const primaryDurations = [30, 45, 60] as const
 const moreDurations = [75, 90] as const
 
@@ -31,11 +34,14 @@ function gymEquipment() {
 }
 
 export default function OnboardingPage() {
-  const [state, setState] = useState(() => application.resumeOnboarding())
+  const aiPlanGenerationAvailable = application.aiPlanGenerationAvailable
+  const [state, setState] = useState(() => {
+    const resumed = application.resumeOnboarding()
+    return aiPlanGenerationAvailable || resumed.draft.aiConsentGranted !== true
+      ? resumed
+      : updateOnboardingDraft(resumed, { aiConsentGranted: false })
+  })
   const [showSafetyDetails, setShowSafetyDetails] = useState(false)
-  const [showMoreFrequency, setShowMoreFrequency] = useState(
-    () => (state.draft.weeklyFrequency ?? 0) >= 5,
-  )
   const [showMoreDuration, setShowMoreDuration] = useState(
     () => (state.draft.sessionMinutes ?? 0) >= 75,
   )
@@ -84,6 +90,26 @@ export default function OnboardingPage() {
   function patch(patchValue: Partial<OnboardingDraft>): void {
     setState((current) => updateOnboardingDraft(current, patchValue))
     setSubmitError('')
+  }
+
+  function selectExperience(experience: ExperienceLevel): void {
+    const trainingSplit = recommendedTrainingSplit(experience)
+    patch({
+      experience,
+      trainingSplit,
+      weeklyFrequency: defaultFrequencyForSplit(trainingSplit),
+    })
+  }
+
+  function selectTrainingSplit(trainingSplit: TrainingSplit): void {
+    const allowed = allowedFrequenciesForSplit(trainingSplit)
+    patch({
+      trainingSplit,
+      weeklyFrequency: state.draft.weeklyFrequency !== undefined
+        && allowed.includes(state.draft.weeklyFrequency)
+        ? state.draft.weeklyFrequency
+        : defaultFrequencyForSplit(trainingSplit),
+    })
   }
 
   function next(): void {
@@ -181,6 +207,7 @@ export default function OnboardingPage() {
             <Text className='section-title'>开始前确认</Text>
             <Text className='subtitle'>遇到疼痛、眩晕或其他不适时，请停止训练并咨询专业人士。</Text>
             <Button
+              id='onboarding-adult-confirmation'
               className={`choice onboarding__wide-choice ${safetyConfirmed ? 'choice--selected' : ''}`}
               onClick={() => patch({
                 adultConfirmed: !safetyConfirmed,
@@ -213,7 +240,8 @@ export default function OnboardingPage() {
                 ] as const).map(([value, description]) => (
                   <Button
                     key={value}
-                    className={`choice onboarding__option-card ${state.draft.goal === value ? 'choice--selected' : ''}`}
+                    id={`onboarding-goal-${value.toLowerCase()}`}
+                    className={`choice onboarding__option-card onboarding__goal-${value.toLowerCase()} ${state.draft.goal === value ? 'choice--selected' : ''}`}
                     onClick={() => patch({ goal: value })}
                   >
                     <Text className='onboarding__option-title'>{goalDisplayName(value)}</Text>
@@ -228,8 +256,9 @@ export default function OnboardingPage() {
                 {(['BEGINNER', 'INTERMEDIATE', 'ADVANCED'] as const).map((value) => (
                   <Button
                     key={value}
-                    className={`choice ${state.draft.experience === value ? 'choice--selected' : ''}`}
-                    onClick={() => patch({ experience: value })}
+                    id={`onboarding-experience-${value.toLowerCase()}`}
+                    className={`choice onboarding__experience-${value.toLowerCase()} ${state.draft.experience === value ? 'choice--selected' : ''}`}
+                    onClick={() => selectExperience(value)}
                   >{experienceDisplayName(value)}</Button>
                 ))}
               </View>
@@ -240,23 +269,45 @@ export default function OnboardingPage() {
         {state.step === 'SCHEDULE' && (
           <>
             <Text className='section-title'>训练安排</Text>
-            <Text className='subtitle'>选择真正能长期坚持的时间，不必一次选得很激进。</Text>
+            <Text className='subtitle'>先选训练分化，再选择能长期坚持的每周训练天数。</Text>
+            <View className='field-group'>
+              <Text className='field-label'>训练分化</Text>
+              <View className='onboarding__option-list'>
+                {([
+                  ['UPPER_LOWER', '2 分化', '上肢 / 下肢，适合新手建立动作和恢复节奏'],
+                  ['PUSH_PULL_LEGS', '3 分化', '推 / 拉 / 腿，适合已有训练基础的用户'],
+                  ['BODY_PART_FIVE_DAY', '5 分化', '胸 / 背 / 腿 / 手臂 / 肩，适合恢复和动作控制更成熟的用户'],
+                ] as const).map(([value, label, description]) => {
+                  const selected = resolveTrainingSplit(state.draft) === value
+                  const recommended = state.draft.experience
+                    ? recommendedTrainingSplit(state.draft.experience) === value
+                    : false
+                  return (
+                    <Button
+                      key={value}
+                      id={`onboarding-split-${value.toLowerCase()}`}
+                      className={`choice onboarding__option-card onboarding__split-${value.toLowerCase()} ${selected ? 'choice--selected' : ''}`}
+                      onClick={() => selectTrainingSplit(value)}
+                    >
+                      <Text className='onboarding__option-title'>{label}{recommended ? ' · 推荐' : ''}</Text>
+                      <Text className='onboarding__option-description'>{description}</Text>
+                    </Button>
+                  )
+                })}
+              </View>
+            </View>
             <View className='field-group'>
               <Text className='field-label'>每周训练几天</Text>
               <View className='choice-row'>
-                {[...primaryFrequencies, ...(showMoreFrequency ? moreFrequencies : [])].map((value) => (
+                {allowedFrequenciesForSplit(resolveTrainingSplit(state.draft)).map((value) => (
                   <Button
                     key={value}
-                    className={`choice ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`}
+                    id={`onboarding-frequency-${value}`}
+                    className={`choice onboarding__frequency-${value} ${state.draft.weeklyFrequency === value ? 'choice--selected' : ''}`}
                     onClick={() => patch({ weeklyFrequency: value })}
                   >{value} 天</Button>
                 ))}
               </View>
-              {!showMoreFrequency && (
-                <Button className='onboarding__more-action' onClick={() => setShowMoreFrequency(true)}>
-                  更多：5 天、6 天
-                </Button>
-              )}
             </View>
             <View className='field-group'>
               <Text className='field-label'>每次训练多久</Text>
@@ -264,7 +315,8 @@ export default function OnboardingPage() {
                 {[...primaryDurations, ...(showMoreDuration ? moreDurations : [])].map((value) => (
                   <Button
                     key={value}
-                    className={`choice ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`}
+                    id={`onboarding-duration-${value}`}
+                    className={`choice onboarding__duration-${value} ${state.draft.sessionMinutes === value ? 'choice--selected' : ''}`}
                     onClick={() => patch({ sessionMinutes: value })}
                   >{value} 分钟</Button>
                 ))}
@@ -292,7 +344,8 @@ export default function OnboardingPage() {
                 ] as const).map(([value, label, description]) => (
                   <Button
                     key={value}
-                    className={`choice onboarding__option-card ${state.draft.location === value ? 'choice--selected' : ''}`}
+                    id={`onboarding-location-${value.toLowerCase()}`}
+                    className={`choice onboarding__option-card onboarding__location-${value.toLowerCase()} ${state.draft.location === value ? 'choice--selected' : ''}`}
                     onClick={() => selectLocation(value)}
                   >
                     <Text className='onboarding__option-title'>{label}</Text>
@@ -361,25 +414,6 @@ export default function OnboardingPage() {
               )}
             </View>
 
-            <View className='field-group onboarding__requirements'>
-              <View className='onboarding__requirements-heading'>
-                <Text className='field-label'>额外训练偏好（可选）</Text>
-                <Text className='onboarding__requirements-count'>
-                  {state.draft.additionalRequirements?.length ?? 0}/300
-                </Text>
-              </View>
-              <Textarea
-                className='onboarding__requirements-input'
-                maxlength={300}
-                value={state.draft.additionalRequirements ?? ''}
-                placeholder='例如：胸背优先、不安排跳跃动作、希望覆盖更多动作模式'
-                onInput={(event) => patch({ additionalRequirements: event.detail.value })}
-              />
-              <Text className='onboarding__requirements-help'>
-                AI 会结合档案、器械和这些偏好生成计划。疼痛、疾病、诊断或康复需求请咨询专业人士，不在这里处理。
-              </Text>
-            </View>
-
             <View className='onboarding__summary'>
               <View className='onboarding__summary-row'>
                 <View className='onboarding__summary-copy'>
@@ -404,6 +438,26 @@ export default function OnboardingPage() {
               <Text>场地：{locationDisplayName(state.draft.location)}</Text>
               <Text>器械：{equipmentSummary}</Text>
             </View>
+
+            <View className='field-group onboarding__ai-consent'>
+              <Text className='field-label'>计划生成方式（可选）</Text>
+              <Button
+                id='onboarding-ai-consent'
+                className={`choice onboarding__wide-choice ${state.draft.aiConsentGranted ? 'choice--selected' : ''}`}
+                disabled={submitting || !aiPlanGenerationAvailable}
+                onClick={() => patch({ aiConsentGranted: !state.draft.aiConsentGranted })}
+              >{aiPlanGenerationAvailable
+                  ? '同意使用 AI 个性化编排动作'
+                  : 'AI 个性化编排暂未启用'}</Button>
+              <Text className='onboarding__requirements-help'>
+                仅发送训练目标、经验、频率、时长、场地和可用动作代码；不发送账号、联系方式或训练自由文本。组数、次数、休息和安全限制仍由系统按固定规则计算。
+              </Text>
+              <Text className='onboarding__requirements-help'>
+                {aiPlanGenerationAvailable
+                  ? '不选择时会直接使用规则生成计划，不影响继续使用。'
+                  : '当前会使用规则生成计划；通过发布门禁后才会开放 AI 选项。'}
+              </Text>
+            </View>
           </>
         )}
 
@@ -420,12 +474,13 @@ export default function OnboardingPage() {
         )}
         {state.step === 'LOCATION_AND_EQUIPMENT'
           ? <Button
+              id='onboarding-generate-plan'
               className='primary-action'
               loading={submitting}
               disabled={submitting}
               onClick={() => void submit()}
             >生成我的计划</Button>
-          : <Button className='primary-action' onClick={next}>继续</Button>}
+          : <Button id='onboarding-continue' className='primary-action' onClick={next}>继续</Button>}
       </View>
     </View>
   )

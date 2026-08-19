@@ -139,8 +139,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description 仅返回当前用户器械可用、未排除且审核状态合格的同模式、同难度、目标肌群替代动作；不修改计划或训练快照。 */
+        /** @description 仅返回当前用户器械可用、未排除且审核状态合格，并且动作模式、难度、主要肌群、负重模式与处方转换兼容的替代动作；不修改计划或训练快照。 */
         get: operations["listExerciseReplacements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workout-sessions/{sessionId}/exercises/{snapshotId}/replacements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 绑定当前用户的训练会话和快照，排除本次训练已有动作后返回安全替代候选。 */
+        get: operations["listWorkoutExerciseReplacements"];
         put?: never;
         post?: never;
         delete?: never;
@@ -208,6 +225,23 @@ export interface paths {
         };
         /** @description 返回当前活动计划模板中可添加到指定训练日的规则处方；关键数字来自已验证模板，不由客户端或 AI 生成。 */
         get: operations["listPlanExerciseOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{planId}/exercise-replacements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回指定计划日内原动作的已审核严格等价替换；候选保持原组数、次数和休息，仅在负重模式变化时要求重新校准。 */
+        get: operations["listPlanExerciseReplacements"];
         put?: never;
         post?: never;
         delete?: never;
@@ -330,14 +364,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workouts/today": {
+    "/api/v1/workout-recovery-checks": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["getTodayWorkout"];
+        /** @description 在创建新训练会话前，用当前用户最近已完成且未作废的实际训练事实检查主要肌群恢复窗口； 该接口只读，不自动重排训练日、不自动减量，也不提供医疗判断。 */
+        get: operations["checkWorkoutRecovery"];
         put?: never;
         post?: never;
         delete?: never;
@@ -410,7 +445,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/workout-sessions/{id}/sets/{clientSetKey}": {
+    "/api/v1/workout-sessions/{sessionId}/sets/{setId}": {
         parameters: {
             query?: never;
             header?: never;
@@ -420,7 +455,8 @@ export interface paths {
         get?: never;
         put: operations["upsertWorkoutSet"];
         post?: never;
-        delete: operations["deleteUnfinishedWorkoutSet"];
+        /** @description 追加不可变作废审计事实；原训练组事实保留，但汇总、历史和进阶读取不再计入该组。 */
+        delete: operations["voidWorkoutSet"];
         options?: never;
         head?: never;
         patch?: never;
@@ -484,6 +520,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * @description KEEP_LOCAL applies only correctable local workout-set facts as an append-only revision.
+         *     KEEP_SERVER abandons the queued local operation and returns server authority. KEEP_BOTH
+         *     keeps both versions as audit evidence but creates no duplicate set/session and only the
+         *     active server fact contributes to training statistics. An identical decision with the
+         *     original expected conflict version is replayed idempotently.
+         */
         post: operations["resolveSyncConflict"];
         delete?: never;
         options?: never;
@@ -749,7 +792,7 @@ export interface components {
         /** Format: int64 */
         ExpectedVersion: number;
         /** @enum {string} */
-        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "REAUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "ANOMALY_CONFIRMATION_REQUIRED" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
+        ErrorCode: "VALIDATION_FAILED" | "AUTHENTICATION_REQUIRED" | "ACCESS_REVOKED" | "REAUTHENTICATION_REQUIRED" | "ACCESS_DENIED" | "RESOURCE_NOT_FOUND" | "VERSION_CONFLICT" | "IDEMPOTENCY_KEY_REUSED" | "ANOMALY_CONFIRMATION_REQUIRED" | "RECOVERY_CONFIRMATION_REQUIRED" | "ACTIVE_WORKOUT_EXISTS" | "WORKOUT_START_ALREADY_TERMINAL" | "INSUFFICIENT_REPLACEMENTS" | "PLAN_VALIDATION_FAILED" | "SESSION_ALREADY_TERMINAL" | "WORKOUT_NOT_TERMINAL" | "SYNC_CONFLICT" | "RATE_LIMITED" | "INTERNAL_ERROR";
         Weight: {
             value: number;
             unit: components["schemas"]["WeightUnit"];
@@ -941,6 +984,8 @@ export interface components {
             data: components["schemas"]["PlanTemplateListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @enum {string} */
+        TrainingSplit: "UPPER_LOWER" | "PUSH_PULL_LEGS" | "BODY_PART_FIVE_DAY";
         AiPlanProposalExercise: {
             exerciseCode: string;
             workSets: number;
@@ -959,6 +1004,7 @@ export interface components {
         };
         PlanCandidateRequest: {
             profileVersion: components["schemas"]["ExpectedVersion"];
+            trainingSplit?: components["schemas"]["TrainingSplit"];
             additionalRequirements?: string;
             aiProposal?: components["schemas"]["AiPlanProposal"];
             /** @default true */
@@ -987,6 +1033,7 @@ export interface components {
         };
         PlanDraft: {
             templateCode: string;
+            trainingSplit?: components["schemas"]["TrainingSplit"];
             name: string;
             days: components["schemas"]["PlanDay"][];
             locks: {
@@ -1002,6 +1049,7 @@ export interface components {
             };
         };
         PlanCandidate: {
+            /** Format: uuid */
             candidateId: string;
             generationSource: components["schemas"]["PlanGenerationSource"];
             plan: components["schemas"]["PlanDraft"];
@@ -1087,6 +1135,29 @@ export interface components {
             data: components["schemas"]["PlanExerciseOptionListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @enum {string} */
+        PlanExerciseReplacementMatchReason: "SAME_PATTERN_MUSCLES_DIFFICULTY";
+        PlanExerciseReplacementOption: {
+            exerciseCode: string;
+            name: string;
+            workSets: number;
+            repMin: number;
+            repMax: number;
+            restSeconds: number;
+            weightStatus: components["schemas"]["WeightStatus"];
+            targetWeightKg?: number;
+            movementPattern: string;
+            primaryMuscles: string[];
+            equipment: string[];
+            matchReason: components["schemas"]["PlanExerciseReplacementMatchReason"];
+        };
+        PlanExerciseReplacementOptionListData: {
+            items: components["schemas"]["PlanExerciseReplacementOption"][];
+        };
+        PlanExerciseReplacementOptionListResponse: {
+            data: components["schemas"]["PlanExerciseReplacementOptionListData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         PlanDayOption: {
             code: string;
             name: string;
@@ -1101,6 +1172,7 @@ export interface components {
         };
         PlanValidationDraft: {
             templateCode: string;
+            trainingSplit?: components["schemas"]["TrainingSplit"];
             name: string;
             days: components["schemas"]["PlanDay"][];
         };
@@ -1117,6 +1189,7 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         CreatePlanRequest: {
+            /** Format: uuid */
             candidateId: string;
         };
         PlanVersionData: {
@@ -1175,10 +1248,32 @@ export interface components {
                 [key: string]: components["schemas"]["LockCommandStatus"];
             };
         };
+        /** @enum {string} */
+        WorkoutRecoveryDecision: "READY" | "CONFIRMATION_REQUIRED";
+        AffectedMuscleRecoveryData: {
+            muscleGroup: string;
+            /** Format: int64 */
+            elapsedHours: number;
+            minimumRecoveryHours: number;
+            lastCompletedAt: components["schemas"]["UtcDateTime"];
+        };
+        WorkoutRecoveryCheckData: {
+            decision: components["schemas"]["WorkoutRecoveryDecision"];
+            policyVersion: string;
+            checkedAt: components["schemas"]["UtcDateTime"];
+            minimumRecoveryHours: number;
+            affectedMuscles: components["schemas"]["AffectedMuscleRecoveryData"][];
+        };
+        WorkoutRecoveryCheckResponse: {
+            data: components["schemas"]["WorkoutRecoveryCheckData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
         WorkoutHistoryItem: {
             /** Format: uuid */
             sessionId: string;
             trainingDayCode: string;
+            /** @description 来自不可变计划版本快照的训练日名称。 */
+            trainingDayName: string;
             /** @enum {string} */
             status: "COMPLETED" | "ABORTED";
             startedAt: components["schemas"]["UtcDateTime"];
@@ -1199,9 +1294,15 @@ export interface components {
         };
         StartWorkoutSessionRequest: {
             clientSessionKey: string;
+            /** Format: uuid */
             planId: string;
             planVersionNo: number;
+            /** @description 兼容字段，旧客户端以训练日代码传值；新客户端同时发送 trainingDayCode。 */
             planDayId: string;
+            /** @description 计划版本内真实、稳定的训练日代码；省略时服务端兼容使用 planDayId。 */
+            trainingDayCode?: string;
+            /** @description 仅在服务端返回 RECOVERY_CONFIRMATION_REQUIRED 后由用户明确确认继续时原样回传。 */
+            recoveryConfirmationToken?: string;
         };
         WorkoutPrescriptionSnapshot: {
             workSets: number;
@@ -1224,6 +1325,40 @@ export interface components {
             /** @enum {string} */
             status: "PENDING" | "ACTIVE" | "COMPLETED" | "SKIPPED" | "ABORTED" | "REPLACED";
         };
+        WorkoutGeneralWarmupPrescription: {
+            /**
+             * @description 通用热身在同一训练日会话中只执行一次。
+             * @constant
+             */
+            occurrences: 1;
+            durationSeconds: number;
+        };
+        WorkoutWarmupRampSet: {
+            weightKg: number;
+            reps: number;
+        };
+        WorkoutRampWarmupPrescription: {
+            /** Format: uuid */
+            exerciseId: string;
+            exerciseOrder: number;
+            /** @enum {string} */
+            status: "READY" | "CALIBRATION_REQUIRED";
+            equipmentType?: string;
+            sets: components["schemas"]["WorkoutWarmupRampSet"][];
+            calibrationCode?: string;
+            calibrationMessage?: string;
+        };
+        WorkoutWarmupPrescription: {
+            /** @constant */
+            schemaVersion: "workout-warmup-prescription-v1";
+            ruleVersion: string;
+            generalWarmup: components["schemas"]["WorkoutGeneralWarmupPrescription"];
+            rampWarmup?: components["schemas"]["WorkoutRampWarmupPrescription"];
+            /** @constant */
+            countsTowardTrainingVolume: false;
+            /** @constant */
+            countsTowardProgression: false;
+        };
         WorkoutSessionData: {
             /** Format: uuid */
             id: string;
@@ -1232,26 +1367,54 @@ export interface components {
             /** Format: uuid */
             planVersionId: string;
             planVersionNo: number;
+            /** @description 服务端已接受的原始启动幂等键；用于响应丢失和跨页面恢复，不是身份凭证。 */
+            clientSessionKey: string;
+            /** @description 兼容字段，当前与 trainingDayCode 返回相同值。 */
             planDayId: string;
+            trainingDayCode: string;
             status: components["schemas"]["SessionStatus"];
             startedAt: components["schemas"]["UtcDateTime"];
             completedAt?: components["schemas"]["UtcDateTime"];
             version: components["schemas"]["ExpectedVersion"];
             exercises: components["schemas"]["WorkoutExerciseSnapshot"][];
+            /** @description 版本化服务端权威热身快照；旧训练会话可能省略。 */
+            warmupPrescription?: components["schemas"]["WorkoutWarmupPrescription"];
         };
         WorkoutSessionResponse: {
             data: components["schemas"]["WorkoutSessionData"];
             meta: components["schemas"]["ResponseMeta"];
         };
-        UpdateSessionStatusRequest: {
-            status: components["schemas"]["SessionStatus"];
-            expectedVersion: components["schemas"]["ExpectedVersion"];
+        WorkoutRecoveryConfirmationDetails: {
+            assessment: components["schemas"]["WorkoutRecoveryCheckData"];
+            /** @description 短期、单次使用且仅绑定本次训练启动事实的 opaque token。 */
+            confirmationToken: string;
+            confirmationExpiresAt: components["schemas"]["UtcDateTime"];
         };
-        UpdateSessionExerciseRequest: {
+        WorkoutRecoveryConfirmationError: {
             /** @enum {string} */
-            action: "SKIP" | "REPLACE" | "COMPLETE";
-            replacementExerciseId?: string;
-            expectedVersion: components["schemas"]["ExpectedVersion"];
+            code: "RECOVERY_CONFIRMATION_REQUIRED";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: components["schemas"]["WorkoutRecoveryConfirmationDetails"];
+            /** @enum {boolean} */
+            retryable: false;
+        };
+        WorkoutRecoveryConfirmationErrorResponse: {
+            error: components["schemas"]["WorkoutRecoveryConfirmationError"];
+            meta: components["schemas"]["ErrorMeta"];
+        };
+        WorkoutStartIdempotencyError: {
+            /** @enum {string} */
+            code: "IDEMPOTENCY_KEY_REUSED";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: Record<string, never>;
+            /** @enum {boolean} */
+            retryable: false;
+        };
+        WorkoutStartIdempotencyErrorResponse: {
+            error: components["schemas"]["WorkoutStartIdempotencyError"];
+            meta: components["schemas"]["ErrorMeta"];
         };
         /** @enum {string} */
         SetType: "WARMUP" | "WORK" | "EXTRA";
@@ -1262,6 +1425,96 @@ export interface components {
         SetActual: {
             weight: components["schemas"]["Weight"];
             reps: number;
+        };
+        /**
+         * @description 用户在该组训练中主动记录的非诊断性安全信号；任一值都会禁止自动进阶。
+         * @enum {string}
+         */
+        WorkoutSafetyFlag: "PAIN" | "INJURY" | "CHEST_DISCOMFORT" | "DIZZINESS" | "SEVERE_UNWELL";
+        RecoverableWorkoutSetData: {
+            /** Format: uuid */
+            setId: string;
+            /** Format: uuid */
+            sessionExerciseId: string;
+            clientSetKey: string;
+            /** Format: int64 */
+            clientOperationSeq: number;
+            setType: components["schemas"]["SetType"];
+            setOrder: number;
+            target: components["schemas"]["SetTarget"];
+            actual: components["schemas"]["SetActual"];
+            remainingReps?: number;
+            /** @enum {string} */
+            completionStatus: "COMPLETED" | "FAILED" | "SKIPPED";
+            completedAt?: components["schemas"]["UtcDateTime"];
+            /** Format: int64 */
+            serverRevision: number;
+            sessionVersion: components["schemas"]["ExpectedVersion"];
+            safetyFlag?: components["schemas"]["WorkoutSafetyFlag"];
+            /** @enum {string} */
+            anomalyStatus?: "CONFIRMED_EXCLUDED";
+            /** @enum {string} */
+            syncStatus: "APPLIED";
+        };
+        ActiveWorkoutExistsDetails: {
+            activeSession: components["schemas"]["WorkoutSessionData"];
+            /** @description 当前会话仍生效的训练组事实；已逻辑作废的组不会返回。 */
+            sets: components["schemas"]["RecoverableWorkoutSetData"][];
+        };
+        ActiveWorkoutExistsError: {
+            /** @enum {string} */
+            code: "ACTIVE_WORKOUT_EXISTS";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: components["schemas"]["ActiveWorkoutExistsDetails"];
+            /** @enum {boolean} */
+            retryable: false;
+        };
+        ActiveWorkoutExistsErrorResponse: {
+            error: components["schemas"]["ActiveWorkoutExistsError"];
+            meta: components["schemas"]["ErrorMeta"];
+        };
+        WorkoutStartTerminalReplayDetails: {
+            terminalSession: components["schemas"]["WorkoutSessionData"];
+        };
+        WorkoutStartTerminalReplayError: {
+            /** @enum {string} */
+            code: "WORKOUT_START_ALREADY_TERMINAL";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: components["schemas"]["WorkoutStartTerminalReplayDetails"];
+            /** @enum {boolean} */
+            retryable: false;
+        };
+        WorkoutStartTerminalReplayErrorResponse: {
+            error: components["schemas"]["WorkoutStartTerminalReplayError"];
+            meta: components["schemas"]["ErrorMeta"];
+        };
+        WorkoutSessionStartConflictResponse: components["schemas"]["WorkoutRecoveryConfirmationErrorResponse"] | components["schemas"]["WorkoutStartIdempotencyErrorResponse"] | components["schemas"]["ActiveWorkoutExistsErrorResponse"] | components["schemas"]["WorkoutStartTerminalReplayErrorResponse"];
+        UpdateSessionStatusRequest: {
+            /** @enum {string} */
+            status: "IN_PROGRESS" | "PAUSED" | "ABORTED";
+            expectedVersion: components["schemas"]["ExpectedVersion"];
+        };
+        UpdateSessionExerciseRequest: {
+            /** @enum {string} */
+            action: "REPLACE";
+            replacementExerciseId?: string;
+            expectedVersion: components["schemas"]["ExpectedVersion"];
+        };
+        WorkoutExerciseUpdateConflictError: {
+            /** @enum {string} */
+            code: "VERSION_CONFLICT" | "INSUFFICIENT_REPLACEMENTS";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: {
+                [key: string]: unknown;
+            };
+            retryable: boolean;
+        };
+        WorkoutExerciseUpdateConflictResponse: {
+            error: components["schemas"]["WorkoutExerciseUpdateConflictError"];
+            meta: components["schemas"]["ErrorMeta"];
         };
         /** @enum {string} */
         CompletionStatus: "PLANNED" | "COMPLETED" | "FAILED" | "SKIPPED";
@@ -1276,6 +1529,7 @@ export interface components {
             remainingReps?: number;
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];
+            safetyFlag?: components["schemas"]["WorkoutSafetyFlag"];
             expectedSessionVersion: components["schemas"]["ExpectedVersion"];
             /** @default false */
             confirmAnomaly: boolean;
@@ -1298,6 +1552,7 @@ export interface components {
             /** Format: int64 */
             serverRevision: number;
             sessionVersion: components["schemas"]["ExpectedVersion"];
+            safetyFlag?: components["schemas"]["WorkoutSafetyFlag"];
             /** @enum {string} */
             anomalyStatus?: "CONFIRMED_EXCLUDED";
             /** @enum {string} */
@@ -1309,6 +1564,21 @@ export interface components {
         };
         DeleteSetRequest: {
             expectedSessionVersion: components["schemas"]["ExpectedVersion"];
+        };
+        WorkoutSetVoidData: {
+            /** Format: uuid */
+            voidId: string;
+            /** Format: uuid */
+            setId: string;
+            /** @enum {string} */
+            reason: "USER_REQUESTED";
+            voidedAt: components["schemas"]["UtcDateTime"];
+            sessionVersion: components["schemas"]["ExpectedVersion"];
+            duplicate: boolean;
+        };
+        WorkoutSetVoidResponse: {
+            data: components["schemas"]["WorkoutSetVoidData"];
+            meta: components["schemas"]["ResponseMeta"];
         };
         CompleteSessionRequest: {
             expectedVersion: components["schemas"]["ExpectedVersion"];
@@ -1337,6 +1607,7 @@ export interface components {
             remainingReps?: number;
             completionStatus: components["schemas"]["CompletionStatus"];
             completedAt?: components["schemas"]["UtcDateTime"];
+            safetyFlag?: components["schemas"]["WorkoutSafetyFlag"];
             expectedSessionVersion: components["schemas"]["ExpectedVersion"];
             /** @default false */
             confirmAnomaly: boolean;
@@ -1391,14 +1662,79 @@ export interface components {
             data: components["schemas"]["SyncConflictListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /**
+         * @description Resolves the current user's conflict with optimistic conflict-version checking.
+         *     KEEP_LOCAL appends a correction revision to the existing workout set and makes the
+         *     correctable local facts authoritative. KEEP_SERVER abandons the queued local operation.
+         *     KEEP_BOTH retains both local and server versions only as conflict/revision audit evidence;
+         *     it does not create another workout set or session, and only the active server fact counts
+         *     toward workout statistics. Repeating the same decision with the original expectedVersion
+         *     replays the result; another decision or version is rejected with VERSION_CONFLICT.
+         */
         ResolveSyncConflictRequest: {
             /** @enum {string} */
             resolution: "KEEP_LOCAL" | "KEEP_SERVER" | "KEEP_BOTH";
             expectedVersion: components["schemas"]["ExpectedVersion"];
         };
-        SyncConflictResponse: {
-            data: components["schemas"]["SyncConflictData"];
+        SyncConflictResolutionData: {
+            /** Format: uuid */
+            conflictId: string;
+            /**
+             * Format: int64
+             * @description Trusted sequence copied from persisted conflict evidence, never from the resolution request.
+             */
+            clientOperationSeq: number;
+            clientKey: string;
+            /** @enum {string} */
+            resolution: "KEEP_LOCAL" | "KEEP_SERVER" | "KEEP_BOTH";
+            /**
+             * @description KEEP_LOCAL returns ACKNOWLEDGED after the revision is active. KEEP_SERVER and
+             *     KEEP_BOTH return ABANDONED so the client terminates the queued local operation.
+             *     REBUILT is reserved for a future response that explicitly supplies rebuiltPayload.
+             * @enum {string}
+             */
+            outcome: "ACKNOWLEDGED" | "REBUILT" | "ABANDONED";
+            /** Format: int64 */
+            authoritativeSessionVersion: number;
+            /** @description Latest authoritative workout-set or workout-session snapshot used to converge local state. */
+            authoritativePayload: {
+                [key: string]: unknown;
+            };
+            /** @description Present only when outcome is REBUILT and a new operation must actually be enqueued. */
+            rebuiltPayload?: {
+                [key: string]: unknown;
+            };
+        };
+        SyncConflictResolutionResponse: {
+            data: components["schemas"]["SyncConflictResolutionData"];
             meta: components["schemas"]["ResponseMeta"];
+        };
+        WorkoutSessionSummaryData: {
+            /** Format: uuid */
+            sessionId: string;
+            /** @enum {string} */
+            status: "COMPLETED" | "ABORTED";
+            completedWorkSets: number;
+            completedVolumeKg: number;
+            completedReps: number;
+            usesExternalLoad: boolean;
+        };
+        WorkoutSessionSummaryResponse: {
+            data: components["schemas"]["WorkoutSessionSummaryData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        WorkoutNotTerminalError: {
+            /** @enum {string} */
+            code: "WORKOUT_NOT_TERMINAL";
+            message: string;
+            fieldErrors: components["schemas"]["FieldError"][];
+            details: Record<string, never>;
+            /** @enum {boolean} */
+            retryable: false;
+        };
+        WorkoutNotTerminalErrorResponse: {
+            error: components["schemas"]["WorkoutNotTerminalError"];
+            meta: components["schemas"]["ErrorMeta"];
         };
         ExerciseTrendPoint: {
             sessionId: string;
@@ -1612,6 +1948,10 @@ export interface components {
         VersionNoPath: number;
         ExerciseIdPath: string;
         ClientSetKeyPath: string;
+        SessionIdPath: string;
+        /** @description PUT 兼容路径参数，值为客户端生成的 clientSetKey。 */
+        ClientSetKeyAsSetIdPath: string;
+        SetIdPath: string;
         Cursor: string;
         /** @description 在已认证用户和操作类型范围内唯一；同键不同 payload 将被拒绝。 */
         IdempotencyKey: string;
@@ -1749,6 +2089,9 @@ export interface operations {
         responses: {
             200: components["responses"]["Success"];
             400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
+            503: components["responses"]["DefaultError"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1763,6 +2106,7 @@ export interface operations {
         responses: {
             200: components["responses"]["Success"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -1970,7 +2314,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 2 至 4 个安全替代候选；合法候选不足时宁缺毋滥 */
+            /** @description 1 至 4 个通用安全替代候选；无合法候选时宁缺毋滥 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1980,6 +2324,33 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["DefaultError"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listWorkoutExerciseReplacements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sessionId: string;
+                snapshotId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 1 至 4 个不与本次训练其他动作重复的安全候选 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExerciseReplacementResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["DefaultError"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2082,6 +2453,35 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
+    listPlanExerciseReplacements: {
+        parameters: {
+            query: {
+                dayCode: string;
+                sourceExerciseCode: string;
+            };
+            header?: never;
+            path: {
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 同动作模式、主要肌群和难度且符合当前器械与排除偏好的替换候选；无合格项时 items 为空。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanExerciseReplacementOptionListResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
     listPlanDayOptions: {
         parameters: {
             query?: never;
@@ -2138,7 +2538,7 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["PlanCreation"];
         responses: {
-            /** @description 已创建不可变的首个计划版本 */
+            /** @description 已激活候选计划；首次创建计划，已有计划时追加不可变的新版本 */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2255,16 +2655,32 @@ export interface operations {
             default: components["responses"]["DefaultError"];
         };
     };
-    getTodayWorkout: {
+    checkWorkoutRecovery: {
         parameters: {
-            query?: never;
+            query: {
+                planId: string;
+                planVersionNo: number;
+                trainingDayCode: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 版本化恢复窗口检查结果；CONFIRMATION_REQUIRED 需要用户明确决定后客户端才可启动 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutRecoveryCheckResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["DefaultError"];
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2304,13 +2720,24 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["WorkoutSessionStart"];
         responses: {
-            /** @description 会话已创建；同一用户和 clientSessionKey 重试返回首次创建结果 */
+            /** @description 会话已创建；同一用户和 clientSessionKey 仅在原会话仍为 CREATED 时返回首次创建结果 */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["WorkoutSessionResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description 服务端原子重算后需要恢复确认、幂等键冲突、已有未结束训练，或该启动键对应会话已经结束；均不会创建第二个会话。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionStartConflictResponse"];
                 };
             };
             default: components["responses"]["DefaultError"];
@@ -2360,6 +2787,8 @@ export interface operations {
                     "application/json": components["schemas"]["WorkoutSessionResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -2385,7 +2814,17 @@ export interface operations {
                     "application/json": components["schemas"]["WorkoutSessionResponse"];
                 };
             };
-            409: components["responses"]["VersionConflict"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description 版本冲突，或当前训练已无不重复且安全的替代动作 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutExerciseUpdateConflictResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2397,8 +2836,9 @@ export interface operations {
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
-                id: components["parameters"]["IdPath"];
-                clientSetKey: components["parameters"]["ClientSetKeyPath"];
+                sessionId: components["parameters"]["SessionIdPath"];
+                /** @description PUT 兼容路径参数，值为客户端生成的 clientSetKey。 */
+                setId: components["parameters"]["ClientSetKeyAsSetIdPath"];
             };
             cookie?: never;
         };
@@ -2413,23 +2853,39 @@ export interface operations {
                     "application/json": components["schemas"]["WorkoutSetResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
     };
-    deleteUnfinishedWorkoutSet: {
+    voidWorkoutSet: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description 在已认证用户和操作类型范围内唯一；同键不同 payload 将被拒绝。 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
             path: {
-                id: components["parameters"]["IdPath"];
-                clientSetKey: components["parameters"]["ClientSetKeyPath"];
+                sessionId: components["parameters"]["SessionIdPath"];
+                setId: components["parameters"]["SetIdPath"];
             };
             cookie?: never;
         };
         requestBody: components["requestBodies"]["SetDeletion"];
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 首次追加或幂等重放的作废审计事实 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSetVoidResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -2457,6 +2913,8 @@ export interface operations {
                     "application/json": components["schemas"]["WorkoutCompletionResponse"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
             409: components["responses"]["VersionConflict"];
             default: components["responses"]["DefaultError"];
         };
@@ -2514,13 +2972,13 @@ export interface operations {
         };
         requestBody: components["requestBodies"]["SyncConflictResolution"];
         responses: {
-            /** @description 已显式裁决的同步冲突 */
+            /** @description 已裁决且携带客户端收敛所需服务器权威快照 */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncConflictResponse"];
+                    "application/json": components["schemas"]["SyncConflictResolutionResponse"];
                 };
             };
             409: components["responses"]["VersionConflict"];
@@ -2538,7 +2996,26 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: components["responses"]["Success"];
+            /** @description 已完成或提前结束训练的汇总事实 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutSessionSummaryResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description 训练尚未进入终态，错误码为 WORKOUT_NOT_TERMINAL。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkoutNotTerminalErrorResponse"];
+                };
+            };
             default: components["responses"]["DefaultError"];
         };
     };
@@ -2569,6 +3046,9 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["RecommendationStatus"];
+                /** @description Base64URL 编码的稳定游标 */
+                cursor?: string;
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -2576,9 +3056,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 建议列表 */
+            /** @description 有界建议列表，按 createdAt、id 倒序 */
             200: {
                 headers: {
+                    "X-Has-More": boolean;
+                    "X-Next-Cursor"?: string;
                     [name: string]: unknown;
                 };
                 content: {

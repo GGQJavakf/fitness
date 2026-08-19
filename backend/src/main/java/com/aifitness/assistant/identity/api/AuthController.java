@@ -23,14 +23,18 @@ public final class AuthController {
     private final WechatLoginService loginService;
     private final Clock clock;
     private final String expectedWechatAppId;
+    private final boolean trustCloudBaseIdentityHeaders;
 
     public AuthController(
             WechatLoginService loginService,
             Clock clock,
-            @Value("${fitness.auth.wechat.app-id:}") String expectedWechatAppId) {
+            @Value("${fitness.auth.wechat.app-id:}") String expectedWechatAppId,
+            @Value("${fitness.auth.wechat.trust-cloudbase-identity-headers:false}")
+                    boolean trustCloudBaseIdentityHeaders) {
         this.loginService = loginService;
         this.clock = clock;
         this.expectedWechatAppId = expectedWechatAppId;
+        this.trustCloudBaseIdentityHeaders = trustCloudBaseIdentityHeaders;
     }
 
     @PostMapping("/wechat/login")
@@ -84,7 +88,8 @@ public final class AuthController {
         if (openId == null && appId == null) {
             return null;
         }
-        if (!validHeaderValue(openId, 256)
+        if (!trustCloudBaseIdentityHeaders
+                || !validHeaderValue(openId, 256)
                 || !validHeaderValue(appId, 128)
                 || expectedWechatAppId == null
                 || expectedWechatAppId.isBlank()

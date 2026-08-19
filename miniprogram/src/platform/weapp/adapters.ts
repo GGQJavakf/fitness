@@ -8,8 +8,13 @@ import type {
   TransportRequest,
   TransportResponse,
 } from '../../infrastructure/api/client'
+import {
+  WEAPP_SESSION_STORAGE_KEY,
+  WEAPP_WORKOUT_DRAFT_STORAGE_PREFIX,
+  createWeappUserScopedDataLifecycle,
+  type WeappUserScopedDataLifecycle,
+} from './WechatUserScopedDataLifecycle'
 
-const sessionStorageKey = 'fitness.session.v1'
 export const WEAPP_REQUEST_TIMEOUT_MS = 20_000
 
 interface CloudContainerRuntime {
@@ -20,7 +25,7 @@ interface CloudContainerRuntime {
       method: string
       header: Record<string, string>
       data?: unknown
-    }): Promise<{ statusCode?: number; data: T }>
+    }): Promise<{ statusCode?: number; data: T; header?: Record<string, unknown> }>
   }
 }
 
@@ -92,6 +97,7 @@ export function createWeappTransport(options: {
         return {
           statusCode: response.statusCode,
           data: response.data,
+          headers: normalizeResponseHeaders(response.header),
         }
       }
       const response = await Taro.request<T>({
@@ -104,9 +110,19 @@ export function createWeappTransport(options: {
       return {
         statusCode: response.statusCode,
         data: response.data,
+        headers: normalizeResponseHeaders(response.header),
       }
     },
   }
+}
+
+function normalizeResponseHeaders(value: unknown): Readonly<Record<string, string>> {
+  if (typeof value !== 'object' || value === null) return {}
+  const normalized: Record<string, string> = {}
+  for (const [name, headerValue] of Object.entries(value)) {
+    if (typeof headerValue === 'string') normalized[name.toLowerCase()] = headerValue
+  }
+  return normalized
 }
 
 function withCloudBaseTimeout<T>(request: Promise<T>, timeoutMs: number): Promise<T> {
@@ -138,11 +154,13 @@ function containerPath(url: string): string {
   return pathStart < 0 ? '/' : url.slice(pathStart)
 }
 
-export function createWeappSessionStore(): SessionAccessPort {
-  return {
+export function createWeappSessionStore(
+  lifecycle: WeappUserScopedDataLifecycle = createWeappUserScopedDataLifecycle(),
+): SessionAccessPort {
+  const store: SessionAccessPort = {
     async load(): Promise<Session | null> {
       try {
-        const value = await Taro.getStorage<Session>({ key: sessionStorageKey })
+        const value = await Taro.getStorage<Session>({ key: WEAPP_SESSION_STORAGE_KEY })
         return isSession(value.data) ? value.data : null
       } catch (error) {
         if (isMissingStorageError(error)) return null
@@ -150,15 +168,20 @@ export function createWeappSessionStore(): SessionAccessPort {
       }
     },
     async save(session: Session): Promise<void> {
-      await Taro.setStorage({ key: sessionStorageKey, data: session })
+      await Taro.setStorage({ key: WEAPP_SESSION_STORAGE_KEY, data: session })
     },
     async clear(): Promise<void> {
       try {
-        await Taro.removeStorage({ key: sessionStorageKey })
+        await Taro.removeStorage({ key: WEAPP_SESSION_STORAGE_KEY })
       } catch (error) {
         if (!isMissingStorageError(error)) throw error
       }
     },
+  }
+  return {
+    load: () => lifecycle.runUserOperation(() => store.load()),
+    save: (session) => lifecycle.runUserOperation(() => store.save(session)),
+    clear: () => lifecycle.runUserOperation(() => store.clear()),
   }
 }
 
@@ -171,6 +194,36 @@ export function createWeappLogin() {
       }
       return result.code
     },
+  }
+}
+
+const nextTrainingDayStorageKey = `${WEAPP_WORKOUT_DRAFT_STORAGE_PREFIX}next-training-day.v1`
+
+export function createWechatNextTrainingDaySelection(
+  lifecycle: WeappUserScopedDataLifecycle = createWeappUserScopedDataLifecycle(),
+) {
+  return {
+    remember: (trainingDayCode: string) => lifecycle.runUserOperation(async () => {
+      const normalized = trainingDayCode.trim()
+      if (!normalized || normalized.length > 128) {
+        throw new TypeError('next training day code is invalid')
+      }
+      await Taro.setStorage({ key: nextTrainingDayStorageKey, data: normalized })
+    }),
+
+    consume: () => lifecycle.runUserOperation(async (): Promise<string | undefined> => {
+      let value: unknown
+      try {
+        value = (await Taro.getStorage<unknown>({ key: nextTrainingDayStorageKey })).data
+      } catch (error) {
+        if (isMissingStorageError(error)) return undefined
+        throw error
+      }
+      await Taro.removeStorage({ key: nextTrainingDayStorageKey })
+      if (typeof value !== 'string') return undefined
+      const normalized = value.trim()
+      return normalized && normalized.length <= 128 ? normalized : undefined
+    }),
   }
 }
 
@@ -218,9 +271,10 @@ function isSession(value: unknown): value is Session {
 }
 
 function isMissingStorageError(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null || !('errMsg' in value)) {
-    return false
-  }
-  const errMsg = (value as { errMsg?: unknown }).errMsg
-  return typeof errMsg === 'string' && /(?:data )?not found/i.test(errMsg)
+  const message = value instanceof Error
+    ? value.message
+    : typeof value === 'object' && value !== null && 'errMsg' in value
+      ? String((value as { errMsg?: unknown }).errMsg ?? '')
+      : ''
+  return /(?:data )?not found/i.test(message)
 }

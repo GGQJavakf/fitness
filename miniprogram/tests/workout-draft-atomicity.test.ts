@@ -10,7 +10,11 @@ vi.mock('@tarojs/taro', () => ({ default: taro }))
 
 import { createOperationQueue } from '../src/domain/sync/OperationQueue'
 import type { WorkoutDraftStore } from '../src/application/ports/WorkoutDraftStore'
-import { WorkoutDraftStorageFullError } from '../src/application/ports/WorkoutDraftStore'
+import {
+  WorkoutDraftRecoveryRequiredError,
+  WorkoutDraftRevisionConflictError,
+  WorkoutDraftStorageFullError,
+} from '../src/application/ports/WorkoutDraftStore'
 import { WorkoutSyncService } from '../src/application/use-cases/WorkoutSyncService'
 import {
   createWechatWorkoutDraftStore,
@@ -19,7 +23,10 @@ import {
 
 describe('WeChat workout draft atomic storage', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
+    taro.getStorage.mockRejectedValue({ errMsg: 'getStorage:fail data not found' })
+    taro.setStorage.mockResolvedValue(undefined)
+    taro.removeStorage.mockResolvedValue(undefined)
   })
 
   it('writes and verifies a new record before switching the active pointer', async () => {
@@ -65,6 +72,24 @@ describe('WeChat workout draft atomic storage', () => {
     expect(taro.removeStorage).toHaveBeenCalledWith({ key: firstRecordKey })
   })
 
+  it('rejects a stale revision instead of replacing a newer active draft', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => { values.set(key, data) })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => { values.delete(key) })
+    const store = createWechatWorkoutDraftStore()
+    await store.save(draft(1))
+    await store.save(draft(2), 1)
+
+    await expect(store.save({ ...draft(2), updatedAtUtc: '2026-07-24T09:00:00Z' }, 1))
+      .rejects.toBeInstanceOf(WorkoutDraftRevisionConflictError)
+
+    await expect(store.loadActive()).resolves.toMatchObject({ revision: 2, updatedAtUtc: '2026-07-24T08:00:00Z' })
+  })
+
   it('keeps the previous active draft if pointer switching fails', async () => {
     const values = new Map<string, unknown>([
       ['fitness.workout.draft.active.v1', { recordKey: 'old-record', schemaVersion: 1 }],
@@ -96,7 +121,40 @@ describe('WeChat workout draft atomic storage', () => {
       })
       .mockResolvedValueOnce({ data: { schemaVersion: 1, payloadJson: '{}', checksum: 'bad' } })
 
-    await expect(createWechatWorkoutDraftStore().loadActive()).rejects.toThrow('checksum')
+    await expect(createWechatWorkoutDraftStore().loadActive())
+      .rejects.toBeInstanceOf(WorkoutDraftRecoveryRequiredError)
+  })
+
+  it.each([
+    ['invalid pointer', { broken: true }, undefined],
+    ['missing record', { recordKey: 'fitness.workout.draft.record.missing.1.deadbeef', schemaVersion: 1 }, undefined],
+    ['checksum mismatch', { recordKey: 'fitness.workout.draft.record.bad.1.deadbeef', schemaVersion: 1 }, { schemaVersion: 1, payloadJson: '{}', checksum: 'bad' }],
+    ['unsupported schema', { recordKey: 'fitness.workout.draft.record.old.1.deadbeef', schemaVersion: 1 }, { schemaVersion: 1, payloadJson: '{"schemaVersion":99}', checksum: 'f72af72e' }],
+  ])('quarantines %s and exposes recovery without removing authentication', async (_label, pointer, envelope) => {
+    const values = new Map<string, unknown>([
+      ['fitness.session.v1', { accessToken: 'redacted', refreshToken: 'redacted', expiresAt: '2099-01-01T00:00:00Z' }],
+      ['fitness.workout.draft.active.v1', pointer],
+    ])
+    if (envelope && typeof pointer === 'object' && pointer !== null && 'recordKey' in pointer) {
+      values.set(String(pointer.recordKey), envelope)
+    }
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => { values.set(key, data) })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => { values.delete(key) })
+    const store = createWechatWorkoutDraftStore()
+
+    await expect(store.loadActive()).rejects.toBeInstanceOf(WorkoutDraftRecoveryRequiredError)
+    expect(values.has('fitness.workout.draft.recovery.v1')).toBe(true)
+    expect(values.has('fitness.workout.draft.quarantine.v1')).toBe(true)
+    expect(values.has('fitness.session.v1')).toBe(true)
+    expect(taro.removeStorage).not.toHaveBeenCalledWith({ key: 'fitness.session.v1' })
+
+    await store.discardCorrupted!()
+    await expect(store.loadActive()).resolves.toBeNull()
+    expect(values.has('fitness.session.v1')).toBe(true)
   })
 
   it('migrates a legacy queue without discarding pending operations', () => {

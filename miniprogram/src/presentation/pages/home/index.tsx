@@ -13,21 +13,53 @@ export default function HomePage() {
   const [message, setMessage] = useState('正在恢复本地会话…')
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
+  const [startupFailed, setStartupFailed] = useState(false)
   const loginInFlight = useRef(false)
+  const startupInFlight = useRef(false)
+  const startupRequestId = useRef(0)
+  const mounted = useRef(true)
 
-  useEffect(() => {
-    void application.startup.start()
-      .then((next) => {
+  async function restoreStartup(): Promise<void> {
+    if (startupInFlight.current) return
+    startupInFlight.current = true
+    const requestId = ++startupRequestId.current
+    setDestination('LOADING')
+    setStartupFailed(false)
+    setMessage('正在恢复本地会话…')
+    try {
+      const next = await application.startup.start()
+      if (!mounted.current || requestId !== startupRequestId.current) return
         setDestination(next)
-        if (next === 'HOME') void application.hasActiveWorkout().then(setHasActiveWorkout).catch(() => setHasActiveWorkout(false))
+        if (next === 'HOME') {
+          void application.hasActiveWorkout()
+            .then((active) => {
+              if (mounted.current && requestId === startupRequestId.current) setHasActiveWorkout(active)
+            })
+            .catch(() => {
+              if (mounted.current && requestId === startupRequestId.current) setHasActiveWorkout(false)
+            })
+        }
         setMessage(next === 'LOGIN'
           ? '使用微信登录后开始 3 分钟建档'
           : '档案已就绪，可以继续生成或查看计划')
-      })
-      .catch(() => {
+    } catch {
+      if (mounted.current && requestId === startupRequestId.current) {
         setDestination('LOGIN')
-        setMessage('暂时无法连接本地服务，请检查网络后重试')
-      })
+        setStartupFailed(true)
+        setMessage('暂时无法恢复会话，请检查网络后重新连接；无需重复登录。')
+      }
+    } finally {
+      startupInFlight.current = false
+    }
+  }
+
+  useEffect(() => {
+    mounted.current = true
+    void restoreStartup()
+    return () => {
+      mounted.current = false
+      startupRequestId.current += 1
+    }
   }, [])
 
   async function login(): Promise<void> {
@@ -43,7 +75,9 @@ export default function HomePage() {
     })
   }
 
-  const statusLabel = destination === 'LOADING'
+  const statusLabel = startupFailed
+    ? '会话恢复失败'
+    : destination === 'LOADING'
     ? '正在连接'
     : destination === 'LOGIN'
       ? '待建立档案'
@@ -92,7 +126,16 @@ export default function HomePage() {
             </View>
           </View>
 
-          {destination === 'LOGIN' && (
+          {destination === 'LOGIN' && startupFailed && (
+            <Button
+              className='home-page__action home-page__action--primary'
+              onClick={() => void restoreStartup()}
+            >
+              重新连接
+            </Button>
+          )}
+
+          {destination === 'LOGIN' && !startupFailed && (
             <Button
               className='home-page__action home-page__action--primary'
               loading={isLoggingIn}
@@ -162,7 +205,7 @@ export default function HomePage() {
           <Text className='home-page__trust-description'>面向已满 18 周岁的成年人，提供一般健身计划，不提供医疗诊断或康复处方。</Text>
           <View className='home-page__rule-note'>
             <View className='home-page__rule-line' />
-            <Text className='home-page__rule-text'>重量、组数、次数与进阶结论由确定性规则计算，AI 负责个性化推荐与解释。</Text>
+            <Text className='home-page__rule-text'>重量、组数、次数与进阶结论由确定性规则计算；仅在明确启用并授权时使用 AI 个性化能力。</Text>
           </View>
         </View>
 

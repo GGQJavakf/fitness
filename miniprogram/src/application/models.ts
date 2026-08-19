@@ -1,4 +1,5 @@
 export type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
+export type TrainingSplit = 'UPPER_LOWER' | 'PUSH_PULL_LEGS' | 'BODY_PART_FIVE_DAY'
 export type FitnessGoal = 'STRENGTH' | 'HYPERTROPHY' | 'FAT_LOSS' | 'GENERAL_FITNESS'
 export type TrainingLocation = 'HOME' | 'GYM' | 'OTHER'
 export type SessionMinutes = 30 | 45 | 60 | 75 | 90
@@ -60,6 +61,13 @@ export interface PlanExerciseOption extends PlanExercise {
   name: string
 }
 
+export interface PlanExerciseReplacementOption extends PlanExerciseOption {
+  movementPattern: string
+  primaryMuscles: string[]
+  equipment: string[]
+  matchReason: 'SAME_PATTERN_MUSCLES_DIFFICULTY'
+}
+
 export interface PlanDayOption {
   code: string
   name: string
@@ -74,6 +82,7 @@ export interface PlanDay {
 
 export interface PlanDraft {
   templateCode: string
+  trainingSplit?: TrainingSplit
   name: string
   days: PlanDay[]
   locks: Record<string, LockStatus>
@@ -81,6 +90,7 @@ export interface PlanDraft {
 
 export interface PlanValidationDraft {
   templateCode: string
+  trainingSplit?: TrainingSplit
   name: string
   days: PlanDay[]
 }
@@ -132,6 +142,7 @@ export interface AiPlanProposal {
 export interface PlanGenerationContextData {
   profile: {
     experience: ExperienceLevel
+    trainingSplit?: TrainingSplit
     goal: FitnessGoal
     weeklyFrequency: number
     sessionMinutes: SessionMinutes

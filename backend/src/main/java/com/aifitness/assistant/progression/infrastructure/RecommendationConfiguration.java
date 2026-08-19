@@ -4,6 +4,7 @@ import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.progression.application.RecommendationRepository;
 import com.aifitness.assistant.progression.application.RecommendationService;
 import com.aifitness.assistant.progression.application.ExerciseTrendQuery;
+import com.aifitness.assistant.progression.domain.ProgressionRulePolicy;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.workout.application.WorkoutCompletionObserver;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,6 +41,11 @@ public class RecommendationConfiguration {
     }
 
     @Bean
+    ProgressionRulePolicy progressionRulePolicy(ObjectMapper objectMapper) {
+        return ClasspathProgressionRulePolicyLoader.load(objectMapper);
+    }
+
+    @Bean
     @ConditionalOnProperty(
             prefix = "fitness.workout", name = "repository", havingValue = "memory", matchIfMissing = true)
     CompletedWorkoutProgressionObserver.HistoricalFactProvider inMemoryProgressionHistory() {
@@ -59,20 +65,23 @@ public class RecommendationConfiguration {
             PlanVersionService plans,
             ProfileService profiles,
             CompletedWorkoutProgressionObserver.HistoricalFactProvider history,
+            ProgressionRulePolicy progressionRulePolicy,
             ObjectMapper objectMapper,
             Clock clock) {
         return new CompletedWorkoutProgressionObserver(recommendations, (user, exerciseEquipment) -> {
             try {
                 return profiles.getEquipment(user).items().stream()
                         .filter(item -> exerciseEquipment.contains(item.equipmentType()))
-                        .map(item -> item.minIncrement().stripTrailingZeros()).distinct().sorted().toList();
+                        .map(item -> new CompletedWorkoutProgressionObserver.EquipmentContext(
+                                item.clientEquipmentKey(), item.equipmentType(), item.unit(), item.availableLevels()))
+                        .toList();
             } catch (ProfileService.ProfileNotFoundException exception) {
                 return List.of();
             }
         }, history, (user, session, exercise) -> plans
                         .getVersion(user, session.planId(), session.planVersionNumber())
                         .plan().isTargetWeightLocked(exercise.exerciseCode()),
-                objectMapper, clock);
+                progressionRulePolicy, objectMapper, clock);
     }
 
     @Bean

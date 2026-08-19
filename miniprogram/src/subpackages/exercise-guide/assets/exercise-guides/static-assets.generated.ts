@@ -8,6 +8,12 @@ import dumbbellFrontSquat03Finish from './dumbbell-front-squat-03-finish.jpg'
 import bodyweightSquat01Setup from './bodyweight-squat-01-setup.jpg'
 import bodyweightSquat02Drive from './bodyweight-squat-02-drive.jpg'
 import bodyweightSquat03Finish from './bodyweight-squat-03-finish.jpg'
+import prisonerSquat01Setup from './prisoner-squat-01-setup.jpg'
+import prisonerSquat02Drive from './prisoner-squat-02-drive.jpg'
+import prisonerSquat03Finish from './prisoner-squat-03-finish.jpg'
+import standingWallCalfRaise01Setup from './standing-wall-calf-raise-01-setup.jpg'
+import standingWallCalfRaise02Drive from './standing-wall-calf-raise-02-drive.jpg'
+import standingWallCalfRaise03Finish from './standing-wall-calf-raise-03-finish.jpg'
 import dumbbellRomanianDeadlift01Setup from './dumbbell-romanian-deadlift-01-setup.jpg'
 import dumbbellRomanianDeadlift02Drive from './dumbbell-romanian-deadlift-02-drive.jpg'
 import dumbbellRomanianDeadlift03Finish from './dumbbell-romanian-deadlift-03-finish.jpg'
@@ -17,6 +23,8 @@ import dumbbellDeadlift03Finish from './dumbbell-deadlift-03-finish.jpg'
 import bodyweightHipHinge01Setup from './bodyweight-hip-hinge-01-setup.jpg'
 import bodyweightHipHinge02Drive from './bodyweight-hip-hinge-02-drive.jpg'
 import bodyweightHipHinge03Finish from './bodyweight-hip-hinge-03-finish.jpg'
+import gluteBridgeExercise01Setup from './glute-bridge-exercise-01-setup.jpg'
+import gluteBridgeExercise02Lift from './glute-bridge-exercise-02-lift.jpg'
 import dumbbellBenchPress01Setup from './dumbbell-bench-press-01-setup.jpg'
 import dumbbellBenchPress02Drive from './dumbbell-bench-press-02-drive.jpg'
 import dumbbellBenchPress03Finish from './dumbbell-bench-press-03-finish.jpg'
@@ -26,6 +34,14 @@ import dumbbellFloorPress03Finish from './dumbbell-floor-press-03-finish.jpg'
 import inclinePushUp01Setup from './incline-push-up-01-setup.jpg'
 import inclinePushUp02Drive from './incline-push-up-02-drive.jpg'
 import inclinePushUp03Finish from './incline-push-up-03-finish.jpg'
+import bentKneePushUp01Setup from './bent-knee-push-up-01-setup.jpg'
+import bentKneePushUp02Lower from './bent-knee-push-up-02-lower.jpg'
+import pushUp01Setup from './push-up-01-setup.jpg'
+import pushUp02Drive from './push-up-02-drive.jpg'
+import pushUp03Finish from './push-up-03-finish.jpg'
+import wallPushUp01Setup from './wall-push-up-01-setup.jpg'
+import wallPushUp02Drive from './wall-push-up-02-drive.jpg'
+import wallPushUp03Finish from './wall-push-up-03-finish.jpg'
 import seatedCableRow01Setup from './seated-cable-row-01-setup.jpg'
 import seatedCableRow02Drive from './seated-cable-row-02-drive.jpg'
 import seatedCableRow03Finish from './seated-cable-row-03-finish.jpg'
@@ -35,6 +51,9 @@ import cableHighRow03Finish from './cable-high-row-03-finish.jpg'
 import cableSingleArmRow01Setup from './cable-single-arm-row-01-setup.jpg'
 import cableSingleArmRow02Drive from './cable-single-arm-row-02-drive.jpg'
 import cableSingleArmRow03Finish from './cable-single-arm-row-03-finish.jpg'
+import oneArmDumbbellRow01Setup from './one-arm-dumbbell-row-01-setup.jpg'
+import oneArmDumbbellRow02Drive from './one-arm-dumbbell-row-02-drive.jpg'
+import oneArmDumbbellRow03Finish from './one-arm-dumbbell-row-03-finish.jpg'
 import dumbbellOverheadPress01Setup from './dumbbell-overhead-press-01-setup.jpg'
 import dumbbellOverheadPress02Drive from './dumbbell-overhead-press-02-drive.jpg'
 import dumbbellOverheadPress03Finish from './dumbbell-overhead-press-03-finish.jpg'
@@ -44,6 +63,51 @@ import seatedDumbbellPress03Finish from './seated-dumbbell-press-03-finish.jpg'
 import singleArmDumbbellPress01Setup from './single-arm-dumbbell-press-01-setup.jpg'
 import singleArmDumbbellPress02Drive from './single-arm-dumbbell-press-02-drive.jpg'
 import singleArmDumbbellPress03Finish from './single-arm-dumbbell-press-03-finish.jpg'
+import dumbbellLateralRaise01Setup from './dumbbell-lateral-raise-01-setup.jpg'
+import dumbbellLateralRaise02Drive from './dumbbell-lateral-raise-02-drive.jpg'
+import dumbbellLateralRaise03Finish from './dumbbell-lateral-raise-03-finish.jpg'
+import singleArmDumbbellLateralRaise01Setup from './single-arm-dumbbell-lateral-raise-01-setup.jpg'
+import singleArmDumbbellLateralRaise02Drive from './single-arm-dumbbell-lateral-raise-02-drive.jpg'
+import singleArmDumbbellLateralRaise03Finish from './single-arm-dumbbell-lateral-raise-03-finish.jpg'
+import cableLateralRaise01Setup from './cable-lateral-raise-01-setup.jpg'
+import cableLateralRaise02Drive from './cable-lateral-raise-02-drive.jpg'
+import cableLateralRaise03Finish from './cable-lateral-raise-03-finish.jpg'
+import dumbbellBicepsCurl01Setup from './dumbbell-biceps-curl-01-setup.jpg'
+import dumbbellBicepsCurl02Drive from './dumbbell-biceps-curl-02-drive.jpg'
+import dumbbellBicepsCurl03Finish from './dumbbell-biceps-curl-03-finish.jpg'
+import dumbbellHammerCurl01Setup from './dumbbell-hammer-curl-01-setup.jpg'
+import dumbbellHammerCurl02Drive from './dumbbell-hammer-curl-02-drive.jpg'
+import dumbbellHammerCurl03Finish from './dumbbell-hammer-curl-03-finish.jpg'
+import cableBicepsCurl01Setup from './cable-biceps-curl-01-setup.jpg'
+import cableBicepsCurl02Drive from './cable-biceps-curl-02-drive.jpg'
+import cableBicepsCurl03Finish from './cable-biceps-curl-03-finish.jpg'
+import cableTricepsPushdown01Setup from './cable-triceps-pushdown-01-setup.jpg'
+import cableTricepsPushdown02Drive from './cable-triceps-pushdown-02-drive.jpg'
+import cableTricepsPushdown03Finish from './cable-triceps-pushdown-03-finish.jpg'
+import dumbbellOverheadTricepsExtension01Setup from './dumbbell-overhead-triceps-extension-01-setup.jpg'
+import dumbbellOverheadTricepsExtension02Drive from './dumbbell-overhead-triceps-extension-02-drive.jpg'
+import dumbbellOverheadTricepsExtension03Finish from './dumbbell-overhead-triceps-extension-03-finish.jpg'
+import dumbbellLyingTricepsExtension01Setup from './dumbbell-lying-triceps-extension-01-setup.jpg'
+import dumbbellLyingTricepsExtension02Drive from './dumbbell-lying-triceps-extension-02-drive.jpg'
+import dumbbellLyingTricepsExtension03Finish from './dumbbell-lying-triceps-extension-03-finish.jpg'
+import dumbbellReverseFly01Setup from './dumbbell-reverse-fly-01-setup.jpg'
+import dumbbellReverseFly02Drive from './dumbbell-reverse-fly-02-drive.jpg'
+import dumbbellReverseFly03Finish from './dumbbell-reverse-fly-03-finish.jpg'
+import cableReverseFly01Setup from './cable-reverse-fly-01-setup.jpg'
+import cableReverseFly02Drive from './cable-reverse-fly-02-drive.jpg'
+import cableReverseFly03Finish from './cable-reverse-fly-03-finish.jpg'
+import cableFacePull01Setup from './cable-face-pull-01-setup.jpg'
+import cableFacePull02Drive from './cable-face-pull-02-drive.jpg'
+import cableFacePull03Finish from './cable-face-pull-03-finish.jpg'
+import dumbbellShrug01Setup from './dumbbell-shrug-01-setup.jpg'
+import dumbbellShrug02Drive from './dumbbell-shrug-02-drive.jpg'
+import dumbbellShrug03Finish from './dumbbell-shrug-03-finish.jpg'
+import cableShrug01Setup from './cable-shrug-01-setup.jpg'
+import cableShrug02Drive from './cable-shrug-02-drive.jpg'
+import cableShrug03Finish from './cable-shrug-03-finish.jpg'
+import machineShrug01Setup from './machine-shrug-01-setup.jpg'
+import machineShrug02Drive from './machine-shrug-02-drive.jpg'
+import machineShrug03Finish from './machine-shrug-03-finish.jpg'
 import latPulldown01Setup from './lat-pulldown-01-setup.jpg'
 import latPulldown02Drive from './lat-pulldown-02-drive.jpg'
 import latPulldown03Finish from './lat-pulldown-03-finish.jpg'
@@ -59,6 +123,10 @@ import proneWRaise03Finish from './prone-w-raise-03-finish.jpg'
 import proneYRaise01Setup from './prone-y-raise-01-setup.jpg'
 import proneYRaise02Drive from './prone-y-raise-02-drive.jpg'
 import proneYRaise03Finish from './prone-y-raise-03-finish.jpg'
+import floorProneCobra01Setup from './floor-prone-cobra-01-setup.jpg'
+import floorProneCobra02Lift from './floor-prone-cobra-02-lift.jpg'
+import contralateralLimbRaise01Setup from './contralateral-limb-raise-01-setup.jpg'
+import contralateralLimbRaise02Raise from './contralateral-limb-raise-02-raise.jpg'
 import deadBug01Setup from './dead-bug-01-setup.jpg'
 import deadBug02Extend from './dead-bug-02-extend.jpg'
 import deadBug03Control from './dead-bug-03-control.jpg'
@@ -140,6 +208,52 @@ export const staticGuidesByExerciseCode = {
       },
     ],
   },
+  PRISONER_SQUAT: {
+    primaryRef: "asset://exercise-guides/prisoner-squat-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "站稳",
+        description: "双手轻放头后，脚掌稳定并保持胸口自然。",
+        source: prisonerSquat01Setup,
+      },
+      {
+        id: "drive",
+        label: "下蹲",
+        description: "屈髋屈膝，膝盖跟随脚尖方向。",
+        source: prisonerSquat02Drive,
+      },
+      {
+        id: "finish",
+        label: "到位",
+        description: "在躯干稳定的可控深度停住。",
+        source: prisonerSquat03Finish,
+      },
+    ],
+  },
+  STANDING_WALL_CALF_RAISE: {
+    primaryRef: "asset://exercise-guides/standing-wall-calf-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "脚跟落地",
+        description: "双手轻扶墙面，双脚平行站稳。",
+        source: standingWallCalfRaise01Setup,
+      },
+      {
+        id: "drive",
+        label: "提起脚跟",
+        description: "缓慢抬起脚跟，把重心保持在前脚掌。",
+        source: standingWallCalfRaise02Drive,
+      },
+      {
+        id: "finish",
+        label: "稳定顶端",
+        description: "身体保持直立，再缓慢放下脚跟。",
+        source: standingWallCalfRaise03Finish,
+      },
+    ],
+  },
   DUMBBELL_ROMANIAN_DEADLIFT: {
     primaryRef: "asset://exercise-guides/dumbbell-romanian-deadlift-01-setup.jpg",
     stages: [
@@ -206,6 +320,23 @@ export const staticGuidesByExerciseCode = {
         label: "到位",
         description: "大腿后侧有拉伸感时保持稳定。",
         source: bodyweightHipHinge03Finish,
+      },
+    ],
+  },
+  GLUTE_BRIDGE_EXERCISE: {
+    primaryRef: "asset://exercise-guides/glute-bridge-exercise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "仰卧准备",
+        description: "双脚踩稳，屈膝并保持腰背自然。",
+        source: gluteBridgeExercise01Setup,
+      },
+      {
+        id: "lift",
+        label: "抬髋",
+        description: "臀部发力抬起髋部，避免腰部过度后仰。",
+        source: gluteBridgeExercise02Lift,
       },
     ],
   },
@@ -278,6 +409,69 @@ export const staticGuidesByExerciseCode = {
       },
     ],
   },
+  BENT_KNEE_PUSH_UP: {
+    primaryRef: "asset://exercise-guides/bent-knee-push-up-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "跪姿支撑",
+        description: "双手和双膝压稳，头背髋保持稳定。",
+        source: bentKneePushUp01Setup,
+      },
+      {
+        id: "lower",
+        label: "控制下降",
+        description: "屈肘降低身体，不塌腰或抬高臀部。",
+        source: bentKneePushUp02Lower,
+      },
+    ],
+  },
+  PUSH_UP: {
+    primaryRef: "asset://exercise-guides/push-up-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "直臂支撑",
+        description: "双手与双脚压稳，头背髋保持接近直线。",
+        source: pushUp01Setup,
+      },
+      {
+        id: "drive",
+        label: "控制下降",
+        description: "屈肘约四十五度，身体整体靠近地面。",
+        source: pushUp02Drive,
+      },
+      {
+        id: "finish",
+        label: "最低点",
+        description: "核心持续收紧，不塌腰或耸肩。",
+        source: pushUp03Finish,
+      },
+    ],
+  },
+  WALL_PUSH_UP: {
+    primaryRef: "asset://exercise-guides/wall-push-up-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "扶墙支撑",
+        description: "双手撑墙，双脚后移并让身体保持直线。",
+        source: wallPushUp01Setup,
+      },
+      {
+        id: "drive",
+        label: "靠近墙面",
+        description: "屈肘让胸口缓慢靠近墙面。",
+        source: wallPushUp02Drive,
+      },
+      {
+        id: "finish",
+        label: "控制返回",
+        description: "推回起点，避免耸肩或身体折叠。",
+        source: wallPushUp03Finish,
+      },
+    ],
+  },
   SEATED_CABLE_ROW: {
     primaryRef: "asset://exercise-guides/seated-cable-row-01-setup.jpg",
     stages: [
@@ -347,6 +541,29 @@ export const staticGuidesByExerciseCode = {
       },
     ],
   },
+  ONE_ARM_DUMBBELL_ROW: {
+    primaryRef: "asset://exercise-guides/one-arm-dumbbell-row-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "稳定支撑",
+        description: "一手一膝压稳训练凳，负重手自然伸展。",
+        source: oneArmDumbbellRow01Setup,
+      },
+      {
+        id: "drive",
+        label: "向后划船",
+        description: "肘部朝髋部方向移动，躯干不要旋转。",
+        source: oneArmDumbbellRow02Drive,
+      },
+      {
+        id: "finish",
+        label: "背部收紧",
+        description: "哑铃靠近身体后停稳，再受控放下。",
+        source: oneArmDumbbellRow03Finish,
+      },
+    ],
+  },
   DUMBBELL_OVERHEAD_PRESS: {
     primaryRef: "asset://exercise-guides/dumbbell-overhead-press-01-setup.jpg",
     stages: [
@@ -413,6 +630,351 @@ export const staticGuidesByExerciseCode = {
         label: "顶端",
         description: "负重位于身体上方，肩颈保持放松。",
         source: singleArmDumbbellPress03Finish,
+      },
+    ],
+  },
+  DUMBBELL_LATERAL_RAISE: {
+    primaryRef: "asset://exercise-guides/dumbbell-lateral-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让手肘保持轻微弯曲。",
+        source: dumbbellLateralRaise01Setup,
+      },
+      {
+        id: "drive",
+        label: "向侧面抬起",
+        description: "肩部带动手臂平稳向两侧移动。",
+        source: dumbbellLateralRaise02Drive,
+      },
+      {
+        id: "finish",
+        label: "肩部高度",
+        description: "抬到肩部附近停稳，避免耸肩。",
+        source: dumbbellLateralRaise03Finish,
+      },
+    ],
+  },
+  SINGLE_ARM_DUMBBELL_LATERAL_RAISE: {
+    primaryRef: "asset://exercise-guides/single-arm-dumbbell-lateral-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让手肘保持轻微弯曲。",
+        source: singleArmDumbbellLateralRaise01Setup,
+      },
+      {
+        id: "drive",
+        label: "向侧面抬起",
+        description: "肩部带动手臂平稳向两侧移动。",
+        source: singleArmDumbbellLateralRaise02Drive,
+      },
+      {
+        id: "finish",
+        label: "肩部高度",
+        description: "抬到肩部附近停稳，避免耸肩。",
+        source: singleArmDumbbellLateralRaise03Finish,
+      },
+    ],
+  },
+  CABLE_LATERAL_RAISE: {
+    primaryRef: "asset://exercise-guides/cable-lateral-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让手肘保持轻微弯曲。",
+        source: cableLateralRaise01Setup,
+      },
+      {
+        id: "drive",
+        label: "向侧面抬起",
+        description: "肩部带动手臂平稳向两侧移动。",
+        source: cableLateralRaise02Drive,
+      },
+      {
+        id: "finish",
+        label: "肩部高度",
+        description: "抬到肩部附近停稳，避免耸肩。",
+        source: cableLateralRaise03Finish,
+      },
+    ],
+  },
+  DUMBBELL_BICEPS_CURL: {
+    primaryRef: "asset://exercise-guides/dumbbell-biceps-curl-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让上臂贴近身体。",
+        source: dumbbellBicepsCurl01Setup,
+      },
+      {
+        id: "drive",
+        label: "屈肘举起",
+        description: "固定上臂，用手臂前侧带动负重。",
+        source: dumbbellBicepsCurl02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "接近肩部后停稳，不用身体甩动。",
+        source: dumbbellBicepsCurl03Finish,
+      },
+    ],
+  },
+  DUMBBELL_HAMMER_CURL: {
+    primaryRef: "asset://exercise-guides/dumbbell-hammer-curl-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让上臂贴近身体。",
+        source: dumbbellHammerCurl01Setup,
+      },
+      {
+        id: "drive",
+        label: "屈肘举起",
+        description: "固定上臂，用手臂前侧带动负重。",
+        source: dumbbellHammerCurl02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "接近肩部后停稳，不用身体甩动。",
+        source: dumbbellHammerCurl03Finish,
+      },
+    ],
+  },
+  CABLE_BICEPS_CURL: {
+    primaryRef: "asset://exercise-guides/cable-biceps-curl-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "手臂下垂",
+        description: "站稳并让上臂贴近身体。",
+        source: cableBicepsCurl01Setup,
+      },
+      {
+        id: "drive",
+        label: "屈肘举起",
+        description: "固定上臂，用手臂前侧带动负重。",
+        source: cableBicepsCurl02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "接近肩部后停稳，不用身体甩动。",
+        source: cableBicepsCurl03Finish,
+      },
+    ],
+  },
+  CABLE_TRICEPS_PUSHDOWN: {
+    primaryRef: "asset://exercise-guides/cable-triceps-pushdown-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "屈肘准备",
+        description: "固定上臂，让手肘处于可控弯曲位置。",
+        source: cableTricepsPushdown01Setup,
+      },
+      {
+        id: "drive",
+        label: "伸直手肘",
+        description: "只移动前臂，避免身体借力。",
+        source: cableTricepsPushdown02Drive,
+      },
+      {
+        id: "finish",
+        label: "手臂伸展",
+        description: "在手肘接近伸直时停稳，不锁死关节。",
+        source: cableTricepsPushdown03Finish,
+      },
+    ],
+  },
+  DUMBBELL_OVERHEAD_TRICEPS_EXTENSION: {
+    primaryRef: "asset://exercise-guides/dumbbell-overhead-triceps-extension-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "屈肘准备",
+        description: "固定上臂，让手肘处于可控弯曲位置。",
+        source: dumbbellOverheadTricepsExtension01Setup,
+      },
+      {
+        id: "drive",
+        label: "伸直手肘",
+        description: "只移动前臂，避免身体借力。",
+        source: dumbbellOverheadTricepsExtension02Drive,
+      },
+      {
+        id: "finish",
+        label: "手臂伸展",
+        description: "在手肘接近伸直时停稳，不锁死关节。",
+        source: dumbbellOverheadTricepsExtension03Finish,
+      },
+    ],
+  },
+  DUMBBELL_LYING_TRICEPS_EXTENSION: {
+    primaryRef: "asset://exercise-guides/dumbbell-lying-triceps-extension-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "屈肘准备",
+        description: "固定上臂，让手肘处于可控弯曲位置。",
+        source: dumbbellLyingTricepsExtension01Setup,
+      },
+      {
+        id: "drive",
+        label: "伸直手肘",
+        description: "只移动前臂，避免身体借力。",
+        source: dumbbellLyingTricepsExtension02Drive,
+      },
+      {
+        id: "finish",
+        label: "手臂伸展",
+        description: "在手肘接近伸直时停稳，不锁死关节。",
+        source: dumbbellLyingTricepsExtension03Finish,
+      },
+    ],
+  },
+  DUMBBELL_REVERSE_FLY: {
+    primaryRef: "asset://exercise-guides/dumbbell-reverse-fly-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩胛稳定",
+        description: "站稳或俯身后先保持躯干稳定。",
+        source: dumbbellReverseFly01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "肘部向外移动，肩部不要耸起。",
+        source: dumbbellReverseFly02Drive,
+      },
+      {
+        id: "finish",
+        label: "上背收紧",
+        description: "肩部后侧和上背收紧后受控返回。",
+        source: dumbbellReverseFly03Finish,
+      },
+    ],
+  },
+  CABLE_REVERSE_FLY: {
+    primaryRef: "asset://exercise-guides/cable-reverse-fly-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩胛稳定",
+        description: "站稳或俯身后先保持躯干稳定。",
+        source: cableReverseFly01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "肘部向外移动，肩部不要耸起。",
+        source: cableReverseFly02Drive,
+      },
+      {
+        id: "finish",
+        label: "上背收紧",
+        description: "肩部后侧和上背收紧后受控返回。",
+        source: cableReverseFly03Finish,
+      },
+    ],
+  },
+  CABLE_FACE_PULL: {
+    primaryRef: "asset://exercise-guides/cable-face-pull-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩胛稳定",
+        description: "站稳或俯身后先保持躯干稳定。",
+        source: cableFacePull01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "肘部向外移动，肩部不要耸起。",
+        source: cableFacePull02Drive,
+      },
+      {
+        id: "finish",
+        label: "上背收紧",
+        description: "肩部后侧和上背收紧后受控返回。",
+        source: cableFacePull03Finish,
+      },
+    ],
+  },
+  DUMBBELL_SHRUG: {
+    primaryRef: "asset://exercise-guides/dumbbell-shrug-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩部放松",
+        description: "站稳并让双臂自然下垂。",
+        source: dumbbellShrug01Setup,
+      },
+      {
+        id: "drive",
+        label: "垂直耸肩",
+        description: "保持手肘伸展，将肩部垂直抬高。",
+        source: dumbbellShrug02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "肩部抬高后短暂停稳，不转动肩膀。",
+        source: dumbbellShrug03Finish,
+      },
+    ],
+  },
+  CABLE_SHRUG: {
+    primaryRef: "asset://exercise-guides/cable-shrug-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩部放松",
+        description: "站稳并让双臂自然下垂。",
+        source: cableShrug01Setup,
+      },
+      {
+        id: "drive",
+        label: "垂直耸肩",
+        description: "保持手肘伸展，将肩部垂直抬高。",
+        source: cableShrug02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "肩部抬高后短暂停稳，不转动肩膀。",
+        source: cableShrug03Finish,
+      },
+    ],
+  },
+  MACHINE_SHRUG: {
+    primaryRef: "asset://exercise-guides/machine-shrug-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩部放松",
+        description: "站稳并让双臂自然下垂。",
+        source: machineShrug01Setup,
+      },
+      {
+        id: "drive",
+        label: "垂直耸肩",
+        description: "保持手肘伸展，将肩部垂直抬高。",
+        source: machineShrug02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端停稳",
+        description: "肩部抬高后短暂停稳，不转动肩膀。",
+        source: machineShrug03Finish,
       },
     ],
   },
@@ -531,6 +1093,40 @@ export const staticGuidesByExerciseCode = {
       },
     ],
   },
+  FLOOR_PRONE_COBRA: {
+    primaryRef: "asset://exercise-guides/floor-prone-cobra-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "俯卧准备",
+        description: "双臂放在身体两侧，颈部保持自然。",
+        source: floorProneCobra01Setup,
+      },
+      {
+        id: "lift",
+        label: "收紧抬起",
+        description: "肩胛轻轻收拢并小幅抬起上胸，不用腰部后仰借力。",
+        source: floorProneCobra02Lift,
+      },
+    ],
+  },
+  CONTRALATERAL_LIMB_RAISE: {
+    primaryRef: "asset://exercise-guides/contralateral-limb-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "俯卧准备",
+        description: "手臂和双腿自然伸展，骨盆保持稳定。",
+        source: contralateralLimbRaise01Setup,
+      },
+      {
+        id: "raise",
+        label: "对侧抬起",
+        description: "一侧手臂与对侧腿小幅抬起，躯干不要旋转。",
+        source: contralateralLimbRaise02Raise,
+      },
+    ],
+  },
   DEAD_BUG: {
     primaryRef: "asset://exercise-guides/dead-bug-01-setup.jpg",
     stages: [
@@ -618,6 +1214,12 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/bodyweight-squat-01-setup.jpg": bodyweightSquat01Setup,
   "asset://exercise-guides/bodyweight-squat-02-drive.jpg": bodyweightSquat02Drive,
   "asset://exercise-guides/bodyweight-squat-03-finish.jpg": bodyweightSquat03Finish,
+  "asset://exercise-guides/prisoner-squat-01-setup.jpg": prisonerSquat01Setup,
+  "asset://exercise-guides/prisoner-squat-02-drive.jpg": prisonerSquat02Drive,
+  "asset://exercise-guides/prisoner-squat-03-finish.jpg": prisonerSquat03Finish,
+  "asset://exercise-guides/standing-wall-calf-raise-01-setup.jpg": standingWallCalfRaise01Setup,
+  "asset://exercise-guides/standing-wall-calf-raise-02-drive.jpg": standingWallCalfRaise02Drive,
+  "asset://exercise-guides/standing-wall-calf-raise-03-finish.jpg": standingWallCalfRaise03Finish,
   "asset://exercise-guides/dumbbell-romanian-deadlift-01-setup.jpg": dumbbellRomanianDeadlift01Setup,
   "asset://exercise-guides/dumbbell-romanian-deadlift-02-drive.jpg": dumbbellRomanianDeadlift02Drive,
   "asset://exercise-guides/dumbbell-romanian-deadlift-03-finish.jpg": dumbbellRomanianDeadlift03Finish,
@@ -627,6 +1229,8 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/bodyweight-hip-hinge-01-setup.jpg": bodyweightHipHinge01Setup,
   "asset://exercise-guides/bodyweight-hip-hinge-02-drive.jpg": bodyweightHipHinge02Drive,
   "asset://exercise-guides/bodyweight-hip-hinge-03-finish.jpg": bodyweightHipHinge03Finish,
+  "asset://exercise-guides/glute-bridge-exercise-01-setup.jpg": gluteBridgeExercise01Setup,
+  "asset://exercise-guides/glute-bridge-exercise-02-lift.jpg": gluteBridgeExercise02Lift,
   "asset://exercise-guides/dumbbell-bench-press-01-setup.jpg": dumbbellBenchPress01Setup,
   "asset://exercise-guides/dumbbell-bench-press-02-drive.jpg": dumbbellBenchPress02Drive,
   "asset://exercise-guides/dumbbell-bench-press-03-finish.jpg": dumbbellBenchPress03Finish,
@@ -636,6 +1240,14 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/incline-push-up-01-setup.jpg": inclinePushUp01Setup,
   "asset://exercise-guides/incline-push-up-02-drive.jpg": inclinePushUp02Drive,
   "asset://exercise-guides/incline-push-up-03-finish.jpg": inclinePushUp03Finish,
+  "asset://exercise-guides/bent-knee-push-up-01-setup.jpg": bentKneePushUp01Setup,
+  "asset://exercise-guides/bent-knee-push-up-02-lower.jpg": bentKneePushUp02Lower,
+  "asset://exercise-guides/push-up-01-setup.jpg": pushUp01Setup,
+  "asset://exercise-guides/push-up-02-drive.jpg": pushUp02Drive,
+  "asset://exercise-guides/push-up-03-finish.jpg": pushUp03Finish,
+  "asset://exercise-guides/wall-push-up-01-setup.jpg": wallPushUp01Setup,
+  "asset://exercise-guides/wall-push-up-02-drive.jpg": wallPushUp02Drive,
+  "asset://exercise-guides/wall-push-up-03-finish.jpg": wallPushUp03Finish,
   "asset://exercise-guides/seated-cable-row-01-setup.jpg": seatedCableRow01Setup,
   "asset://exercise-guides/seated-cable-row-02-drive.jpg": seatedCableRow02Drive,
   "asset://exercise-guides/seated-cable-row-03-finish.jpg": seatedCableRow03Finish,
@@ -645,6 +1257,9 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/cable-single-arm-row-01-setup.jpg": cableSingleArmRow01Setup,
   "asset://exercise-guides/cable-single-arm-row-02-drive.jpg": cableSingleArmRow02Drive,
   "asset://exercise-guides/cable-single-arm-row-03-finish.jpg": cableSingleArmRow03Finish,
+  "asset://exercise-guides/one-arm-dumbbell-row-01-setup.jpg": oneArmDumbbellRow01Setup,
+  "asset://exercise-guides/one-arm-dumbbell-row-02-drive.jpg": oneArmDumbbellRow02Drive,
+  "asset://exercise-guides/one-arm-dumbbell-row-03-finish.jpg": oneArmDumbbellRow03Finish,
   "asset://exercise-guides/dumbbell-overhead-press-01-setup.jpg": dumbbellOverheadPress01Setup,
   "asset://exercise-guides/dumbbell-overhead-press-02-drive.jpg": dumbbellOverheadPress02Drive,
   "asset://exercise-guides/dumbbell-overhead-press-03-finish.jpg": dumbbellOverheadPress03Finish,
@@ -654,6 +1269,51 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/single-arm-dumbbell-press-01-setup.jpg": singleArmDumbbellPress01Setup,
   "asset://exercise-guides/single-arm-dumbbell-press-02-drive.jpg": singleArmDumbbellPress02Drive,
   "asset://exercise-guides/single-arm-dumbbell-press-03-finish.jpg": singleArmDumbbellPress03Finish,
+  "asset://exercise-guides/dumbbell-lateral-raise-01-setup.jpg": dumbbellLateralRaise01Setup,
+  "asset://exercise-guides/dumbbell-lateral-raise-02-drive.jpg": dumbbellLateralRaise02Drive,
+  "asset://exercise-guides/dumbbell-lateral-raise-03-finish.jpg": dumbbellLateralRaise03Finish,
+  "asset://exercise-guides/single-arm-dumbbell-lateral-raise-01-setup.jpg": singleArmDumbbellLateralRaise01Setup,
+  "asset://exercise-guides/single-arm-dumbbell-lateral-raise-02-drive.jpg": singleArmDumbbellLateralRaise02Drive,
+  "asset://exercise-guides/single-arm-dumbbell-lateral-raise-03-finish.jpg": singleArmDumbbellLateralRaise03Finish,
+  "asset://exercise-guides/cable-lateral-raise-01-setup.jpg": cableLateralRaise01Setup,
+  "asset://exercise-guides/cable-lateral-raise-02-drive.jpg": cableLateralRaise02Drive,
+  "asset://exercise-guides/cable-lateral-raise-03-finish.jpg": cableLateralRaise03Finish,
+  "asset://exercise-guides/dumbbell-biceps-curl-01-setup.jpg": dumbbellBicepsCurl01Setup,
+  "asset://exercise-guides/dumbbell-biceps-curl-02-drive.jpg": dumbbellBicepsCurl02Drive,
+  "asset://exercise-guides/dumbbell-biceps-curl-03-finish.jpg": dumbbellBicepsCurl03Finish,
+  "asset://exercise-guides/dumbbell-hammer-curl-01-setup.jpg": dumbbellHammerCurl01Setup,
+  "asset://exercise-guides/dumbbell-hammer-curl-02-drive.jpg": dumbbellHammerCurl02Drive,
+  "asset://exercise-guides/dumbbell-hammer-curl-03-finish.jpg": dumbbellHammerCurl03Finish,
+  "asset://exercise-guides/cable-biceps-curl-01-setup.jpg": cableBicepsCurl01Setup,
+  "asset://exercise-guides/cable-biceps-curl-02-drive.jpg": cableBicepsCurl02Drive,
+  "asset://exercise-guides/cable-biceps-curl-03-finish.jpg": cableBicepsCurl03Finish,
+  "asset://exercise-guides/cable-triceps-pushdown-01-setup.jpg": cableTricepsPushdown01Setup,
+  "asset://exercise-guides/cable-triceps-pushdown-02-drive.jpg": cableTricepsPushdown02Drive,
+  "asset://exercise-guides/cable-triceps-pushdown-03-finish.jpg": cableTricepsPushdown03Finish,
+  "asset://exercise-guides/dumbbell-overhead-triceps-extension-01-setup.jpg": dumbbellOverheadTricepsExtension01Setup,
+  "asset://exercise-guides/dumbbell-overhead-triceps-extension-02-drive.jpg": dumbbellOverheadTricepsExtension02Drive,
+  "asset://exercise-guides/dumbbell-overhead-triceps-extension-03-finish.jpg": dumbbellOverheadTricepsExtension03Finish,
+  "asset://exercise-guides/dumbbell-lying-triceps-extension-01-setup.jpg": dumbbellLyingTricepsExtension01Setup,
+  "asset://exercise-guides/dumbbell-lying-triceps-extension-02-drive.jpg": dumbbellLyingTricepsExtension02Drive,
+  "asset://exercise-guides/dumbbell-lying-triceps-extension-03-finish.jpg": dumbbellLyingTricepsExtension03Finish,
+  "asset://exercise-guides/dumbbell-reverse-fly-01-setup.jpg": dumbbellReverseFly01Setup,
+  "asset://exercise-guides/dumbbell-reverse-fly-02-drive.jpg": dumbbellReverseFly02Drive,
+  "asset://exercise-guides/dumbbell-reverse-fly-03-finish.jpg": dumbbellReverseFly03Finish,
+  "asset://exercise-guides/cable-reverse-fly-01-setup.jpg": cableReverseFly01Setup,
+  "asset://exercise-guides/cable-reverse-fly-02-drive.jpg": cableReverseFly02Drive,
+  "asset://exercise-guides/cable-reverse-fly-03-finish.jpg": cableReverseFly03Finish,
+  "asset://exercise-guides/cable-face-pull-01-setup.jpg": cableFacePull01Setup,
+  "asset://exercise-guides/cable-face-pull-02-drive.jpg": cableFacePull02Drive,
+  "asset://exercise-guides/cable-face-pull-03-finish.jpg": cableFacePull03Finish,
+  "asset://exercise-guides/dumbbell-shrug-01-setup.jpg": dumbbellShrug01Setup,
+  "asset://exercise-guides/dumbbell-shrug-02-drive.jpg": dumbbellShrug02Drive,
+  "asset://exercise-guides/dumbbell-shrug-03-finish.jpg": dumbbellShrug03Finish,
+  "asset://exercise-guides/cable-shrug-01-setup.jpg": cableShrug01Setup,
+  "asset://exercise-guides/cable-shrug-02-drive.jpg": cableShrug02Drive,
+  "asset://exercise-guides/cable-shrug-03-finish.jpg": cableShrug03Finish,
+  "asset://exercise-guides/machine-shrug-01-setup.jpg": machineShrug01Setup,
+  "asset://exercise-guides/machine-shrug-02-drive.jpg": machineShrug02Drive,
+  "asset://exercise-guides/machine-shrug-03-finish.jpg": machineShrug03Finish,
   "asset://exercise-guides/lat-pulldown-01-setup.jpg": latPulldown01Setup,
   "asset://exercise-guides/lat-pulldown-02-drive.jpg": latPulldown02Drive,
   "asset://exercise-guides/lat-pulldown-03-finish.jpg": latPulldown03Finish,
@@ -669,6 +1329,10 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/prone-y-raise-01-setup.jpg": proneYRaise01Setup,
   "asset://exercise-guides/prone-y-raise-02-drive.jpg": proneYRaise02Drive,
   "asset://exercise-guides/prone-y-raise-03-finish.jpg": proneYRaise03Finish,
+  "asset://exercise-guides/floor-prone-cobra-01-setup.jpg": floorProneCobra01Setup,
+  "asset://exercise-guides/floor-prone-cobra-02-lift.jpg": floorProneCobra02Lift,
+  "asset://exercise-guides/contralateral-limb-raise-01-setup.jpg": contralateralLimbRaise01Setup,
+  "asset://exercise-guides/contralateral-limb-raise-02-raise.jpg": contralateralLimbRaise02Raise,
   "asset://exercise-guides/dead-bug-01-setup.jpg": deadBug01Setup,
   "asset://exercise-guides/dead-bug-02-extend.jpg": deadBug02Extend,
   "asset://exercise-guides/dead-bug-03-control.jpg": deadBug03Control,

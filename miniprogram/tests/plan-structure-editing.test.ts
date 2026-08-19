@@ -69,6 +69,26 @@ describe('plan structure editing', () => {
       statusCode: 200,
       data: {
         data: { items: [{
+          exerciseCode: 'DUMBBELL_FRONT_SQUAT', name: '双哑铃前蹲', workSets: 3,
+          repMin: 8, repMax: 12, restSeconds: 90, weightStatus: 'KNOWN', targetWeightKg: 12,
+          movementPattern: 'SQUAT', primaryMuscles: ['GLUTES', 'QUADRICEPS'],
+          equipment: ['DUMBBELL'], matchReason: 'SAME_PATTERN_MUSCLES_DIFFICULTY',
+        }] },
+        meta: { requestId: 'request-replacement', serverTime: '2026-07-25T00:00:00Z' },
+      },
+    })
+    await expect(client.listPlanExerciseReplacements('plan / 1', 'DAY A', 'GOBLET/SQUAT'))
+      .resolves.toHaveLength(1)
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      url: 'http://127.0.0.1:8080/api/v1/plans/plan%20%2F%201/exercise-replacements'
+        + '?dayCode=DAY%20A&sourceExerciseCode=GOBLET%2FSQUAT',
+      method: 'GET',
+    }))
+
+    request.mockResolvedValueOnce({
+      statusCode: 200,
+      data: {
+        data: { items: [{
           code: 'DAY_B', name: '训练日 B', exercises: [{
             exerciseCode: 'PRESS', name: '哑铃卧推', workSets: 3,
             repMin: 8, repMax: 12, restSeconds: 90, weightStatus: 'NEEDS_CALIBRATION',

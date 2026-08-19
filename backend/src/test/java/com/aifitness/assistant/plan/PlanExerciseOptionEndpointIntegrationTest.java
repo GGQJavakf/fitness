@@ -5,11 +5,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.FitnessAssistantApplication;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -38,6 +40,17 @@ class PlanExerciseOptionEndpointIntegrationTest {
                 .andReturn().getResponse().getContentAsString());
         String planId = active.at("/data/planId").asText();
         String dayCode = active.at("/data/activeVersion/plan/days/0/code").asText();
+        JsonNode sourceExercise = null;
+        for (JsonNode exercise : active.at("/data/activeVersion/plan/days/0/exercises")) {
+            if (Set.of("GOBLET_SQUAT", "DUMBBELL_BENCH_PRESS", "DUMBBELL_OVERHEAD_PRESS",
+                    "SEATED_CABLE_ROW", "DUMBBELL_ROMANIAN_DEADLIFT")
+                    .contains(exercise.path("exerciseCode").asText())) {
+                sourceExercise = exercise;
+                break;
+            }
+        }
+        assertThat(sourceExercise).as("active plan must contain a reviewed replacement source").isNotNull();
+        String sourceExerciseCode = sourceExercise.path("exerciseCode").asText();
 
         mvc.perform(get("/api/v1/plans/{planId}/exercise-options", planId)
                         .queryParam("dayCode", dayCode)
@@ -51,6 +64,32 @@ class PlanExerciseOptionEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.items[0].repMax").isNumber())
                 .andExpect(jsonPath("$.data.items[0].restSeconds").isNumber())
                 .andExpect(jsonPath("$.data.items[0].weightStatus").value("NEEDS_CALIBRATION"));
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-replacements", planId)
+                        .queryParam("dayCode", dayCode)
+                        .queryParam("sourceExerciseCode", sourceExerciseCode)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].exerciseCode").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].exerciseCode").value(
+                        org.hamcrest.Matchers.not(sourceExerciseCode)))
+                .andExpect(jsonPath("$.data.items[0].workSets").value(sourceExercise.path("workSets").asInt()))
+                .andExpect(jsonPath("$.data.items[0].repMin").value(sourceExercise.path("repMin").asInt()))
+                .andExpect(jsonPath("$.data.items[0].repMax").value(sourceExercise.path("repMax").asInt()))
+                .andExpect(jsonPath("$.data.items[0].restSeconds").value(sourceExercise.path("restSeconds").asInt()))
+                .andExpect(jsonPath("$.data.items[0].movementPattern").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].primaryMuscles").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].equipment").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].matchReason")
+                        .value("SAME_PATTERN_MUSCLES_DIFFICULTY"));
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-replacements", planId)
+                        .queryParam("dayCode", dayCode)
+                        .queryParam("sourceExerciseCode", "NOT_IN_DAY")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
 
         String otherUser = login();
         mvc.perform(get("/api/v1/plans/{planId}/exercise-options", planId)

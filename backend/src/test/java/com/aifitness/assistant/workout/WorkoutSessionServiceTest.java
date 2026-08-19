@@ -7,6 +7,7 @@ import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
+import com.aifitness.assistant.workout.application.WorkoutWarmupPrescriptionService;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
 import com.aifitness.assistant.workout.infrastructure.InMemoryWorkoutSessionRepository;
@@ -16,7 +17,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.math.BigDecimal;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class WorkoutSessionServiceTest {
 
@@ -74,6 +79,76 @@ class WorkoutSessionServiceTest {
         assertThatThrownBy(() -> service.get(
                 new AuthenticatedUserId(UUID.randomUUID()), created.id()))
                 .isInstanceOf(WorkoutSessionService.SessionNotFoundException.class);
+    }
+
+    @Test
+    void genericStatusUpdateCannotBypassAuthoritativeCompletion() {
+        WorkoutSessionService service = service((userId, planId, versionNo, dayCode) -> planSnapshot());
+        WorkoutSession created = service.start(
+                new AuthenticatedUserId(USER_ID),
+                new WorkoutSessionService.StartCommand("client-session-001", PLAN_ID, 1, "DAY_1"));
+        WorkoutSession active = service.transition(
+                new AuthenticatedUserId(USER_ID), created.id(), WorkoutStatus.IN_PROGRESS, 0);
+
+        assertThatThrownBy(() -> service.transition(
+                new AuthenticatedUserId(USER_ID), active.id(), WorkoutStatus.COMPLETING, active.version()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.transition(
+                new AuthenticatedUserId(USER_ID), active.id(), WorkoutStatus.COMPLETED, active.version()))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.get(new AuthenticatedUserId(USER_ID), active.id()).status())
+                .isEqualTo(WorkoutStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void storesVersionedWarmupPrescriptionAgainstTheSelectedSnapshotExercise() {
+        PlanWorkoutSnapshotQuery plans = (userId, planId, versionNo, dayCode) -> new PlanWorkoutSnapshotQuery.PlanDaySource(
+                PLAN_ID, VERSION_ID, 1, DAY_ID, "DAY_1",
+                List.of(
+                        new PlanWorkoutSnapshotQuery.ExerciseSource(
+                                UUID.fromString("00000000-0000-0000-0000-000000000205"),
+                                1, "DEAD_BUG", "死虫式", "content-v1", java.util.Set.of("BODYWEIGHT"),
+                                3, 8, 12, 90, "BODYWEIGHT", "KG"),
+                        new PlanWorkoutSnapshotQuery.ExerciseSource(
+                                UUID.fromString("00000000-0000-0000-0000-000000000206"),
+                                2, "DB_SQUAT", "哑铃深蹲", "content-v1", java.util.Set.of("DUMBBELL"),
+                                3, 8, 12, 90, "KNOWN", Optional.of(new BigDecimal("20")), "KG")));
+        WorkoutWarmupPrescriptionService warmups = mock(WorkoutWarmupPrescriptionService.class);
+        when(warmups.prescribe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList()))
+                .thenReturn(new com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.Prescription(
+                        "workout-warmup-prescription-v1",
+                        "1.3.0",
+                        new com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.GeneralWarmup(1, 180),
+                        Optional.of(new com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.RampWarmup(
+                                2,
+                                com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.RampStatus.READY,
+                                Optional.of("DUMBBELL"),
+                                List.of(new com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.RampSet(
+                                        new BigDecimal("10"), 10)),
+                                Optional.empty(),
+                                Optional.empty())),
+                        false,
+                        false));
+        AtomicInteger sequence = new AtomicInteger(300);
+        WorkoutSessionService service = new WorkoutSessionService(
+                new InMemoryWorkoutSessionRepository(), plans, Clock.fixed(NOW, ZoneOffset.UTC),
+                () -> new UUID(0, sequence.getAndIncrement()), warmups);
+
+        WorkoutSession created = service.start(
+                new AuthenticatedUserId(USER_ID),
+                new WorkoutSessionService.StartCommand("client-session-001", PLAN_ID, 1, "DAY_1"));
+
+        assertThat(created.warmupPrescription()).get().satisfies(prescription -> {
+            assertThat(prescription.schemaVersion()).isEqualTo("workout-warmup-prescription-v1");
+            assertThat(prescription.generalWarmup().occurrences()).isEqualTo(1);
+            assertThat(prescription.rampWarmup()).get().satisfies(ramp -> {
+                assertThat(ramp.exerciseOrder()).isEqualTo(2);
+                assertThat(ramp.exerciseId()).isEqualTo(created.exercises().get(1).id());
+                assertThat(ramp.sets()).extracting(set -> set.weightKg()).containsExactly(new BigDecimal("10"));
+            });
+            assertThat(prescription.countsTowardTrainingVolume()).isFalse();
+            assertThat(prescription.countsTowardProgression()).isFalse();
+        });
     }
 
     private static WorkoutSessionService service(PlanWorkoutSnapshotQuery plans) {

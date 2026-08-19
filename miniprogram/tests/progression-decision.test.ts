@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createRecommendationActionGate,
+  progressionApplyIdempotencyKey,
   toProgressionCard,
   type ProgressionRecommendationData,
 } from '../src/application/progression'
@@ -63,5 +64,13 @@ describe('progression recommendation presentation', () => {
     expect(gate.tryStart('recommendation-1')).toBe(false)
     gate.finish('recommendation-1')
     expect(gate.tryStart('recommendation-1')).toBe(true)
+  })
+
+  it('reuses a stable apply idempotency key after a lost response', () => {
+    const first = progressionApplyIdempotencyKey('recommendation-1', 42.5, 3)
+    const retry = progressionApplyIdempotencyKey('recommendation-1', 42.5, 3)
+
+    expect(first).toBe('progression-recommendation-1-42.5-v3')
+    expect(retry).toBe(first)
   })
 })

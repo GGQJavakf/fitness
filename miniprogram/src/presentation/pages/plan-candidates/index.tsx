@@ -1,5 +1,5 @@
 import { Button, Text, View } from '@tarojs/components'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { exerciseDisplayName } from '../../copy'
@@ -13,6 +13,7 @@ export default function PlanCandidatesPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [explanation, setExplanation] = useState(candidate?.explanationMessage ?? '')
+  const actionInFlight = useRef(false)
   const exerciseCount = candidate?.days.reduce((total, day) => total + day.exercises.length, 0) ?? 0
 
   useEffect(() => {
@@ -25,6 +26,8 @@ export default function PlanCandidatesPage() {
   }, [candidate?.candidateId, candidate?.generationSource])
 
   async function startFirstWorkout(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
     setBusy(true)
     setError('')
     try {
@@ -36,18 +39,21 @@ export default function PlanCandidatesPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '科学计划暂时无法启用，请稍后重试')
     } finally {
+      actionInFlight.current = false
       setBusy(false)
     }
   }
 
   async function adjustCandidate(): Promise<void> {
-    if (candidate?.action?.route === 'ONBOARDING_EQUIPMENT') {
+    if (candidate?.action) {
       application.resumeOnboarding(candidate.action.route)
     }
     await application.navigation.replace('ONBOARDING')
   }
 
   async function editCandidate(): Promise<void> {
+    if (actionInFlight.current) return
+    actionInFlight.current = true
     setBusy(true)
     setError('')
     try {
@@ -57,6 +63,7 @@ export default function PlanCandidatesPage() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '计划编辑器暂时无法打开，请稍后重试')
     } finally {
+      actionInFlight.current = false
       setBusy(false)
     }
   }
@@ -85,21 +92,21 @@ export default function PlanCandidatesPage() {
           <Text className='recommendation-hero__eyebrow'>
             {candidate.generationSource === 'AI_PERSONALIZED'
               ? 'AI PERSONALIZED PLAN'
-              : 'SAFE FALLBACK PLAN'}
+              : 'RULE-BASED TRAINING PLAN'}
           </Text>
         </View>
         <Text className='recommendation-hero__title'>
           {candidate.status === 'READY'
             ? candidate.generationSource === 'AI_PERSONALIZED'
               ? '你的 AI 个性化训练方案'
-              : '你的基础保底训练方案'
+              : '你的规则生成训练方案'
             : '需要补充训练条件'}
         </Text>
         <Text className='recommendation-hero__subtitle'>
           {candidate.status === 'READY'
             ? candidate.generationSource === 'AI_PERSONALIZED'
               ? 'AI 已结合目标、经验、训练频率、器械与额外偏好生成，并通过服务端规则校验。'
-              : 'AI 本次不可用，已按你的档案与器械生成规则保底计划；稍后可重新生成。'
+              : '已按你的档案与器械由确定性规则引擎生成，并通过安全校验。'
             : '当前信息暂时无法组成安全有效的训练方案。'}
         </Text>
         {candidate.generationLabel && (

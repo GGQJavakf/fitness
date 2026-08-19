@@ -13,6 +13,7 @@ function history(
   return {
     sessionId: `${trainingDayCode}-${completedAt}`,
     trainingDayCode,
+    trainingDayName: trainingDayCode,
     status,
     startedAt: completedAt,
     completedAt,

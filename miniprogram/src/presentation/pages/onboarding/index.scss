@@ -104,38 +104,6 @@
   flex: 0 0 auto;
 }
 
-.onboarding__requirements {
-  padding: 22px;
-  border: 2px solid #d4ddd8;
-  border-radius: 18px;
-  background: #f4f0e8;
-}
-
-.onboarding__requirements-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.onboarding__requirements-count {
-  color: #68716c;
-  font-size: 23px;
-}
-
-.onboarding__requirements-input {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 164px;
-  padding: 20px;
-  border: 2px solid #bcc9c3;
-  border-radius: 14px;
-  color: #202522;
-  background: #fff;
-  font-size: 27px;
-  line-height: 1.55;
-}
-
 .onboarding__requirements-help {
   color: #68716c;
   font-size: 23px;
@@ -147,6 +115,13 @@
   border: 2px solid #d4ddd8;
   border-radius: 18px;
   background: #f8fbfa;
+}
+
+.onboarding__ai-consent {
+  padding: 22px;
+  border: 2px solid #b9cec9;
+  border-radius: 18px;
+  background: #f3f7f6;
 }
 
 .onboarding__preference-list {

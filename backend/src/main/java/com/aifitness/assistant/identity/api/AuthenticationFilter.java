@@ -60,8 +60,11 @@ public final class AuthenticationFilter extends OncePerRequestFilter {
         AuthenticatedUserId userId;
         try {
             userId = loginService.authenticate(bearerToken(request.getHeader("Authorization")));
+        } catch (WechatLoginService.AccessRevokedException exception) {
+            writeUnauthorized(response, ErrorCode.ACCESS_REVOKED, "账号访问已终止");
+            return;
         } catch (IllegalArgumentException | WechatLoginService.AuthenticationRequiredException exception) {
-            writeUnauthorized(response);
+            writeUnauthorized(response, ErrorCode.AUTHENTICATION_REQUIRED, "登录状态已失效");
             return;
         }
         request.setAttribute(AUTHENTICATED_USER_ATTRIBUTE, userId);
@@ -79,14 +82,15 @@ public final class AuthenticationFilter extends OncePerRequestFilter {
         return token;
     }
 
-    private void writeUnauthorized(HttpServletResponse response) throws IOException {
+    private void writeUnauthorized(
+            HttpServletResponse response, ErrorCode code, String message) throws IOException {
         String requestId = MDC.get("requestId");
         if (requestId == null || requestId.isBlank()) {
             requestId = UUID.randomUUID().toString();
         }
         ApiError error = new ApiError(
-                ErrorCode.AUTHENTICATION_REQUIRED,
-                "登录状态已失效",
+                code,
+                message,
                 List.of(),
                 Map.of(),
                 false);

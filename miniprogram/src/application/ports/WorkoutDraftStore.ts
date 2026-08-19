@@ -20,8 +20,9 @@ export interface WorkoutDraft {
 
 export interface WorkoutDraftStore {
   loadActive(): Promise<WorkoutDraft | null>
-  save(draft: WorkoutDraft): Promise<void>
+  save(draft: WorkoutDraft, expectedRevision?: number | null): Promise<void>
   clearActive(expectedDraftId: string): Promise<void>
+  discardCorrupted?(): Promise<void>
 }
 
 export class WorkoutDraftCorruptedError extends Error {
@@ -35,5 +36,19 @@ export class WorkoutDraftStorageFullError extends Error {
   constructor() {
     super('workout draft storage is full; the active draft was preserved')
     this.name = 'WorkoutDraftStorageFullError'
+  }
+}
+
+export class WorkoutDraftRecoveryRequiredError extends Error {
+  constructor(message = 'workout draft recovery is required') {
+    super(message)
+    this.name = 'WorkoutDraftRecoveryRequiredError'
+  }
+}
+
+export class WorkoutDraftRevisionConflictError extends Error {
+  constructor() {
+    super('workout draft revision changed before save')
+    this.name = 'WorkoutDraftRevisionConflictError'
   }
 }

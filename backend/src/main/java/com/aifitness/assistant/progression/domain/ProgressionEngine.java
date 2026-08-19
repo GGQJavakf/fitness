@@ -82,7 +82,11 @@ public final class ProgressionEngine {
     private static ProgressionDecision increase(
             ProgressionDecision.Prescription current, EnginePolicy policy, EquipmentRoundingPolicy equipment,
             ProgressionDecision.ReasonCode reason) {
-        BigDecimal recommended = equipment.increaseOneStep(current.weightKg());
+        Optional<BigDecimal> reachable = equipment.increaseOneStep(current.weightKg());
+        if (reachable.isEmpty()) {
+            return review(current, policy, ProgressionDecision.ReasonCode.CONFLICTING_INPUT);
+        }
+        BigDecimal recommended = reachable.orElseThrow();
         return changed(ProgressionDecision.Decision.INCREASE, current, current.withWeight(recommended),
                 recommended, recommended, EquipmentRoundingPolicy.INCREASE_RULE, policy, equipment, reason);
     }
@@ -91,7 +95,11 @@ public final class ProgressionEngine {
             ProgressionDecision.Prescription current, EnginePolicy policy, EquipmentRoundingPolicy equipment,
             ProgressionDecision.ReasonCode reason) {
         BigDecimal raw = current.weightKg().multiply(BigDecimal.ONE.subtract(policy.reductionRate()));
-        BigDecimal rounded = equipment.roundReduction(current.weightKg(), raw);
+        Optional<BigDecimal> reachable = equipment.roundReduction(current.weightKg(), raw);
+        if (reachable.isEmpty()) {
+            return review(current, policy, ProgressionDecision.ReasonCode.CONFLICTING_INPUT);
+        }
+        BigDecimal rounded = reachable.orElseThrow();
         return changed(ProgressionDecision.Decision.REDUCE, current, current.withWeight(rounded), raw, rounded,
                 EquipmentRoundingPolicy.REDUCTION_RULE, policy, equipment, reason);
     }

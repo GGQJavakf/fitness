@@ -19,7 +19,7 @@
 .main-navigation__item {
   position: relative;
   display: flex;
-  min-height: 78px;
+  min-height: 88px;
   padding: 0;
   flex-direction: column;
   gap: 8px;
@@ -58,7 +58,7 @@
   }
 
   .main-navigation__item {
-    min-height: 72px;
+    min-height: 88px;
     font-size: 22px;
   }
 }

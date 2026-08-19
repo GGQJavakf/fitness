@@ -47,7 +47,7 @@
   display: block;
   margin-top: 7px;
   color: rgba(255, 255, 255, 0.58);
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .session-hero--warmup,
@@ -80,7 +80,7 @@
 .session-timer__label {
   margin-top: 14px;
   color: rgba(255, 255, 255, 0.62);
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .session-guide {
@@ -103,14 +103,14 @@
 
 .session-guide__index {
   color: #0f6b57;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .session-passive-note {
   display: block;
   margin: 4px 0 30px;
   color: #748078;
-  font-size: 21px;
+  font-size: 22px;
   text-align: center;
 }
 
@@ -141,7 +141,7 @@
   border-radius: 18px;
   background: #edf7f2;
   color: #245f50;
-  font-size: 21px;
+  font-size: 22px;
   line-height: 1.45;
 }
 
@@ -195,7 +195,7 @@
 }
 
 .session-field-heading .field-helper {
-  font-size: 18px;
+  font-size: 22px;
   white-space: nowrap;
 }
 
@@ -239,7 +239,7 @@
 
 .session-formal-weight__label {
   color: #507068;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .session-formal-weight__value {
@@ -252,7 +252,7 @@
 .session-formal-weight__hint {
   margin-top: 2px;
   color: #5f786f;
-  font-size: 19px;
+  font-size: 22px;
 }
 
 .session-formal-weight__edit {
@@ -263,7 +263,7 @@
   border-radius: 16px;
   background: #fff;
   color: #0f6b57;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 58px;
 }
 
@@ -271,12 +271,12 @@
   min-height: 42px;
   padding: 0 12px;
   border-radius: 13px;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 42px;
 }
 
 .session-formal-weight--compact .session-formal-weight__label {
-  font-size: 19px;
+  font-size: 22px;
 }
 
 .session-formal-weight--compact .session-formal-weight__value {
@@ -284,7 +284,7 @@
 }
 
 .session-formal-weight--compact .session-formal-weight__hint {
-  font-size: 17px;
+  font-size: 22px;
 }
 
 .session-auto-warmup {
@@ -309,7 +309,7 @@
 
 .session-auto-warmup__eyebrow {
   color: #8fe2c2;
-  font-size: 20px;
+  font-size: 22px;
   letter-spacing: 1px;
 }
 
@@ -334,7 +334,7 @@
 
 .metric-input-wrap {
   display: grid;
-  min-height: 62px;
+  min-height: 88px;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   border: 1px solid #cad8d1;
@@ -356,14 +356,14 @@
 .metric-input-unit {
   padding-right: 14px;
   color: #748078;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .session-field-error {
   display: block;
   margin-top: 6px;
   color: #a8443b;
-  font-size: 19px;
+  font-size: 22px;
   line-height: 1.4;
 }
 
@@ -373,7 +373,7 @@
   border-radius: 14px;
   background: #fff1ef;
   color: #8f3932;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.45;
 }
 
@@ -381,7 +381,7 @@
 .session-inline-message {
   padding: 13px 16px;
   border-radius: 15px;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.5;
 }
 
@@ -413,14 +413,14 @@
   border-radius: 14px;
   background: #f7faf8;
   color: #0b2f28;
-  font-size: 20px;
+  font-size: 22px;
   justify-content: space-between;
   align-items: center;
 }
 
 .session-effort__toggle text:last-child {
   color: #0f6b57;
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .rir-options {
@@ -438,7 +438,7 @@
   border-radius: 17px;
   background: #fffefb;
   color: #435149;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .rir-option--selected {
@@ -454,7 +454,7 @@
   justify-content: flex-start;
   background: transparent;
   color: #0f6b57;
-  font-size: 21px;
+  font-size: 22px;
   text-align: left;
 }
 
@@ -482,7 +482,7 @@
   min-width: 0;
   min-height: 88px;
   padding: 0 8px;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .workout-actions__pain {
@@ -490,7 +490,7 @@
   grid-column: 1 / -1;
   background: transparent;
   color: #a8443b;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .session-motion-section {
@@ -534,13 +534,13 @@
 
 .session-exercise-guidance__meta {
   color: #748078;
-  font-size: 18px;
+  font-size: 22px;
 }
 
 .session-exercise-guidance__description {
   margin-top: 8px;
   color: #435149;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.5;
 }
 
@@ -563,12 +563,12 @@
 
 .session-exercise-step__index {
   color: #0f6b57;
-  font-size: 17px;
+  font-size: 22px;
 }
 
 .session-exercise-step__text {
   color: #27322d;
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1.5;
 }
 
@@ -608,26 +608,26 @@
 .session-exercise-coaching__title {
   margin-bottom: 5px;
   color: #0b2f28;
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 700;
 }
 
 .session-exercise-coaching__item {
   color: #45675d;
-  font-size: 17px;
+  font-size: 22px;
   line-height: 1.5;
 }
 
 .session-exercise-safety__title {
   margin-bottom: 5px;
   color: #0b2f28;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
 }
 
 .session-exercise-safety__cue {
   color: #45675d;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.5;
 }
 
@@ -643,7 +643,7 @@
   padding: 0 12px;
   background: transparent;
   color: #6a766f;
-  font-size: 21px;
+  font-size: 22px;
 }
 
 .rest-controls {

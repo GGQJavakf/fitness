@@ -5,6 +5,7 @@ import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.domain.WorkoutExerciseSnapshot;
 import com.aifitness.assistant.workout.domain.WorkoutSession;
 import com.aifitness.assistant.workout.domain.WorkoutStatus;
+import com.aifitness.assistant.workout.domain.WorkoutWarmupPrescription;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -50,6 +51,27 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
     public Optional<WorkoutSession> findByUserAndClientKey(UUID userId, String clientSessionKey) {
         return query("WHERE ws.user_id = ? AND ws.client_session_key = ?", bytes(userId), clientSessionKey)
                 .stream().findFirst();
+    }
+
+    @Override
+    public StartState findStartStateForUpdate(UUID userId, String clientSessionKey) {
+        Objects.requireNonNull(userId, "user id must not be null");
+        Objects.requireNonNull(clientSessionKey, "client session key must not be null");
+        if (jdbc.queryForList(
+                "SELECT HEX(id) FROM user_account WHERE id = ? FOR UPDATE",
+                String.class, bytes(userId)).isEmpty()) {
+            throw new WorkoutSessionService.SessionNotFoundException();
+        }
+        Optional<WorkoutSession> exact = query(
+                "WHERE ws.user_id = ? AND ws.client_session_key = ? FOR UPDATE",
+                bytes(userId), clientSessionKey).stream().findFirst();
+        Optional<WorkoutSession> active = query("""
+                WHERE ws.user_id = ?
+                  AND ws.status IN ('CREATED', 'IN_PROGRESS', 'PAUSED', 'COMPLETING')
+                ORDER BY ws.started_at, ws.id
+                LIMIT 1 FOR UPDATE
+                """, bytes(userId)).stream().findFirst();
+        return new StartState(exact, active);
     }
 
     @Override
@@ -152,6 +174,7 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
             overlay.put("exerciseName", replacement.exerciseName());
             overlay.put("contentVersion", replacement.contentVersion());
             overlay.put("equipment", replacement.equipment().stream().sorted().toList());
+            overlay.put("prescription", prescriptionFacts(replacement.prescription()));
             int snapshotUpdated = jdbc.update("""
                     UPDATE workout_exercise_snapshot
                     SET replacement_snapshot_json = ?, replacement_revision = replacement_revision + 1,
@@ -193,15 +216,15 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         facts.put("exerciseName", exercise.exerciseName());
         facts.put("contentVersion", exercise.contentVersion());
         facts.put("equipment", exercise.equipment().stream().sorted().toList());
-        Map<String, Object> prescription = new LinkedHashMap<>();
-        prescription.put("workSets", exercise.prescription().workSets());
-        prescription.put("repMin", exercise.prescription().repMin());
-        prescription.put("repMax", exercise.prescription().repMax());
-        prescription.put("restSeconds", exercise.prescription().restSeconds());
-        prescription.put("weightStatus", exercise.prescription().weightStatus());
-        exercise.prescription().targetWeightKg().ifPresent(
-                weight -> prescription.put("targetWeightKg", weight));
-        prescription.put("unit", exercise.prescription().unit());
+        int firstOrder = session.exercises().stream()
+                .mapToInt(WorkoutExerciseSnapshot::order)
+                .min()
+                .orElseThrow();
+        if (exercise.order() == firstOrder) {
+            session.warmupPrescription().ifPresent(
+                    warmup -> facts.put("warmupPrescription", warmupFacts(warmup)));
+        }
+        Map<String, Object> prescription = prescriptionFacts(exercise.prescription());
         jdbc.update("""
                 INSERT INTO workout_exercise_snapshot
                     (id, session_id, source_plan_exercise_id, source_training_day_id,
@@ -248,28 +271,57 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
                 row.getString("client_session_key"), WorkoutStatus.valueOf(row.getString("status")),
                 row.getTimestamp("started_at").toInstant(),
                 Optional.ofNullable(completedAt).map(Timestamp::toInstant),
-                row.getLong("sync_version"), exercises);
+                row.getLong("sync_version"), exercises, readWarmup(facts));
     }
 
     private WorkoutExerciseSnapshot readSnapshot(UUID sessionId, ResultSet row) throws SQLException {
         Map<String, Object> facts = readJson(row.getString("exercise_snapshot_json"));
         String replacementJson = row.getString("replacement_snapshot_json");
         Map<String, Object> effective = replacementJson == null ? facts : readJson(replacementJson);
-        Map<String, Object> prescription = readJson(row.getString("prescription_snapshot_json"));
-        Object equipmentValue = effective.get("equipment");
-        Set<String> equipment = equipmentValue instanceof List<?> values
-                ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet())
-                : Set.of();
+        Map<String, Object> originalPrescriptionFacts = readJson(row.getString("prescription_snapshot_json"));
+        Set<String> originalEquipment = equipment(facts);
+        Set<String> equipment = equipment(effective);
+        WorkoutExerciseSnapshot.Prescription originalPrescription = prescription(originalPrescriptionFacts);
+        WorkoutExerciseSnapshot.Prescription effectivePrescription = replacementJson == null
+                ? originalPrescription
+                : effective.containsKey("prescription")
+                        ? prescription(objectMap(effective.get("prescription"), "prescription"))
+                        : originalPrescription.forReplacement(originalEquipment, equipment);
         return new WorkoutExerciseSnapshot(
                 uuid(row.getBytes("id")), sessionId, uuid(row.getBytes("source_plan_exercise_id")),
                 row.getInt("exercise_order"), text(effective, "exerciseCode"), text(effective, "exerciseName"),
                 text(effective, "contentVersion"), equipment,
-                new WorkoutExerciseSnapshot.Prescription(
-                        number(prescription, "workSets"), number(prescription, "repMin"),
-                        number(prescription, "repMax"), number(prescription, "restSeconds"),
-                        text(prescription, "weightStatus"), decimal(prescription, "targetWeightKg"),
-                        text(prescription, "unit")),
+                effectivePrescription,
                 WorkoutExerciseSnapshot.Status.valueOf(row.getString("status")));
+    }
+
+    private static Map<String, Object> prescriptionFacts(
+            WorkoutExerciseSnapshot.Prescription prescription) {
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("workSets", prescription.workSets());
+        facts.put("repMin", prescription.repMin());
+        facts.put("repMax", prescription.repMax());
+        facts.put("restSeconds", prescription.restSeconds());
+        facts.put("weightStatus", prescription.weightStatus());
+        prescription.targetWeightKg().ifPresent(weight -> facts.put("targetWeightKg", weight));
+        facts.put("unit", prescription.unit());
+        return facts;
+    }
+
+    private static WorkoutExerciseSnapshot.Prescription prescription(Map<String, Object> facts) {
+        return new WorkoutExerciseSnapshot.Prescription(
+                number(facts, "workSets"), number(facts, "repMin"),
+                number(facts, "repMax"), number(facts, "restSeconds"),
+                text(facts, "weightStatus"), decimal(facts, "targetWeightKg"),
+                text(facts, "unit"));
+    }
+
+    private static Set<String> equipment(Map<String, Object> facts) {
+        Object value = facts.get("equipment");
+        return value instanceof List<?> values
+                ? values.stream().map(String::valueOf)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet())
+                : Set.of();
     }
 
     private String writeJson(Object value) {
@@ -286,6 +338,95 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("persisted workout snapshot is invalid", exception);
         }
+    }
+
+    private static Map<String, Object> warmupFacts(WorkoutWarmupPrescription value) {
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("schemaVersion", value.schemaVersion());
+        facts.put("ruleVersion", value.ruleVersion());
+        facts.put("generalWarmup", Map.of(
+                "occurrences", value.generalWarmup().occurrences(),
+                "durationSeconds", value.generalWarmup().durationSeconds()));
+        value.rampWarmup().ifPresent(ramp -> {
+            Map<String, Object> rampFacts = new LinkedHashMap<>();
+            rampFacts.put("exerciseId", ramp.exerciseId().toString());
+            rampFacts.put("exerciseOrder", ramp.exerciseOrder());
+            rampFacts.put("status", ramp.status().name());
+            ramp.equipmentType().ifPresent(type -> rampFacts.put("equipmentType", type));
+            rampFacts.put("sets", ramp.sets().stream()
+                    .map(set -> Map.of("weightKg", set.weightKg(), "reps", set.reps()))
+                    .toList());
+            ramp.calibrationCode().ifPresent(code -> rampFacts.put("calibrationCode", code));
+            ramp.calibrationMessage().ifPresent(message -> rampFacts.put("calibrationMessage", message));
+            facts.put("rampWarmup", rampFacts);
+        });
+        facts.put("countsTowardTrainingVolume", value.countsTowardTrainingVolume());
+        facts.put("countsTowardProgression", value.countsTowardProgression());
+        return facts;
+    }
+
+    private static Optional<WorkoutWarmupPrescription> readWarmup(Map<String, Object> facts) {
+        Object raw = facts.get("warmupPrescription");
+        if (raw == null) {
+            return Optional.empty();
+        }
+        Map<String, Object> warmup = objectMap(raw, "warmupPrescription");
+        Map<String, Object> general = objectMap(warmup.get("generalWarmup"), "generalWarmup");
+        Optional<WorkoutWarmupPrescription.RampWarmup> ramp = Optional.ofNullable(warmup.get("rampWarmup"))
+                .map(value -> objectMap(value, "rampWarmup"))
+                .map(value -> {
+                    Object rawSets = value.get("sets");
+                    if (!(rawSets instanceof List<?> sets)) {
+                        throw new IllegalStateException("persisted ramp warmup sets are invalid");
+                    }
+                    List<WorkoutWarmupPrescription.RampSet> rampSets = sets.stream()
+                            .map(item -> objectMap(item, "rampWarmup.set"))
+                            .map(item -> new WorkoutWarmupPrescription.RampSet(
+                                    decimalRequired(item, "weightKg"), number(item, "reps")))
+                            .toList();
+                    return new WorkoutWarmupPrescription.RampWarmup(
+                            UUID.fromString(text(value, "exerciseId")),
+                            number(value, "exerciseOrder"),
+                            WorkoutWarmupPrescription.RampStatus.valueOf(text(value, "status")),
+                            optionalText(value, "equipmentType"),
+                            rampSets,
+                            optionalText(value, "calibrationCode"),
+                            optionalText(value, "calibrationMessage"));
+                });
+        return Optional.of(new WorkoutWarmupPrescription(
+                text(warmup, "schemaVersion"),
+                text(warmup, "ruleVersion"),
+                new WorkoutWarmupPrescription.GeneralWarmup(
+                        number(general, "occurrences"), number(general, "durationSeconds")),
+                ramp,
+                booleanValue(warmup, "countsTowardTrainingVolume"),
+                booleanValue(warmup, "countsTowardProgression")));
+    }
+
+    private static Map<String, Object> objectMap(Object value, String field) {
+        if (!(value instanceof Map<?, ?> values)) {
+            throw new IllegalStateException("persisted workout snapshot object is missing: " + field);
+        }
+        Map<String, Object> mapped = new LinkedHashMap<>();
+        values.forEach((key, item) -> mapped.put(String.valueOf(key), item));
+        return mapped;
+    }
+
+    private static Optional<String> optionalText(Map<String, Object> values, String field) {
+        return Optional.ofNullable(values.get(field)).map(String::valueOf);
+    }
+
+    private static java.math.BigDecimal decimalRequired(Map<String, Object> values, String field) {
+        return decimal(values, field)
+                .orElseThrow(() -> new IllegalStateException("persisted workout snapshot decimal is missing: " + field));
+    }
+
+    private static boolean booleanValue(Map<String, Object> values, String field) {
+        Object value = values.get(field);
+        if (!(value instanceof Boolean flag)) {
+            throw new IllegalStateException("persisted workout snapshot boolean is missing: " + field);
+        }
+        return flag;
     }
 
     private static String text(Map<String, Object> values, String field) {

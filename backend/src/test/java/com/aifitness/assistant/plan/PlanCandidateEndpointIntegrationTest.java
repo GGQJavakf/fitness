@@ -1,11 +1,15 @@
 package com.aifitness.assistant.plan;
 
 import com.aifitness.assistant.FitnessAssistantApplication;
+import com.aifitness.assistant.rules.domain.PlanRulePolicy;
+import com.aifitness.assistant.rules.infrastructure.ClasspathPlanRulePolicyLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
+import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -52,7 +56,7 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(3))
                 .andExpect(jsonPath("$.data.candidate.plan.days[*].exercises[*].weightStatus")
                         .value(org.hamcrest.Matchers.hasItem("NEEDS_CALIBRATION")))
-                .andExpect(jsonPath("$.data.candidate.ruleReference.ruleVersion").value("1.2.0"))
+                .andExpect(jsonPath("$.data.candidate.ruleReference.ruleVersion").value("1.6.0"))
                 .andExpect(jsonPath("$.data.candidate.explanationStatus").value("DEGRADED"))
                 .andExpect(jsonPath("$.data.candidate.explanation").isNotEmpty())
                 .andReturn().getResponse().getContentAsString();
@@ -89,20 +93,27 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
-    void generatesRuleValidCandidateForEveryP0WeeklyFrequency() {
+    void generatesRuleValidCandidateForEverySupportedGymFrequency() {
         IntStream.rangeClosed(2, 6).forEach(frequency -> {
             try {
                 String token = login();
                 configureProfile(token, frequency);
                 configureEquipment(token);
 
-                mvc.perform(post("/api/v1/plans/candidates")
+                String response = mvc.perform(post("/api/v1/plans/candidates")
                                 .header("Authorization", "Bearer " + token)
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
-                        .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(frequency));
+                        .andReturn().getResponse().getContentAsString();
+                JsonNode data = objectMapper.readTree(response).path("data");
+                org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                        .isEqualTo("CANDIDATE_READY");
+                org.assertj.core.api.Assertions.assertThat(data.at("/candidate/plan/days").size())
+                        .isEqualTo(frequency);
+                org.assertj.core.api.Assertions.assertThat(data.at("/candidate/validationIssues"))
+                        .noneMatch(issue -> "ERROR".equals(issue.path("severity").asText())
+                                || "RECOVERY_WINDOW_TOO_SHORT".equals(issue.path("reasonCode").asText()));
             } catch (Exception exception) {
                 throw new AssertionError("candidate generation failed for weekly frequency " + frequency, exception);
             }
@@ -110,7 +121,91 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
-    void generatesBodyweightCandidateForEveryP0WeeklyFrequencyWithoutEquipment() {
+    void generatesTheExplicitProfessionalTwoThreeAndFiveDaySplits() throws Exception {
+        int[] frequencies = {2, 4, 3, 6, 5};
+        String[] splits = {
+            "UPPER_LOWER", "UPPER_LOWER", "PUSH_PULL_LEGS", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"
+        };
+        String[] templates = {
+            "UPPER_LOWER_2_DAY_V1",
+            "UPPER_LOWER_4_DAY_V1",
+            "PUSH_PULL_LEGS_3_DAY_V1",
+            "PUSH_PULL_LEGS_6_DAY_V1",
+            "BODY_PART_5_DAY_V1"
+        };
+
+        for (int index = 0; index < frequencies.length; index++) {
+            String token = login();
+            configureProfile(token, frequencies[index], 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
+            configureEquipment(token);
+
+            JsonNode data = objectMapper.readTree(mvc.perform(post("/api/v1/plans/candidates")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"profileVersion\":1,\"trainingSplit\":\""
+                                    + splits[index] + "\",\"lockedFields\":{}}"))
+                    .andExpect(status().isOk())
+                    .andReturn().getResponse().getContentAsString()).path("data");
+
+            org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                    .as(splits[index] + " at frequency " + frequencies[index])
+                    .isEqualTo("CANDIDATE_READY");
+            org.assertj.core.api.Assertions.assertThat(data.at("/candidate/plan/templateCode").asText())
+                    .isEqualTo(templates[index]);
+            org.assertj.core.api.Assertions.assertThat(data.at("/candidate/plan/days"))
+                    .hasSize(frequencies[index])
+                    .allSatisfy(day -> org.assertj.core.api.Assertions.assertThat(day.path("exercises").size())
+                            .isBetween(4, 5));
+
+            String candidateId = data.at("/candidate/candidateId").asText();
+            String activated = mvc.perform(post("/api/v1/plans")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"candidateId\":\"" + candidateId + "\"}"))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.activeVersion.plan.trainingSplit").value(splits[index]))
+                    .andReturn().getResponse().getContentAsString();
+            String planId = objectMapper.readTree(activated).at("/data/planId").asText();
+            mvc.perform(get("/api/v1/plans/active")
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.planId").value(planId))
+                    .andExpect(jsonPath("$.data.activeVersion.plan.templateCode").value(templates[index]))
+                    .andExpect(jsonPath("$.data.activeVersion.plan.trainingSplit").value(splits[index]));
+        }
+
+        String fiveDayToken = login();
+        configureProfile(fiveDayToken, 5, 45, "HYPERTROPHY", "ADVANCED", "GYM");
+        configureEquipment(fiveDayToken);
+        JsonNode fiveDay = generateCandidate(fiveDayToken, "BODY_PART_FIVE_DAY").path("plan");
+        org.assertj.core.api.Assertions.assertThat(exerciseCodes(fiveDay, "ARMS_A"))
+                .contains(
+                        "DUMBBELL_BICEPS_CURL",
+                        "DUMBBELL_HAMMER_CURL",
+                        "CABLE_TRICEPS_PUSHDOWN",
+                        "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION");
+        org.assertj.core.api.Assertions.assertThat(exerciseCodes(fiveDay, "SHOULDERS_A"))
+                .containsOnlyOnce("DUMBBELL_OVERHEAD_PRESS");
+    }
+
+    @Test
+    void rejectsAnExplicitSplitThatDoesNotMatchTheSelectedFrequency() throws Exception {
+        String token = login();
+        configureProfile(token, 3);
+        configureEquipment(token);
+
+        mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"profileVersion\":1,\"trainingSplit\":\"UPPER_LOWER\",\"lockedFields\":{}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("NO_CANDIDATE"))
+                .andExpect(jsonPath("$.data.validationIssues[0].reasonCode")
+                        .value("SPLIT_FREQUENCY_MISMATCH"));
+    }
+
+    @Test
+    void generatesBodyweightCandidateWhenSafeAndReturnsTypedCapacityWhenDirectArmWorkIsUnavailable() {
         IntStream.rangeClosed(2, 6).forEach(frequency -> {
             try {
                 String token = login();
@@ -121,13 +216,24 @@ class PlanCandidateEndpointIntegrationTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
                         .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
-                        .andExpect(jsonPath("$.data.candidate.plan.templateCode")
-                                .value(org.hamcrest.Matchers.containsString("BODYWEIGHT")))
-                        .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(frequency))
                         .andReturn().getResponse().getContentAsString();
 
-                JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+                JsonNode data = objectMapper.readTree(response).path("data");
+                if (frequency >= 4) {
+                    org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                            .as("bodyweight frequency %s must not fake a professional upper-body split", frequency)
+                            .isEqualTo("NO_CANDIDATE");
+                    org.assertj.core.api.Assertions.assertThat(data.path("validationIssues"))
+                            .anyMatch(issue -> "INSUFFICIENT_ELIGIBLE_EXERCISES"
+                                    .equals(issue.path("reasonCode").asText()));
+                    return;
+                }
+                org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                        .isEqualTo("CANDIDATE_READY");
+                JsonNode candidate = data.path("candidate");
+                org.assertj.core.api.Assertions.assertThat(candidate.at("/plan/templateCode").asText())
+                        .contains("BODYWEIGHT");
+                org.assertj.core.api.Assertions.assertThat(candidate.at("/plan/days")).hasSize(frequency);
                 JsonNode exercises = candidate
                         .at("/plan/days").findValues("exercises").stream()
                         .reduce(objectMapper.createArrayNode(),
@@ -138,15 +244,9 @@ class PlanCandidateEndpointIntegrationTest {
                                  (left, right) -> left.addAll(right));
                 org.assertj.core.api.Assertions.assertThat(exercises)
                         .allMatch(exercise -> "BODYWEIGHT".equals(exercise.path("weightStatus").asText()));
-                if (frequency == 5) {
-                    org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
-                            .anyMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
-                                    .equals(issue.path("reasonCode").asText()));
-                } else {
-                    org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
-                            .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
-                                    .equals(issue.path("reasonCode").asText()));
-                }
+                org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
+                        .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
+                                .equals(issue.path("reasonCode").asText()));
             } catch (Exception exception) {
                 throw new AssertionError(
                         "bodyweight candidate generation failed for weekly frequency " + frequency, exception);
@@ -155,7 +255,7 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
-    void everyTemplateDrivingCombinationGeneratesAValidCandidateAndAcceptsAllOtherOptionValues()
+    void everyTemplateDrivingCombinationGeneratesAValidCandidateOrATypedCapacityDiagnostic()
             throws Exception {
         String[] goals = {"GENERAL_FITNESS", "STRENGTH", "HYPERTROPHY", "FAT_LOSS"};
         String[] experiences = {"BEGINNER", "INTERMEDIATE", "ADVANCED"};
@@ -189,12 +289,23 @@ class PlanCandidateEndpointIntegrationTest {
                             + ", minutes=" + minutes
                             + ", equipment=" + (gymEquipment ? "GYM" : "BODYWEIGHT");
 
+                    if ("NO_CANDIDATE".equals(data.path("status").asText())) {
+                        org.assertj.core.api.Assertions.assertThat(data.path("validationIssues"))
+                                .as(combination)
+                                .anyMatch(issue -> java.util.Set.of(
+                                                "INSUFFICIENT_ELIGIBLE_EXERCISES",
+                                                "RECOVERY_WINDOW_TOO_SHORT")
+                                        .contains(issue.path("reasonCode").asText()));
+                        combinationIndex++;
+                        continue;
+                    }
                     org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
                             .as(combination)
                             .isEqualTo("CANDIDATE_READY");
                     org.assertj.core.api.Assertions.assertThat(data.at("/candidate/validationIssues"))
                             .as(combination)
-                            .noneMatch(issue -> "ERROR".equals(issue.path("severity").asText()));
+                            .noneMatch(issue -> "ERROR".equals(issue.path("severity").asText())
+                                    || "RECOVERY_WINDOW_TOO_SHORT".equals(issue.path("reasonCode").asText()));
                     org.assertj.core.api.Assertions.assertThat(
                                     data.at("/candidate/plan/templateCode").asText().contains("BODYWEIGHT"))
                             .as(combination)
@@ -202,6 +313,74 @@ class PlanCandidateEndpointIntegrationTest {
                     combinationIndex++;
                 }
             }
+        }
+    }
+
+    @Test
+    void fortyFiveMinuteHomeAndGymMatrixComposesFourOrFiveSafeExercisesForEverySupportedFrequency()
+            throws Exception {
+        PlanRulePolicy policy = ClasspathPlanRulePolicyLoader.load(objectMapper);
+        StringBuilder matrixEvidence = new StringBuilder();
+        for (String location : new String[] {"HOME", "GYM"}) {
+            for (int frequency = 2; frequency <= 6; frequency++) {
+                for (String goal : new String[] {"GENERAL_FITNESS", "STRENGTH", "HYPERTROPHY", "FAT_LOSS"}) {
+                    String token = login();
+                    configureProfile(token, frequency, 45, goal, "BEGINNER", location);
+                    if ("GYM".equals(location)) {
+                        configureEquipment(token);
+                    }
+
+                    String response = mvc.perform(post("/api/v1/plans/candidates")
+                                    .header("Authorization", "Bearer " + token)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                            .andExpect(status().isOk())
+                            .andReturn().getResponse().getContentAsString();
+                    JsonNode data = objectMapper.readTree(response).path("data");
+                    String combination = "location=" + location + ", frequency=" + frequency + ", goal=" + goal;
+
+                    boolean supported = "GYM".equals(location) || frequency <= 3;
+                    org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
+                            .as(combination)
+                            .isEqualTo(supported ? "CANDIDATE_READY" : "NO_CANDIDATE");
+                    if (!supported) {
+                        org.assertj.core.api.Assertions.assertThat(data.path("validationIssues"))
+                                .as(combination)
+                                .anyMatch(issue -> "INSUFFICIENT_ELIGIBLE_EXERCISES"
+                                        .equals(issue.path("reasonCode").asText()));
+                        matrixEvidence.append(combination)
+                                .append(" status=NO_CANDIDATE reason=INSUFFICIENT_ELIGIBLE_EXERCISES")
+                                .append(System.lineSeparator());
+                        continue;
+                    }
+                    JsonNode days = data.at("/candidate/plan/days");
+                    org.assertj.core.api.Assertions.assertThat(
+                                    data.at("/candidate/plan/templateCode").asText().contains("BODYWEIGHT"))
+                            .as(combination + " equipment-specific template")
+                            .isEqualTo("HOME".equals(location));
+                    org.assertj.core.api.Assertions.assertThat(days)
+                            .as(combination)
+                            .allSatisfy(day -> {
+                                org.assertj.core.api.Assertions.assertThat(day.path("exercises").size())
+                                        .isBetween(4, 5);
+                                org.assertj.core.api.Assertions.assertThat(estimatedSessionSeconds(day, policy))
+                                        .isLessThanOrEqualTo(45 * 60);
+                            });
+                    matrixEvidence.append(combination).append(" status=CANDIDATE_READY days=");
+                    for (JsonNode day : days) {
+                        matrixEvidence.append(day.path("code").asText())
+                                .append(':')
+                                .append(day.path("exercises").size())
+                                .append('@')
+                                .append(estimatedSessionSeconds(day, policy))
+                                .append("s ");
+                    }
+                    matrixEvidence.append(System.lineSeparator());
+                }
+            }
+        }
+        if (Boolean.getBoolean("fitness.matrix.report")) {
+            System.out.print(matrixEvidence);
         }
     }
 
@@ -225,7 +404,10 @@ class PlanCandidateEndpointIntegrationTest {
                 .isPositive()
                 .isLessThan(fortyFiveMinuteExerciseCount);
         org.assertj.core.api.Assertions.assertThat(fortyFiveMinuteExerciseCount)
-                .isLessThanOrEqualTo(8);
+                .isBetween(4, 5);
+        org.assertj.core.api.Assertions.assertThat(fortyFiveMinutePlan.at("/days"))
+                .allSatisfy(day -> org.assertj.core.api.Assertions.assertThat(day.path("exercises").size())
+                        .isBetween(4, 5));
         org.assertj.core.api.Assertions.assertThat(thirtyMinutePlan).isNotEqualTo(fortyFiveMinutePlan);
 
         Map<String, Integer> expectedRepMinimums =
@@ -455,6 +637,41 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).at("/data/candidate");
+    }
+
+    private JsonNode generateCandidate(String token, String trainingSplit) throws Exception {
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"profileVersion\":1,\"trainingSplit\":\""
+                                + trainingSplit + "\",\"lockedFields\":{}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).at("/data/candidate");
+    }
+
+    private static List<String> exerciseCodes(JsonNode plan, String dayCode) {
+        return StreamSupport.stream(plan.path("days").spliterator(), false)
+                .filter(day -> dayCode.equals(day.path("code").asText()))
+                .findFirst()
+                .map(day -> StreamSupport.stream(day.path("exercises").spliterator(), false)
+                        .map(exercise -> exercise.path("exerciseCode").asText())
+                        .toList())
+                .orElseThrow(() -> new AssertionError("missing training day " + dayCode));
+    }
+
+    private static int estimatedSessionSeconds(JsonNode day, PlanRulePolicy policy) {
+        boolean loadedExercisePresent = StreamSupport.stream(
+                        day.path("exercises").spliterator(), false)
+                .anyMatch(exercise -> !"BODYWEIGHT".equals(exercise.path("weightStatus").asText()));
+        return policy.duration().sessionWarmupSeconds(loadedExercisePresent)
+                + StreamSupport.stream(day.path("exercises").spliterator(), false)
+                        .mapToInt(exercise -> exercise.path("workSets").asInt()
+                                * (policy.duration().secondsPerWorkSet()
+                                        + exercise.path("restSeconds").asInt())
+                                + policy.duration().secondsPerExerciseTransition())
+                        .sum();
     }
 
     private void configureEquipment(String token) throws Exception {

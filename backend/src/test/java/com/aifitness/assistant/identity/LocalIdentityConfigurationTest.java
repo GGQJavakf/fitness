@@ -3,6 +3,7 @@ package com.aifitness.assistant.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.identity.application.WechatLoginService;
+import com.aifitness.assistant.identity.application.AuthenticationAttemptLimiter;
 import com.aifitness.assistant.identity.infrastructure.LocalIdentityConfiguration;
 import com.aifitness.assistant.identity.infrastructure.LocalWechatIdentityProvider;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ class LocalIdentityConfigurationTest {
         contextRunner.withPropertyValues("server.address=127.0.0.1").run(context -> {
             assertThat(context).hasNotFailed();
             assertThat(context).hasSingleBean(WechatLoginService.class);
+            assertThat(context).hasSingleBean(AuthenticationAttemptLimiter.class);
         });
     }
 

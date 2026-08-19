@@ -95,7 +95,7 @@ describe('workout recovery', () => {
     expect(restored?.warmup).toMatchObject({ phase: 'GENERAL', generalDurationSeconds: 300 })
 
     const ramp = await service.completeGeneralWarmup(restored!)
-    expect(ramp.warmup).toMatchObject({ phase: 'RAMP', generalTimer: { timerStatus: 'SKIPPED' } })
+    expect(ramp.warmup).toMatchObject({ phase: 'WORK', generalTimer: { timerStatus: 'SKIPPED' } })
   })
 
   it('persists one confirmed formal weight for the rest of the workout', async () => {
@@ -128,7 +128,7 @@ describe('workout recovery', () => {
     expect(() => restoreWorkoutFlow({ clientSessionKey: 'broken' })).toThrow(/workout state/i)
   })
 
-  it('restores legacy three-ramp drafts and backfills their planned formal weight', () => {
+  it('restores legacy ramp drafts without inferring client-side warmup weights', () => {
     const legacy = JSON.parse(JSON.stringify(createWorkoutFlow({
       clientSessionKey: 'legacy-ramp-session',
       planVersionId: 'legacy-plan',
@@ -143,12 +143,22 @@ describe('workout recovery', () => {
         targetWeightKg: 20,
       }],
     })))
+    legacy.warmup.phase = 'RAMP'
+    legacy.warmup.rampExerciseIndex = 0
     legacy.warmup.maximumRampSets = 3
+    delete legacy.warmup.prescriptionVersion
+    delete legacy.warmup.ruleVersion
+    delete legacy.warmup.rampStatus
+    delete legacy.warmup.rampSets
+    delete legacy.warmup.calibrationMessage
     delete legacy.exercises[0].sessionWeightKg
 
     const restored = restoreWorkoutFlow(legacy)
 
-    expect(restored.warmup.maximumRampSets).toBe(3)
+    expect(restored.warmup).toMatchObject({
+      phase: 'WORK', prescriptionVersion: 'legacy-client-v1',
+      rampExerciseIndex: null, rampStatus: 'NOT_REQUIRED', maximumRampSets: 0,
+    })
     expect(restored.exercises[0].sessionWeightKg).toBe(20)
   })
 
@@ -205,12 +215,14 @@ describe('workout recovery', () => {
   it('retains a rejected operation until a later retry is accepted by the server', async () => {
     let stored: WorkoutDraft | null = null
     let attempts = 0
+    const replayedSafetyFlags: unknown[] = []
     const service = new WorkoutFlowService(
       { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
       { nowUtc: () => '2026-07-24T09:00:00.000Z' },
       {
         syncWorkoutOperations: async (operations) => {
           attempts += 1
+          replayedSafetyFlags.push(...operations.map((operation) => operation.payload.safetyFlag))
           return operations.map((operation) => ({
             clientOperationSeq: operation.clientOperationSeq,
             status: attempts === 1 ? 'REJECTED' as const : 'APPLIED' as const,
@@ -230,19 +242,24 @@ describe('workout recovery', () => {
     })
     state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
     state = await service.recordSet(state, {
-      clientSetKey: 'rejected-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
-      actualWeightKg: 25, actualReps: 8,
+      clientSetKey: 'rejected-set-1', exerciseIndex: 0, setType: 'WORK', status: 'FAILED',
+      actualWeightKg: 25, actualReps: 0, safetyFlag: 'DIZZINESS',
     })
 
     const rejected = await service.flush(state)
 
     expect(rejected.syncStatus).toBe('SYNC_REJECTED')
     expect(stored!.queue.operations).toHaveLength(1)
-    expect(stored!.queue.operations[0].status).toBe('PENDING')
+    expect(stored!.queue.operations[0].status).toBe('REJECTED')
+    expect(stored!.setRecords[0]).toMatchObject({ safetyFlag: 'DIZZINESS' })
+    expect(stored!.queue.operations[0].payload).toMatchObject({ safetyFlag: 'DIZZINESS' })
 
-    const recovered = await service.flush(rejected)
+    const retrying = await service.retryRejectedOperations(rejected)
+    expect(stored!.queue.operations[0]).toMatchObject({ status: 'PENDING', clientOperationSeq: 2 })
+    const recovered = await service.flush(retrying)
 
     expect(recovered.syncStatus).toBe('SYNCED')
+    expect(replayedSafetyFlags).toEqual(['DIZZINESS', 'DIZZINESS'])
     expect(stored!.queue.operations).toHaveLength(0)
     expect(stored!.lastServerVersion).toBe(2)
   })
@@ -317,13 +334,13 @@ describe('workout recovery', () => {
     })
     const staleFlush = service.flush(afterFirstSet)
     await synchronizationStarted
-    await service.recordSet(afterFirstSet, {
+    const secondRecord = service.recordSet(afterFirstSet, {
       clientSetKey: 'stale-flush-set-2', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
       actualWeightKg: 25, actualReps: 8,
     })
 
     releaseSynchronization()
-    await staleFlush
+    await Promise.all([staleFlush, secondRecord])
     const restored = await service.load()
 
     expect(restored?.exercises[0].sets).toHaveLength(2)
@@ -399,6 +416,15 @@ describe('workout recovery', () => {
     let state = await service.start({
       clientSessionKey: 'ramp-server-session', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 0,
       exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'SQUAT', name: '深蹲', targetWorkSets: 3, targetReps: 8, restSeconds: 90 }],
+      warmupPrescription: {
+        schemaVersion: 'workout-warmup-prescription-v1', ruleVersion: '1.3.0',
+        generalWarmup: { occurrences: 1, durationSeconds: 180 },
+        rampWarmup: {
+          exerciseId: 'exercise-id', exerciseOrder: 1, status: 'READY',
+          sets: [{ weightKg: 10, reps: 10 }, { weightKg: 15, reps: 8 }],
+        },
+        countsTowardTrainingVolume: false, countsTowardProgression: false,
+      },
     })
     state = await service.completeGeneralWarmup(state)
     state = await service.recordSet(state, { clientSetKey: 'ramp-set-0001', exerciseIndex: 0, setType: 'WARMUP', status: 'COMPLETED', actualWeightKg: 10, actualReps: 10 })
@@ -512,7 +538,7 @@ describe('workout recovery', () => {
       store, { nowUtc: () => '2026-07-24T09:00:00.000Z' }, undefined, undefined,
       {
         listExerciseReplacements: async () => [{ id: 'replacement-id', code: 'SAFE_ROW', name: '安全划船', movementPattern: 'HORIZONTAL_PULL', difficulty: 'BEGINNER', equipment: ['CABLE'], primaryMuscles: ['BACK'] }],
-        replaceWorkoutExercise: async () => ({ version: 2, exercises: [{ id: 'exercise-id', exerciseCode: 'SAFE_ROW', exerciseName: '安全划船', prescription: { workSets: 2, repMax: 10, restSeconds: 60 } }] }),
+        replaceWorkoutExercise: async () => ({ version: 2, exercises: [{ id: 'exercise-id', exerciseCode: 'SAFE_ROW', exerciseName: '安全划船', prescription: { workSets: 2, repMin: 8, repMax: 10, restSeconds: 60, weightStatus: 'NEEDS_CALIBRATION', unit: 'KG' } }] }),
       },
     )
     const state = await service.start({ clientSessionKey: 'replace-session', planVersionId: 'plan-version', serverSessionId: 'session-id', serverVersion: 1,
@@ -521,7 +547,7 @@ describe('workout recovery', () => {
 
     const updated = await service.replaceCurrentExercise(state, candidate)
 
-    expect(updated.exercises[0]).toMatchObject({ exerciseCode: 'SAFE_ROW', replacedExerciseCode: 'ROW', targetReps: 10 })
+    expect(updated.exercises[0]).toMatchObject({ exerciseCode: 'SAFE_ROW', replacedExerciseCode: 'ROW', targetReps: 10, weightStatus: 'NEEDS_CALIBRATION' })
     expect(stored!.lastServerVersion).toBe(2)
     expect(stored!.planSnapshot).toMatchObject({ planVersionId: 'plan-version' })
   })

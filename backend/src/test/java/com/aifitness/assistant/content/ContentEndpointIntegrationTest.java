@@ -43,8 +43,27 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("equipmentType", "dumbbell"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.contentVersion").value("1.2.0"))
-                .andExpect(jsonPath("$.data.items.length()").value(9))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"))
+                .andExpect(jsonPath("$.data.items.length()").value(18))
+                .andExpect(jsonPath("$.data.items[*].code", containsInAnyOrder(
+                        "DUMBBELL_BENCH_PRESS",
+                        "DUMBBELL_BICEPS_CURL",
+                        "DUMBBELL_DEADLIFT",
+                        "DUMBBELL_FLOOR_PRESS",
+                        "DUMBBELL_FRONT_SQUAT",
+                        "DUMBBELL_HAMMER_CURL",
+                        "DUMBBELL_LATERAL_RAISE",
+                        "DUMBBELL_LYING_TRICEPS_EXTENSION",
+                        "DUMBBELL_OVERHEAD_PRESS",
+                        "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION",
+                        "DUMBBELL_REVERSE_FLY",
+                        "DUMBBELL_ROMANIAN_DEADLIFT",
+                        "DUMBBELL_SHRUG",
+                        "GOBLET_SQUAT",
+                        "ONE_ARM_DUMBBELL_ROW",
+                        "SEATED_DUMBBELL_PRESS",
+                        "SINGLE_ARM_DUMBBELL_LATERAL_RAISE",
+                        "SINGLE_ARM_DUMBBELL_PRESS")))
                 .andExpect(jsonPath("$.data.items[0].plainLanguage").isNotEmpty())
                 .andExpect(jsonPath("$.data.items[0].difficulty").value("BEGINNER"))
                 .andExpect(jsonPath("$.data.items[*].image.fallbackRef",
@@ -61,7 +80,7 @@ class ContentEndpointIntegrationTest {
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
                 .andExpect(jsonPath("$.data.image.fallbackRef")
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.2.0"));
+                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"));
 
         mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT/replacements")
                         .header("Authorization", "Bearer " + token))
@@ -70,6 +89,12 @@ class ContentEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.items.length()").value(2))
                 .andExpect(jsonPath("$.data.items[0].movementPattern").value("SQUAT"))
                 .andExpect(jsonPath("$.data.items[0].difficulty").value("BEGINNER"));
+
+        mvc.perform(get("/api/v1/exercises/LAT_PULLDOWN/replacements")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].code").value("NEUTRAL_GRIP_PULLDOWN"));
 
         mvc.perform(get("/api/v1/exercises/UNKNOWN")
                         .header("Authorization", "Bearer " + token))
@@ -80,11 +105,14 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("weeklyFrequency", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.templateVersion").value("1.2.0"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.2.0"))
-                .andExpect(jsonPath("$.data.items.length()").value(2))
+                .andExpect(jsonPath("$.data.templateVersion").value("1.8.0"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"))
+                .andExpect(jsonPath("$.data.items.length()").value(3))
                 .andExpect(jsonPath("$.data.items[*].code")
-                        .value(containsInAnyOrder("BODYWEIGHT_3_DAY_V1", "FULL_BODY_3_DAY_V1")));
+                        .value(containsInAnyOrder(
+                                "BODYWEIGHT_3_DAY_V1",
+                                "FULL_BODY_3_DAY_V1",
+                                "PUSH_PULL_LEGS_3_DAY_V1")));
     }
 
     @Test

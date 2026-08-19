@@ -1,16 +1,21 @@
-# 微信真机局域网调试手册
+# 微信真机安全调试手册
 
-本手册仅用于同一局域网内的开发调试，不是微信体验版或生产部署方案。它不会放宽本地假身份的回环地址限制；真机必须通过真实微信 `code` 换取身份。
+本手册仅用于开发调试，不是生产部署方案。它不会放宽本地假身份的回环地址限制；真机必须通过真实微信 `code` 换取身份，API 请求必须使用 HTTPS。
 
 ## 1. 前置条件
 
-- 手机与开发电脑连接同一可信局域网。
+- 推荐使用已部署的 HTTPS 体验环境；局域网联调必须另有受信任的 TLS 终止代理，不能把 Spring HTTP 端口直接暴露给手机。
 - 微信小程序 AppID 可用，且 `WECHAT_APP_ID` 与微信开发者工具项目一致。
 - `WECHAT_APP_SECRET`、`FITNESS_DB_URL`、`FITNESS_DB_USERNAME`、`FITNESS_DB_PASSWORD` 已在当前 PowerShell 进程中配置。
 - 密钥不得写入本文档、Git、`project.config.json` 或小程序构建产物。
 - MySQL 数据库仅用于 local/test/staging-experience，禁止连接生产数据。
+- 普通 HTTPS 体验地址和局域网反向代理必须保持 `FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS=false`；登录始终通过一次性微信 code 交换。只有已回读确认的 CloudBase MINIAPP 私有入口才可启用该开关。
 
-## 2. 选择电脑的局域网地址
+## 2. 选择 API 地址
+
+推荐直接使用无路径、无查询参数的 HTTPS 体验环境地址，例如 `https://fitness-staging.example.com`。
+
+确需局域网联调时，再选择电脑的私有 IPv4 地址：
 
 ```powershell
 Get-NetIPConfiguration |
@@ -18,7 +23,7 @@ Get-NetIPConfiguration |
   Select-Object InterfaceAlias,@{Name='IPv4';Expression={$_.IPv4Address.IPAddress}}
 ```
 
-选择手机能够访问的私有 IPv4 地址。VPN、虚拟网卡或多个地址同时存在时，不要依赖自动选择。
+选择手机能够访问的私有 IPv4 地址。VPN、虚拟网卡或多个地址同时存在时，不要依赖自动选择。该地址必须由 HTTPS 反向代理监听，证书需要被手机信任并覆盖该地址。
 
 ## 3. 预检并构建真机版本
 
@@ -29,27 +34,34 @@ npm run preflight:device -- --host <LAN_IP>
 npm run build:weapp:device -- --host <LAN_IP>
 ```
 
-预检只显示环境变量键是否存在，不打印其值。构建会将请求基址注入为 `http://<LAN_IP>:8080`；默认构建仍保持 `http://127.0.0.1:8080`，两者不会互相覆盖源代码配置。
+使用已部署的 HTTPS 体验环境时执行：
 
-## 4. 启动体验后端
+```powershell
+npm run preflight:device -- --api-base-url https://<STAGING_HOST>
+npm run build:weapp:device -- --api-base-url https://<STAGING_HOST>
+```
+
+局域网模式默认将请求基址注入为 `https://<LAN_IP>:8443`，也可用 `--port` 指定 TLS 代理端口。显式 HTTPS 地址模式不会要求本地后端环境变量。默认模拟器构建仍保持 `http://127.0.0.1:8080`，不会覆盖源代码配置。
+
+## 4. 启动局域网体验后端（可选）
 
 在同一个已配置环境变量的 PowerShell 中进入 `<repo-root>/backend`：
 
 ```powershell
 .\mvnw.cmd spring-boot:run `
   "-Dspring-boot.run.profiles=staging-experience" `
-  "-Dspring-boot.run.arguments=--server.address=<LAN_IP> --server.port=8080"
+  "-Dspring-boot.run.arguments=--server.address=127.0.0.1 --server.port=8080"
 ```
 
-`staging-experience` 会使用真实微信身份适配器、Flyway 和 MySQL 仓储；AI 默认关闭并使用模板降级。启动日志不得包含微信密钥或数据库密码。
+`staging-experience` 会使用真实微信身份适配器、Flyway 和 MySQL 仓储；AI 默认关闭并使用模板降级。启动日志不得包含微信密钥或数据库密码。另行配置 HTTPS 反向代理，使 `https://<LAN_IP>:8443` 转发到 `http://127.0.0.1:8080`。
 
-如果手机无法连接，先检查电脑与手机是否同网段以及 Windows 防火墙是否拦截 8080。不要自动创建永久放行规则；确需放行时仅对当前可信网络和 8080 端口创建临时规则，验证后删除。
+如果手机无法连接，先检查证书信任、证书地址覆盖、电脑与手机是否同网段，以及 Windows 防火墙是否拦截 TLS 代理端口。不要对 Spring 的 8080 端口创建入站放行规则；确需放行时仅对当前可信网络和 TLS 代理端口创建临时规则，验证后删除。
 
 ## 5. 微信开发者工具
 
 1. 从 `<repo-root>` 打开项目，`miniprogramRoot` 应指向 `miniprogram/dist/`。
 2. 确认使用与 `WECHAT_APP_ID` 匹配的 AppID。
-3. 仅在开发调试阶段启用“不校验合法域名、web-view、TLS 版本以及 HTTPS 证书”。该设置不能作为体验版验收证据。
+3. 开发工具可临时关闭业务域名校验，但不得关闭 HTTPS 证书校验来充当验收证据。
 4. 重新编译后选择“真机调试”，不要复用此前指向 `127.0.0.1` 的构建产物。
 
 ## 6. 最小验收顺序

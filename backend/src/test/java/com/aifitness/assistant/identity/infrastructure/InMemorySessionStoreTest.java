@@ -26,7 +26,9 @@ class InMemorySessionStoreTest {
         store.revokeAllSessionsAndBlockLogin(user, requestId);
 
         assertThatThrownBy(() -> store.refresh(tokens.refreshToken(), afterAccessExpiry))
-                .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class);
+                .isInstanceOf(WechatLoginService.AccessRevokedException.class);
+        assertThatThrownBy(() -> store.authenticate(tokens.accessToken(), afterAccessExpiry))
+                .isInstanceOf(WechatLoginService.AccessRevokedException.class);
         assertThatThrownBy(() -> store.issue(user, afterAccessExpiry))
                 .isInstanceOf(WechatLoginService.AuthenticationRequiredException.class);
     }

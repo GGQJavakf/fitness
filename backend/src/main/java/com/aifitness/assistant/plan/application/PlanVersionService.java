@@ -18,7 +18,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public final class PlanVersionService {
@@ -26,12 +25,22 @@ public final class PlanVersionService {
     private final PlanRepository plans;
     private final PlanPolicy policy;
     private final Clock clock;
-    private final Map<String, PendingWarning> pendingWarnings = new ConcurrentHashMap<>();
+    private final WarningConfirmationStore warningConfirmations;
 
     public PlanVersionService(PlanRepository plans, PlanPolicy policy, Clock clock) {
+        this(plans, policy, clock, new InMemoryWarningConfirmationStore(clock));
+    }
+
+    public PlanVersionService(
+            PlanRepository plans,
+            PlanPolicy policy,
+            Clock clock,
+            WarningConfirmationStore warningConfirmations) {
         this.plans = Objects.requireNonNull(plans, "plans must not be null");
         this.policy = Objects.requireNonNull(policy, "policy must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.warningConfirmations = Objects.requireNonNull(
+                warningConfirmations, "warningConfirmations must not be null");
     }
 
     public TrainingPlan createInitial(AuthenticatedUserId user, String candidateId) {
@@ -39,16 +48,51 @@ public final class PlanVersionService {
         if (candidateId == null || candidateId.isBlank()) {
             throw new IllegalArgumentException("candidateId must not be blank");
         }
-        UUID planId = initialPlanId(user, candidateId);
+        UUID initialPlanId = initialPlanId(user, candidateId);
         Optional<TrainingPlan> active = plans.findActiveByUser(user.value());
         if (active.isPresent()) {
-            if (active.get().id().equals(planId)) {
-                return active.get();
+            TrainingPlan current = active.get();
+            if (current.id().equals(initialPlanId)) {
+                return current;
             }
-            throw new ActivePlanAlreadyExistsException();
+            UUID replacementVersionId = candidateVersionId(current.id(), candidateId);
+            if (hasVersion(current, replacementVersionId)) {
+                return current;
+            }
+            TrainingPlanVersion replacement = validatedCandidateVersion(
+                    user, candidateId, replacementVersionId, current.id(),
+                    current.activeVersionNumber() + 1, TrainingPlanVersion.SourceType.USER_EDIT,
+                    current.activeVersion().plan());
+            try {
+                return plans.append(
+                        user.value(), current.id(), current.activeVersionNumber(), replacement);
+            } catch (VersionConflictException conflict) {
+                TrainingPlan concurrent = plans.findActiveByUser(user.value()).orElseThrow(() -> conflict);
+                if (hasVersion(concurrent, replacementVersionId)) {
+                    return concurrent;
+                }
+                throw conflict;
+            }
         }
+        TrainingPlanVersion first = validatedCandidateVersion(
+                user, candidateId, initialVersionId(initialPlanId), initialPlanId, 1,
+                TrainingPlanVersion.SourceType.INITIAL, null);
+        return plans.create(user.value(), first);
+    }
+
+    private TrainingPlanVersion validatedCandidateVersion(
+            AuthenticatedUserId user,
+            String candidateId,
+            UUID versionId,
+            UUID planId,
+            int versionNumber,
+            TrainingPlanVersion.SourceType sourceType,
+            PlanDraft lockedBasePlan) {
         CandidatePlan candidate = policy.candidate(user, candidateId);
-        List<ValidationIssue> issues = policy.validate(user, candidate.plan(), candidate.ruleReference());
+        PlanDraft candidatePlan = lockedBasePlan == null
+                ? candidate.plan()
+                : candidate.plan().preserveLockedValues(lockedBasePlan, Map.of());
+        List<ValidationIssue> issues = policy.validate(user, candidatePlan, candidate.ruleReference());
         if (hasSeverity(issues, Severity.ERROR)) {
             throw new PlanValidationException(issues);
         }
@@ -56,10 +100,9 @@ public final class PlanVersionService {
                 .filter(issue -> issue.severity() == Severity.WARNING)
                 .map(ValidationIssue::reasonCode)
                 .collect(Collectors.toUnmodifiableSet());
-        TrainingPlanVersion first = new TrainingPlanVersion(
-                initialVersionId(planId), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
-                candidate.plan(), candidate.ruleReference(), confirmedWarnings, clock.instant());
-        return plans.create(user.value(), first);
+        return new TrainingPlanVersion(
+                versionId, planId, versionNumber, sourceType,
+                candidatePlan, candidate.ruleReference(), confirmedWarnings, clock.instant());
     }
 
     public TrainingPlan getActive(AuthenticatedUserId user) {
@@ -145,7 +188,8 @@ public final class PlanVersionService {
             throw new VersionConflictException(current.activeVersionNumber());
         }
         TrainingPlanVersion base = current.activeVersion();
-        PlanDraft merged = proposed.preserveLockedValues(base.plan(), locks);
+        PlanDraft identityPreserved = preserveAuthoritativePlanIdentity(proposed, base.plan());
+        PlanDraft merged = identityPreserved.preserveLockedValues(base.plan(), locks);
         RuleReference effectiveReference = policy.effectiveReference(base.ruleReference());
         List<ValidationIssue> issues = new ArrayList<>(policy.validate(user, merged, effectiveReference));
         if (!effectiveReference.equals(base.ruleReference())) {
@@ -163,15 +207,13 @@ public final class PlanVersionService {
         }
         if (hasSeverity(issues, Severity.WARNING)) {
             String fingerprint = fingerprint(user, planId, baseVersionNumber, merged, issues);
-            if (!validToken(warningConfirmationToken, fingerprint)) {
-                pendingWarnings.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(clock.instant()));
-                String token = UUID.randomUUID().toString();
-                pendingWarnings.put(token, new PendingWarning(fingerprint, clock.instant().plus(10, ChronoUnit.MINUTES)));
+            if (!warningConfirmations.consume(user, warningConfirmationToken, fingerprint, clock.instant())) {
+                String token = warningConfirmations.issue(
+                        user, fingerprint, clock.instant().plus(10, ChronoUnit.MINUTES));
                 return new VersionResult(
                         VersionStatus.WARNING_CONFIRMATION_REQUIRED, merged, issues,
                         Optional.of(token), Optional.empty());
             }
-            pendingWarnings.remove(warningConfirmationToken);
         }
         Set<String> confirmedWarnings = issues.stream()
                 .filter(issue -> issue.severity() == Severity.WARNING)
@@ -185,14 +227,13 @@ public final class PlanVersionService {
                 VersionStatus.CREATED, merged, issues, Optional.empty(), Optional.of(updated.activeVersion()));
     }
 
-    private boolean validToken(String token, String fingerprint) {
-        if (token == null || token.isBlank()) {
-            return false;
+    private static PlanDraft preserveAuthoritativePlanIdentity(PlanDraft proposed, PlanDraft base) {
+        if (proposed.templateCode().equals(base.templateCode())
+                && proposed.trainingSplit() == base.trainingSplit()) {
+            return proposed;
         }
-        PendingWarning pending = pendingWarnings.get(token);
-        return pending != null
-                && pending.expiresAt().isAfter(clock.instant())
-                && pending.fingerprint().equals(fingerprint);
+        return new PlanDraft(
+                base.templateCode(), base.trainingSplit(), proposed.name(), proposed.days(), proposed.locks());
     }
 
     private static String fingerprint(
@@ -217,6 +258,15 @@ public final class PlanVersionService {
     private static UUID initialVersionId(UUID planId) {
         return UUID.nameUUIDFromBytes(
                 (planId + "|version|1").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static UUID candidateVersionId(UUID planId, String candidateId) {
+        return UUID.nameUUIDFromBytes(
+                (planId + "|candidate|" + candidateId).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static boolean hasVersion(TrainingPlan plan, UUID versionId) {
+        return plan.versions().stream().anyMatch(version -> version.id().equals(versionId));
     }
 
     private static void requireUser(AuthenticatedUserId user) {
@@ -270,8 +320,6 @@ public final class PlanVersionService {
     public enum Severity { INFO, WARNING, ERROR }
 
     public enum VersionStatus { PREVIEW, WARNING_CONFIRMATION_REQUIRED, VALIDATION_ERROR, CREATED }
-
-    private record PendingWarning(String fingerprint, Instant expiresAt) {}
 
     public static final class VersionConflictException extends RuntimeException {
         private final int currentVersion;

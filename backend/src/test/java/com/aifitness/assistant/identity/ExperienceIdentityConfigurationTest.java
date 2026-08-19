@@ -3,6 +3,7 @@ package com.aifitness.assistant.identity;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.identity.application.WechatIdentityProvider;
+import com.aifitness.assistant.identity.application.AuthenticationAttemptLimiter;
 import com.aifitness.assistant.identity.application.IdentityRepository;
 import com.aifitness.assistant.identity.application.SessionStore;
 import com.aifitness.assistant.identity.application.SubjectProtector;
@@ -20,6 +21,7 @@ import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
+import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,7 +30,9 @@ import org.springframework.context.annotation.Profile;
 class ExperienceIdentityConfigurationTest {
 
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
-            .withConfiguration(AutoConfigurations.of(PropertyPlaceholderAutoConfiguration.class))
+            .withConfiguration(AutoConfigurations.of(
+                    PropertyPlaceholderAutoConfiguration.class,
+                    JacksonAutoConfiguration.class))
             .withUserConfiguration(
                     ExperienceIdentityConfiguration.class, TestDataSourceConfiguration.class)
             .withPropertyValues("spring.profiles.active=staging-experience");
@@ -47,6 +51,7 @@ class ExperienceIdentityConfigurationTest {
                     assertThat(context).hasSingleBean(WechatIdentityResolver.class);
                     assertThat(context).hasSingleBean(UserAccessRevocation.class);
                     assertThat(context).hasSingleBean(WechatLoginService.class);
+                    assertThat(context).hasSingleBean(AuthenticationAttemptLimiter.class);
                 });
     }
 
@@ -80,6 +85,7 @@ class ExperienceIdentityConfigurationTest {
                 "${FITNESS_DB_PASSWORD}",
                 "${WECHAT_APP_ID}",
                 "${WECHAT_APP_SECRET}",
+                "${FITNESS_TRUST_CLOUDBASE_IDENTITY_HEADERS:false}",
                 "repository: mysql",
                 "include-message: never",
                 "include-stacktrace: never");

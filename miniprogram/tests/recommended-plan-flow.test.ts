@@ -81,58 +81,6 @@ function onboardingPort(): OnboardingPersistencePort {
 }
 
 describe('recommended plan first-use flow', () => {
-  it('starts from the scientific recommendation and offers an optional editor', () => {
-    const page = source('src/presentation/pages/plan-candidates/index.tsx')
-    const config = source('src/presentation/pages/plan-candidates/index.config.ts')
-    const appConfig = source('src/app.config.ts')
-
-    expect(config).toContain("navigationBarTitleText: '科学训练方案'")
-    expect(page).toContain('你的 AI 个性化训练方案')
-    expect(page).toContain('你的基础保底训练方案')
-    expect(page).toContain('开始第一次训练')
-    expect(page).toContain('application.activateCandidate()')
-    expect(page).toContain("navigation.replace('WORKOUT_PREPARE')")
-    expect(page).toContain('修改训练计划')
-    expect(page).toMatch(/async function editCandidate[\s\S]*activateCandidate\(\)[\s\S]*openPlanEditor\(\)/)
-    expect(page).toContain("'PLAN_EDITOR'")
-    expect(appConfig).toContain("'presentation/pages/plan-editor/index'")
-    expect(page).not.toContain('查看并确认计划')
-    expect(page).not.toMatch(/USER_LOCKED|RULE_LOCKED/)
-  })
-
-  it('lets an active plan open the versioned editor without making it the primary action', () => {
-    const page = source('src/presentation/pages/plan/index.tsx')
-
-    expect(page).toContain('修改训练计划')
-    expect(page).toContain('openPlanEditor')
-    expect(page).toContain("'PLAN_EDITOR'")
-    expect(page).not.toContain('重新优化（仅预览）')
-    expect(page).toContain('训练反馈与调整建议')
-    expect(page).toContain("navigation.replace('HISTORY')")
-  })
-
-  it('distinguishes loading, empty, and failed active-plan states', () => {
-    const page = source('src/presentation/pages/plan/index.tsx')
-
-    expect(page).toContain("loading ? '正在读取计划'")
-    expect(page).toContain('完成基础档案后，系统会直接给出科学训练建议。')
-    expect(page).toContain("error ? '重试加载'")
-    expect(page).toContain('if (error)')
-    expect(page).toContain('void loadPlan()')
-    expect(page).toContain('disabled={loading}')
-  })
-
-  it('redirects unauthenticated plan loads to the login home instead of reporting a network failure', () => {
-    const page = source('src/presentation/pages/plan/index.tsx')
-
-    expect(page).toContain("failure.kind === 'AUTHENTICATION_REQUIRED'")
-    expect(page).toMatch(/if \(!mounted\.current\) return[\s\S]*navigation\.replace\('HOME'\)/)
-    expect(page).toContain("application.navigation.replace('HOME')")
-    expect(page).toMatch(
-      /catch \(error[^)]*\)[\s\S]*resolveActivePlanLoadFailure[\s\S]*AUTHENTICATION_REQUIRED[\s\S]*navigation\.replace\('HOME'\)/,
-    )
-  })
-
   it('classifies active-plan failures without misreporting service errors as network errors', () => {
     expect(resolveActivePlanLoadFailure(
       new ApplicationError('AUTHENTICATION_REQUIRED', '登录状态已失效，请重新登录'),

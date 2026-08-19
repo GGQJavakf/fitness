@@ -14,7 +14,7 @@ import java.util.UUID;
 
 /** Applies explicit, deterministic eligibility rules before progression evaluation. */
 public final class EffectiveSetSelector {
-    private static final String SCHEMA_VERSION = "progression-input-v1";
+    private static final String SCHEMA_VERSION = "progression-input-v2";
 
     public ProgressionInput select(
             SelectionCriteria criteria, List<RawSetFact> rawFacts, Instant selectedAt) {
@@ -23,7 +23,19 @@ public final class EffectiveSetSelector {
         Objects.requireNonNull(selectedAt, "selection time must not be null");
         List<ProgressionInput.EffectiveSet> effective = new ArrayList<>();
         List<ExcludedSet> excluded = new ArrayList<>();
+        List<ProgressionInput.FailedSetFact> failed = new ArrayList<>();
+        List<ProgressionInput.SafetyFlagFact> safety = new ArrayList<>();
         for (RawSetFact fact : facts) {
+            if (matchesAuditScope(criteria, fact)) {
+                if (fact.kind() == SetKind.WORK && fact.status() == FactStatus.FAILED) {
+                    failed.add(new ProgressionInput.FailedSetFact(
+                            fact.factId(), fact.sessionId(), fact.setOrder(), fact.completedAt(),
+                            fact.serverRevision(), fact.payloadDigest()));
+                }
+                fact.safetyFlag().ifPresent(flag -> safety.add(new ProgressionInput.SafetyFlagFact(
+                        fact.factId(), fact.sessionId(), ProgressionInput.FactSetType.valueOf(fact.kind().name()),
+                        fact.setOrder(), flag, fact.completedAt(), fact.serverRevision(), fact.payloadDigest())));
+            }
             List<ExclusionReason> reasons = reasons(criteria, fact);
             if (!reasons.isEmpty()) {
                 excluded.add(new ExcludedSet(fact.factId(), fact.sessionId(), reasons));
@@ -38,9 +50,26 @@ public final class EffectiveSetSelector {
                 .thenComparingInt(ProgressionInput.EffectiveSet::setOrder)
                 .thenComparing(ProgressionInput.EffectiveSet::factId));
         excluded.sort(Comparator.comparing(ExcludedSet::sessionId).thenComparing(ExcludedSet::factId));
+        failed.sort(Comparator.comparing(ProgressionInput.FailedSetFact::completedAt)
+                .thenComparing(ProgressionInput.FailedSetFact::sessionId)
+                .thenComparingInt(ProgressionInput.FailedSetFact::setOrder)
+                .thenComparing(ProgressionInput.FailedSetFact::factId));
+        safety.sort(Comparator.comparing(ProgressionInput.SafetyFlagFact::completedAt)
+                .thenComparing(ProgressionInput.SafetyFlagFact::sessionId)
+                .thenComparingInt(ProgressionInput.SafetyFlagFact::setOrder)
+                .thenComparing(ProgressionInput.SafetyFlagFact::factId));
         return new ProgressionInput(
                 SCHEMA_VERSION, criteria.userId(), criteria.exerciseId(), criteria.variantKey(), criteria.unit(),
-                selectedAt, effective, excluded);
+                selectedAt, effective, excluded, failed, safety);
+    }
+
+    private static boolean matchesAuditScope(SelectionCriteria criteria, RawSetFact fact) {
+        return fact.userId().equals(criteria.userId())
+                && fact.exerciseId().equals(criteria.exerciseId())
+                && fact.variantKey().equals(criteria.variantKey())
+                && fact.unit().equals(criteria.unit())
+                && fact.sessionOutcome() == SessionOutcome.COMPLETED
+                && fact.currentRevision();
     }
 
     private static List<ExclusionReason> reasons(SelectionCriteria criteria, RawSetFact fact) {
@@ -83,11 +112,37 @@ public final class EffectiveSetSelector {
             BigDecimal weight,
             int reps,
             Optional<Integer> remainingReps,
+            Optional<ProgressionInput.SafetyFlag> safetyFlag,
             boolean anomalous,
             boolean currentRevision,
             Instant completedAt,
             long serverRevision,
             String payloadDigest) {
+
+        public RawSetFact(
+                UUID factId,
+                UUID sessionId,
+                UUID userId,
+                UUID exerciseId,
+                String variantKey,
+                String unit,
+                SetKind kind,
+                int setOrder,
+                SessionOutcome sessionOutcome,
+                FactStatus status,
+                BigDecimal weight,
+                int reps,
+                Optional<Integer> remainingReps,
+                boolean anomalous,
+                boolean currentRevision,
+                Instant completedAt,
+                long serverRevision,
+                String payloadDigest) {
+            this(factId, sessionId, userId, exerciseId, variantKey, unit, kind, setOrder, sessionOutcome,
+                    status, weight, reps, remainingReps, Optional.empty(), anomalous, currentRevision,
+                    completedAt, serverRevision, payloadDigest);
+        }
+
         public RawSetFact {
             Objects.requireNonNull(factId, "fact id must not be null");
             Objects.requireNonNull(sessionId, "session id must not be null");
@@ -103,6 +158,7 @@ public final class EffectiveSetSelector {
             }
             if (weight != null && weight.signum() < 0) throw new IllegalArgumentException("weight must not be negative");
             remainingReps = Objects.requireNonNull(remainingReps, "remaining reps must not be null");
+            safetyFlag = Objects.requireNonNull(safetyFlag, "safety flag must not be null");
             if (remainingReps.filter(value -> value < 0).isPresent()) {
                 throw new IllegalArgumentException("remaining reps must not be negative");
             }

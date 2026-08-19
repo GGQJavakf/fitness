@@ -55,6 +55,7 @@ public final class JdbcSessionStore implements SessionStore {
         byte[] refreshDigest = digest(refreshToken);
         Objects.requireNonNull(now, "now must not be null");
         return Objects.requireNonNull(transactions.execute(status -> {
+            requireNotTerminalRefreshToken(refreshDigest);
             List<RefreshableSession> sessions = jdbc.query("""
                     SELECT id, user_id, refresh_expires_at
                     FROM auth_session
@@ -116,6 +117,7 @@ public final class JdbcSessionStore implements SessionStore {
     @Override
     public AuthenticatedUserId authenticate(String accessToken, Instant now) {
         Objects.requireNonNull(now, "now must not be null");
+        byte[] accessDigest = digest(accessToken);
         List<AuthenticatedUserId> users = jdbc.query("""
                 SELECT s.user_id
                 FROM auth_session s
@@ -125,9 +127,12 @@ public final class JdbcSessionStore implements SessionStore {
                   AND s.access_expires_at > ?
                   AND u.status = 'ACTIVE'
                 """, (row, ignored) -> new AuthenticatedUserId(
-                        JdbcBinaryUuid.uuid(row.getBytes(1))), digest(accessToken), Timestamp.from(now));
-        return users.stream().findFirst()
-                .orElseThrow(WechatLoginService.AuthenticationRequiredException::new);
+                        JdbcBinaryUuid.uuid(row.getBytes(1))), accessDigest, Timestamp.from(now));
+        if (users.isEmpty()) {
+            requireNotTerminalAccessToken(accessDigest);
+            throw new WechatLoginService.AuthenticationRequiredException();
+        }
+        return users.getFirst();
     }
 
     private void requireActiveAccount(AuthenticatedUserId userId) {
@@ -138,6 +143,27 @@ public final class JdbcSessionStore implements SessionStore {
                 """, (row, ignored) -> row.getBytes(1), JdbcBinaryUuid.bytes(userId.value()));
         if (accounts.isEmpty()) {
             throw new WechatLoginService.AuthenticationRequiredException();
+        }
+    }
+
+    private void requireNotTerminalAccessToken(byte[] accessDigest) {
+        requireNotTerminalToken("access_token_digest", accessDigest);
+    }
+
+    private void requireNotTerminalRefreshToken(byte[] refreshDigest) {
+        requireNotTerminalToken("refresh_token_digest", refreshDigest);
+    }
+
+    private void requireNotTerminalToken(String tokenColumn, byte[] tokenDigest) {
+        String sql = """
+                SELECT COUNT(*)
+                FROM auth_session s
+                JOIN user_account u ON u.id = s.user_id
+                WHERE s.%s = ? AND u.status = 'DELETED'
+                """.formatted(tokenColumn);
+        Integer count = jdbc.queryForObject(sql, Integer.class, tokenDigest);
+        if (count != null && count > 0) {
+            throw new WechatLoginService.AccessRevokedException();
         }
     }
 

@@ -30,9 +30,10 @@ public class ExperiencePrivacyConfiguration {
     }
 
     @Bean
-    LocalReauthenticationProofStore privacyReauthenticationProofStore(
-            Clock clock, WechatIdentityResolver identities) {
-        return new LocalReauthenticationProofStore(clock, Duration.ofMinutes(5), identities);
+    JdbcReauthenticationProofStore privacyReauthenticationProofStore(
+            DataSource dataSource, Clock clock, WechatIdentityResolver identities) {
+        return new JdbcReauthenticationProofStore(
+                dataSource, clock, Duration.ofMinutes(5), identities);
     }
 
     @Bean
@@ -46,15 +47,15 @@ public class ExperiencePrivacyConfiguration {
     }
 
     @Bean
-    PrivacyRateLimitPort privacyRateLimit() {
-        return new InMemoryPrivacyRateLimiter(20, Duration.ofMinutes(1));
+    PrivacyRateLimitPort privacyRateLimit(DataSource dataSource) {
+        return new JdbcPrivacyRateLimiter(dataSource, 20, Duration.ofMinutes(1));
     }
 
     @Bean
     PrivacyRequestService privacyRequestService(
             PrivacyRepository repository,
             PrivacyExportRepository exportRepository,
-            LocalReauthenticationProofStore reauthentication,
+            JdbcReauthenticationProofStore reauthentication,
             PrivacyRequestService.AuditPort audit,
             Clock clock,
             PrivacyDataPort data,

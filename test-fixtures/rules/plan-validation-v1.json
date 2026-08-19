@@ -1,7 +1,7 @@
 {
   "metadata": {
     "fixtureVersion": "1.0.0",
-    "ruleVersion": "1.2.0",
+    "ruleVersion": "1.6.0",
     "oracleVersion": "M0-04-1",
     "ruleSet": "PLAN_VALIDATION",
     "generationConstraints": [
@@ -9,7 +9,7 @@
       "Key numeric boundaries come from versioned rule configuration",
       "Unknown initial weight requires calibration rather than demographic estimation"
     ],
-    "digestSha256": "a1ff3bde851a0c59708756c5cd8e05a524c9b37030b6e35770f3bc75e23c20e4"
+    "digestSha256": "2289fb82cf570e6d8cc3909eded9b6cff83292325b6b93fcc19064a42950bc15"
   },
   "cases": [
     {

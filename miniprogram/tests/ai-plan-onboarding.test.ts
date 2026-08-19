@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
-  AiPlanUnavailableError,
+  AiDiagnosticError,
   type AiPlanGenerator,
 } from '../src/application/cloudbaseAi'
 import {
+  createOnboardingState,
   saveProfileAndGenerateCandidate,
   type OnboardingDraft,
   type OnboardingPersistencePort,
@@ -14,108 +15,76 @@ import type {
   PlanCandidateGenerationData,
   PlanGenerationContextData,
 } from '../src/application/models'
+import { createFitnessApplication } from '../src/application/useCases'
 
 const draft: OnboardingDraft = {
   adultConfirmed: true,
   safetyAccepted: true,
   goal: 'GENERAL_FITNESS',
   experience: 'BEGINNER',
+  trainingSplit: 'UPPER_LOWER',
   weeklyFrequency: 2,
   sessionMinutes: 45,
   location: 'HOME',
   equipment: [],
   preferences: [],
   additionalRequirements: '核心训练优先，不安排跳跃动作',
+  aiConsentGranted: false,
 }
 
-const context: PlanGenerationContextData = {
+const context = {
   profile: {
-    experience: 'BEGINNER',
-    goal: 'GENERAL_FITNESS',
-    weeklyFrequency: 2,
-    sessionMinutes: 45,
-    location: 'HOME',
-    profileVersion: 1,
+    experience: 'BEGINNER', trainingSplit: 'UPPER_LOWER', goal: 'GENERAL_FITNESS', weeklyFrequency: 2,
+    sessionMinutes: 45, location: 'HOME', profileVersion: 1,
   },
   exercises: [],
   constraints: {
-    minimumSessionsPerWeek: 2,
-    maximumSessionsPerWeek: 6,
-    maximumExercisesPerSession: 8,
-    minimumWorkSets: 2,
-    maximumWorkSets: 4,
-    minimumReps: 5,
-    maximumReps: 15,
-    minimumRestSeconds: 45,
-    maximumRestSeconds: 240,
-    secondsPerWorkSet: 45,
-    secondsPerExerciseTransition: 75,
-    maximumMovementPatternOccurrencesPerSession: 2,
+    minimumSessionsPerWeek: 2, maximumSessionsPerWeek: 6,
+    maximumExercisesPerSession: 5, minimumWorkSets: 2, maximumWorkSets: 4,
+    minimumReps: 5, maximumReps: 15, minimumRestSeconds: 45,
+    maximumRestSeconds: 240, secondsPerWorkSet: 45,
+    secondsPerExerciseTransition: 75, maximumMovementPatternOccurrencesPerSession: 2,
     maximumWorkSetsPerPrimaryMusclePerSession: 12,
     minimumRecoveryHoursBetweenPrimaryMuscleSessions: 48,
   },
   ruleReference: {
-    ruleVersion: '1.3.0',
-    templateVersion: '1.2.0',
-    contentVersion: '1.2.0',
+    ruleVersion: '1.3.0', templateVersion: '1.3.0', contentVersion: '1.6.0',
+  },
+} satisfies PlanGenerationContextData
+
+const proposal: AiPlanProposal = {
+  name: 'AI 候选',
+  days: [],
+}
+
+const fallbackCandidate: PlanCandidateGenerationData = {
+  status: 'CANDIDATE_READY',
+  candidate: {
+    candidateId: 'fallback-candidate',
+    generationSource: 'FALLBACK_RULE_PLAN',
+    plan: { templateCode: 'BODYWEIGHT_2_DAY_V1', name: '规则计划', days: [], locks: {} },
+    validationIssues: [],
+    ruleReference: context.ruleReference,
+    lockedFieldOutcomes: {},
+    explanationStatus: 'DEGRADED',
+    explanation: '规则说明',
+    expiresAt: '2026-08-11T12:00:00Z',
+  },
+  validationIssues: [],
+  lockedFieldOutcomes: {},
+}
+
+const aiCandidate: PlanCandidateGenerationData = {
+  ...fallbackCandidate,
+  candidate: {
+    ...fallbackCandidate.candidate!,
+    candidateId: 'ai-candidate',
+    generationSource: 'AI_PERSONALIZED',
+    plan: { ...fallbackCandidate.candidate!.plan, templateCode: 'AI_PERSONALIZED' },
   },
 }
 
-const firstProposal: AiPlanProposal = {
-  name: '第一次方案',
-  days: [{
-    code: 'DAY_1',
-    name: '第一天',
-    exercises: [{
-      exerciseCode: 'UNKNOWN',
-      workSets: 3,
-      repMin: 8,
-      repMax: 12,
-      restSeconds: 75,
-    }],
-  }, {
-    code: 'DAY_2',
-    name: '第二天',
-    exercises: [{
-      exerciseCode: 'UNKNOWN',
-      workSets: 3,
-      repMin: 8,
-      repMax: 12,
-      restSeconds: 75,
-    }],
-  }],
-}
-
-const repairedProposal: AiPlanProposal = {
-  ...firstProposal,
-  name: '修复后方案',
-}
-
-function candidate(source: 'AI_PERSONALIZED' | 'FALLBACK_RULE_PLAN'): PlanCandidateGenerationData {
-  return {
-    status: 'CANDIDATE_READY',
-    candidate: {
-      candidateId: `candidate-${source}`,
-      generationSource: source,
-      plan: {
-        templateCode: source === 'AI_PERSONALIZED' ? 'AI_PERSONALIZED' : 'BODYWEIGHT_2_DAY_V1',
-        name: '可用计划',
-        days: [],
-        locks: {},
-      },
-      validationIssues: [],
-      ruleReference: context.ruleReference,
-      lockedFieldOutcomes: {},
-      explanationStatus: source === 'AI_PERSONALIZED' ? 'PENDING' : 'DEGRADED',
-      explanation: '说明',
-      expiresAt: '2026-08-04T12:00:00Z',
-    },
-    validationIssues: [],
-    lockedFieldOutcomes: {},
-  }
-}
-
-function port(results: PlanCandidateGenerationData[]): OnboardingPersistencePort {
+function port(): OnboardingPersistencePort {
   return {
     getProfileVersion: vi.fn().mockResolvedValue(0),
     getEquipmentVersion: vi.fn().mockResolvedValue(0),
@@ -124,144 +93,174 @@ function port(results: PlanCandidateGenerationData[]): OnboardingPersistencePort
     saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
     savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
     getPlanGenerationContext: vi.fn().mockResolvedValue(context),
-    generateCandidate: vi.fn()
-      .mockImplementation(() => Promise.resolve(results.shift() ?? candidate('FALLBACK_RULE_PLAN'))),
+    generateCandidate: vi.fn().mockResolvedValue(fallbackCandidate),
   }
 }
 
-describe('AI-primary onboarding orchestration', () => {
-  it('repairs one backend-rejected AI proposal before accepting the candidate', async () => {
-    const rejected: PlanCandidateGenerationData = {
-      status: 'NO_CANDIDATE',
-      validationIssues: [{
-        severity: 'ERROR',
-        reasonCode: 'EXERCISE_NOT_ELIGIBLE',
-        fieldPath: '/days/DAY_1/exercises/UNKNOWN',
-      }],
-      lockedFieldOutcomes: {},
-    }
-    const persistence = port([rejected, candidate('AI_PERSONALIZED')])
-    const generator: AiPlanGenerator = {
-      generate: vi.fn()
-        .mockResolvedValueOnce(firstProposal)
-        .mockResolvedValueOnce(repairedProposal),
-    }
-
-    await expect(saveProfileAndGenerateCandidate(persistence, draft, generator))
-      .resolves.toMatchObject({
-        candidate: { generationSource: 'AI_PERSONALIZED' },
-      })
-
-    expect(generator.generate).toHaveBeenCalledTimes(2)
-    expect(generator.generate).toHaveBeenNthCalledWith(
-      2,
-      context,
-      draft.additionalRequirements,
-      rejected.validationIssues,
-    )
-    expect(persistence.generateCandidate).toHaveBeenNthCalledWith(1, {
-      profileVersion: 1,
-      additionalRequirements: draft.additionalRequirements,
-      aiProposal: firstProposal,
-      fallbackAllowed: false,
-    })
-    expect(persistence.generateCandidate).toHaveBeenNthCalledWith(2, {
-      profileVersion: 1,
-      additionalRequirements: draft.additionalRequirements,
-      aiProposal: repairedProposal,
-      fallbackAllowed: false,
-    })
+describe('onboarding AI boundary', () => {
+  it('defaults AI consent to false', () => {
+    expect(createOnboardingState().draft.aiConsentGranted).toBe(false)
   })
 
-  it('uses an explicitly requested fallback when CloudBase AI is unavailable', async () => {
-    const persistence = port([candidate('FALLBACK_RULE_PLAN')])
-    const generator: AiPlanGenerator = {
-      generate: vi.fn().mockRejectedValue(new AiPlanUnavailableError('provider unavailable')),
-    }
+  it('uses deterministic fallback and makes zero AI/context calls without consent', async () => {
+    const persistence = port()
+    const generator: AiPlanGenerator = { generate: vi.fn() }
 
     await expect(saveProfileAndGenerateCandidate(persistence, draft, generator))
-      .resolves.toMatchObject({
-        candidate: { generationSource: 'FALLBACK_RULE_PLAN' },
-      })
+      .resolves.toMatchObject({ candidate: { generationSource: 'FALLBACK_RULE_PLAN' } })
 
-    expect(generator.generate).toHaveBeenCalledTimes(1)
-    expect(persistence.generateCandidate).toHaveBeenCalledOnce()
+    expect(generator.generate).not.toHaveBeenCalled()
+    expect(persistence.getPlanGenerationContext).not.toHaveBeenCalled()
     expect(persistence.generateCandidate).toHaveBeenCalledWith({
       profileVersion: 1,
+      trainingSplit: 'UPPER_LOWER',
       additionalRequirements: draft.additionalRequirements,
       fallbackAllowed: true,
     })
   })
 
-  it('never performs more than one repair before falling back', async () => {
+  it('uses AI selection only after consent and asks the backend for authoritative validation', async () => {
+    const persistence = port()
+    vi.mocked(persistence.generateCandidate).mockResolvedValue(aiCandidate)
+    const generator: AiPlanGenerator = { generate: vi.fn().mockResolvedValue(proposal) }
+
+    await expect(saveProfileAndGenerateCandidate(
+      persistence,
+      { ...draft, aiConsentGranted: true },
+      generator,
+    )).resolves.toMatchObject({ candidate: { generationSource: 'AI_PERSONALIZED' } })
+
+    expect(persistence.getPlanGenerationContext).toHaveBeenCalledWith(1)
+    expect(generator.generate).toHaveBeenCalledWith(context, {
+      consentGranted: true,
+      repairIssues: undefined,
+    })
+    expect(persistence.generateCandidate).toHaveBeenCalledWith({
+      profileVersion: 1,
+      trainingSplit: 'UPPER_LOWER',
+      additionalRequirements: draft.additionalRequirements,
+      aiProposal: proposal,
+      fallbackAllowed: false,
+    })
+  })
+
+  it('uses one structured repair attempt before accepting an AI candidate', async () => {
     const rejected: PlanCandidateGenerationData = {
       status: 'NO_CANDIDATE',
       validationIssues: [{
         severity: 'ERROR',
-        reasonCode: 'SESSION_DURATION_EXCEEDED',
-        fieldPath: '/days/DAY_1',
+        reasonCode: 'SESSION_TARGET_UNDERFILLED',
+        fieldPath: '/days/DAY_1/exercises',
       }],
       lockedFieldOutcomes: {},
     }
-    const persistence = port([rejected, rejected, candidate('FALLBACK_RULE_PLAN')])
-    const generator: AiPlanGenerator = {
-      generate: vi.fn()
-        .mockResolvedValueOnce(firstProposal)
-        .mockResolvedValueOnce(repairedProposal),
-    }
+    const persistence = port()
+    vi.mocked(persistence.generateCandidate)
+      .mockResolvedValueOnce(rejected)
+      .mockResolvedValueOnce(aiCandidate)
+    const generator: AiPlanGenerator = { generate: vi.fn().mockResolvedValue(proposal) }
 
-    await expect(saveProfileAndGenerateCandidate(persistence, draft, generator))
-      .resolves.toMatchObject({
-        candidate: { generationSource: 'FALLBACK_RULE_PLAN' },
-      })
+    await expect(saveProfileAndGenerateCandidate(
+      persistence,
+      { ...draft, aiConsentGranted: true },
+      generator,
+    )).resolves.toMatchObject({ candidate: { generationSource: 'AI_PERSONALIZED' } })
 
     expect(generator.generate).toHaveBeenCalledTimes(2)
-    expect(persistence.generateCandidate).toHaveBeenCalledTimes(3)
-    expect(persistence.generateCandidate).toHaveBeenLastCalledWith({
-      profileVersion: 1,
-      additionalRequirements: draft.additionalRequirements,
-      fallbackAllowed: true,
+    expect(generator.generate).toHaveBeenNthCalledWith(2, context, {
+      consentGranted: true,
+      repairIssues: rejected.validationIssues,
     })
+    expect(persistence.generateCandidate).toHaveBeenCalledTimes(2)
   })
 
-  it('does not hide generation-context or candidate contract failures behind fallback', async () => {
-    const contextFailure = port([])
-    vi.mocked(contextFailure.getPlanGenerationContext!).mockRejectedValue(
-      new Error('profile version conflict'),
+  it('stops after one repair and surfaces the final rule rejection without fallback', async () => {
+    const rejected: PlanCandidateGenerationData = {
+      status: 'NO_CANDIDATE',
+      validationIssues: [{
+        severity: 'ERROR',
+        reasonCode: 'RECOVERY_WINDOW_TOO_SHORT',
+        fieldPath: '/days/DAY_2',
+      }],
+      lockedFieldOutcomes: {},
+    }
+    const persistence = port()
+    vi.mocked(persistence.generateCandidate)
+      .mockResolvedValueOnce(rejected)
+      .mockResolvedValueOnce(rejected)
+    const generator: AiPlanGenerator = { generate: vi.fn().mockResolvedValue(proposal) }
+
+    await expect(saveProfileAndGenerateCandidate(
+      persistence,
+      { ...draft, aiConsentGranted: true },
+      generator,
+    )).resolves.toEqual(rejected)
+
+    expect(generator.generate).toHaveBeenCalledTimes(2)
+    expect(persistence.generateCandidate).toHaveBeenCalledTimes(2)
+    expect(persistence.generateCandidate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ fallbackAllowed: true }),
     )
-    const generator: AiPlanGenerator = {
-      generate: vi.fn().mockResolvedValue(firstProposal),
-    }
-
-    await expect(saveProfileAndGenerateCandidate(contextFailure, draft, generator))
-      .rejects.toThrow('profile version conflict')
-    expect(contextFailure.generateCandidate).not.toHaveBeenCalled()
-
-    const candidateFailure = port([])
-    vi.mocked(candidateFailure.generateCandidate).mockRejectedValue(
-      new Error('contract response invalid'),
-    )
-    await expect(saveProfileAndGenerateCandidate(candidateFailure, draft, generator))
-      .rejects.toThrow('contract response invalid')
-    expect(candidateFailure.generateCandidate).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves existing structured preferences until the user edits them', async () => {
-    const persistence = port([candidate('AI_PERSONALIZED')])
-    const generator: AiPlanGenerator = {
-      generate: vi.fn().mockResolvedValue(firstProposal),
-    }
+  it('requires a fresh consent choice when onboarding is opened again', async () => {
+    const persistence = port()
+    vi.mocked(persistence.generateCandidate).mockResolvedValue(aiCandidate)
+    const generator: AiPlanGenerator = { generate: vi.fn().mockResolvedValue(proposal) }
+    const application = createFitnessApplication(persistence, {
+      validatePlan: vi.fn(),
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn(),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    }, generator)
 
-    await saveProfileAndGenerateCandidate(persistence, draft, generator)
+    await application.completeOnboarding({ ...draft, aiConsentGranted: true })
 
-    expect(persistence.savePreferences).not.toHaveBeenCalled()
+    expect(application.resumeOnboarding().draft.aiConsentGranted).toBe(false)
   })
 
-  it('saves structured preferences when the user explicitly changes them', async () => {
-    const persistence = port([candidate('AI_PERSONALIZED')])
+  it('falls back only for ordinary provider failures', async () => {
+    const persistence = port()
     const generator: AiPlanGenerator = {
-      generate: vi.fn().mockResolvedValue(firstProposal),
+      generate: vi.fn().mockRejectedValue(new AiDiagnosticError(
+        'TRANSIENT', 'AI_PROVIDER_TRANSIENT', 'temporary',
+      )),
     }
+
+    await expect(saveProfileAndGenerateCandidate(
+      persistence,
+      { ...draft, aiConsentGranted: true },
+      generator,
+    )).resolves.toMatchObject({ candidate: { generationSource: 'FALLBACK_RULE_PLAN' } })
+    expect(persistence.generateCandidate).toHaveBeenCalledTimes(1)
+    expect(persistence.generateCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      fallbackAllowed: true,
+    }))
+  })
+
+  it('surfaces contract and unsafe-output failures without hiding them behind fallback', async () => {
+    const persistence = port()
+    const generator: AiPlanGenerator = {
+      generate: vi.fn().mockRejectedValue(new AiDiagnosticError(
+        'CONTRACT', 'AI_CONTRACT_INVALID', 'invalid response',
+      )),
+    }
+
+    await expect(saveProfileAndGenerateCandidate(
+      persistence,
+      { ...draft, aiConsentGranted: true },
+      generator,
+    )).rejects.toMatchObject({ category: 'CONTRACT' })
+    expect(persistence.generateCandidate).not.toHaveBeenCalled()
+  })
+
+  it('preserves structured preferences only when explicitly edited', async () => {
+    const untouched = port()
+    await saveProfileAndGenerateCandidate(untouched, draft)
+    expect(untouched.savePreferences).not.toHaveBeenCalled()
+
+    const edited = port()
     const editedDraft: OnboardingDraft = {
       ...draft,
       preferences: [{
@@ -270,10 +269,8 @@ describe('AI-primary onboarding orchestration', () => {
       }],
       preferencesTouched: true,
     }
-
-    await saveProfileAndGenerateCandidate(persistence, editedDraft, generator)
-
-    expect(persistence.savePreferences).toHaveBeenCalledWith({
+    await saveProfileAndGenerateCandidate(edited, editedDraft)
+    expect(edited.savePreferences).toHaveBeenCalledWith({
       items: editedDraft.preferences,
       expectedVersion: 0,
     })

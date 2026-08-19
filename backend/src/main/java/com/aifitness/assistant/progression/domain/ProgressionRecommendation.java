@@ -78,7 +78,7 @@ public record ProgressionRecommendation(
         BigDecimal normalized = Objects.requireNonNull(acceptedWeight, "accepted weight must not be null")
                 .stripTrailingZeros();
         if (!roundingEvidence.orElseThrow().allows(currentPrescription.weightKg(), normalized)) {
-            throw new IllegalArgumentException("accepted weight does not match the equipment increment");
+            throw new IllegalArgumentException("accepted weight does not match an available equipment level");
         }
         return normalized;
     }
@@ -125,8 +125,7 @@ public record ProgressionRecommendation(
 
         boolean allows(BigDecimal currentWeight, BigDecimal acceptedWeight) {
             if (acceptedWeight.signum() < 0) return false;
-            BigDecimal increment = availableEquipmentSteps.getFirst();
-            return acceptedWeight.subtract(currentWeight).abs().remainder(increment).signum() == 0;
+            return availableEquipmentSteps.stream().anyMatch(level -> level.compareTo(acceptedWeight) == 0);
         }
     }
 

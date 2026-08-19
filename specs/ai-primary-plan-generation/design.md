@@ -1,5 +1,15 @@
 # AI-primary plan generation design
 
+## Supersession note
+
+The online-plan-generation flow below is retained as historical design context and is not active
+for the current release. `../post-audit-remediation/design.md` is authoritative: online
+`PLAN_GENERATION` is fail-closed, onboarding uses the deterministic composer, and enabling a future
+AI proposal source requires a separate purpose, privacy, consent, and release approval. The
+historical free-text onboarding control is also inactive: its API field remains compatible, while
+the current UI exposes only structured preferred/excluded exercise choices that the deterministic
+composer actually consumes.
+
 ## Responsibility boundary
 
 The AI is the primary source of plan structure: plan name, training-day split, exercise
@@ -7,9 +17,10 @@ selection/order, work sets, repetition range, and rest within the published boun
 backend is the acceptance authority. It derives weight state, applies locks, validates the
 proposal, and is the only component allowed to register an activatable candidate.
 
-The deterministic generator remains only as a compatibility and availability fallback.
-Session duration is an upper-bound input to estimation; there is no duration-to-exercise-count
-rule or underfilled-count warning.
+The deterministic generator remains the authoritative availability fallback. Session duration is
+a complete budget. The post-audit composition policy requires four or five exercises for a
+45-minute day when safe candidates are available and emits an underfilled or insufficiency issue
+otherwise. This paragraph supersedes the former count-agnostic design.
 
 ## Flow
 
@@ -84,8 +95,9 @@ defects cannot be silently hidden.
 ## Fallback behavior
 
 The fallback generator uses eligible templates, goal-specific prescriptions, compatible
-exercise replacement, recovery constraints, and remaining duration. It may add safe accessory
-movements only while they fit the time budget. It does not target a fixed exercise count.
+exercise replacement, recovery constraints, and remaining duration. The final sentence of the
+former design is superseded: the current 45-minute composition band requires four or five safe
+exercises when enough eligible actions exist and otherwise returns a typed insufficiency result.
 
 Fallback provenance is explicit in the API and UI. The deterministic fallback explanation
 does not claim AI personalization.
