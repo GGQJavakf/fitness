@@ -153,6 +153,25 @@ describe('original golden-cat static exercise breakdown pack', () => {
       .toEqual([0, 8, 3])
     expect(byCode.get('STANDING_WALL_CALF_RAISE')?.stages.map((stage) => stage.sourceGridIndex))
       .toEqual([0, 1, 2])
+
+    const curatedTriptychs = new Map([
+      ['DUMBBELL_LATERAL_RAISE', 'dumbbell-lateral-raise-sprite-v4.png'],
+      ['SINGLE_ARM_DUMBBELL_LATERAL_RAISE', 'single-arm-dumbbell-lateral-raise-sprite-v4.png'],
+      ['CABLE_LATERAL_RAISE', 'cable-lateral-raise-sprite-v4.png'],
+      ['CABLE_TRICEPS_PUSHDOWN', 'cable-triceps-pushdown-sprite-v4.png'],
+      ['DUMBBELL_OVERHEAD_TRICEPS_EXTENSION', 'dumbbell-overhead-triceps-extension-sprite-v4.png'],
+      ['DUMBBELL_LYING_TRICEPS_EXTENSION', 'dumbbell-lying-triceps-extension-sprite-v4.png'],
+      ['CABLE_REVERSE_FLY', 'cable-reverse-fly-sprite-v4.png'],
+      ['MACHINE_SHRUG', 'machine-shrug-sprite-v4.png'],
+    ])
+    for (const [exerciseCode, sourceFile] of curatedTriptychs) {
+      const stages = byCode.get(exerciseCode)?.stages ?? []
+      expect(stages, exerciseCode).toHaveLength(3)
+      expect(stages.map((stage) => stage.sourceFile), exerciseCode)
+        .toEqual(Array(3).fill(`assets-source/exercise-guides/${sourceFile}`))
+      expect(stages.map((stage) => stage.sourceGridIndex), exerciseCode)
+        .toEqual([undefined, undefined, undefined])
+    }
   })
 
   it('rebuilds the complete static pack byte-for-byte from the approved locked rig', () => {

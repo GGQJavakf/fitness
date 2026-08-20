@@ -1040,14 +1040,13 @@ def lateral_raise(parts: PartLibrary, phase: float, variant: str) -> RenderedFra
 
 def shrug(parts: PartLibrary, phase: float, variant: str) -> RenderedFrame:
     base = standing_front_pose(5, -5, 5, -5)
-    lift = 6 * phase
+    lift = 10 * phase
 
     def raised(limb: Limb) -> Limb:
         return tuple((point[0], point[1] - lift) for point in limb)  # type: ignore[return-value]
 
     pose = replace(
         base,
-        head_center=(base.head_center[0], base.head_center[1] - lift * 0.25),
         left_arm=raised(base.left_arm),
         right_arm=raised(base.right_arm),
     )

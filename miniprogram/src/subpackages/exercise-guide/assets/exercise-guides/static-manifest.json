@@ -912,10 +912,10 @@
           "description": "站稳并让手肘保持轻微弯曲。",
           "file": "dumbbell-lateral-raise-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
-          "sizeBytes": 9374
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
+          "sha256": "618fee2f501c7b659c61edcd7843d0a77bbdb1fa5b5fb4cbbc7a60f93badf9f9",
+          "sizeBytes": 6183
         },
         {
           "id": "drive",
@@ -923,10 +923,10 @@
           "description": "肩部带动手臂平稳向两侧移动。",
           "file": "dumbbell-lateral-raise-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "6a6cf86d93d9ee0178f050b61a1ca9747b5b01e5a071e6b1873876e5999f8251",
-          "sizeBytes": 9746
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
+          "sha256": "8367e15158f5c21294b9a2ef5e0d4d9219102d9459b3a746d7a83fabe8401aeb",
+          "sizeBytes": 7192
         },
         {
           "id": "finish",
@@ -934,10 +934,10 @@
           "description": "抬到肩部附近停稳，避免耸肩。",
           "file": "dumbbell-lateral-raise-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "9c56d8983ac40329e202c45c34cfef9fd7337bb1e0c5015edebe7ae571244533",
-          "sizeBytes": 9791
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
+          "sha256": "d61bc54e0efa29b802acab1fb744c1d6af755fb978fafb59482b17db24cce390",
+          "sizeBytes": 6715
         }
       ]
     },
@@ -951,10 +951,10 @@
           "description": "站稳并让手肘保持轻微弯曲。",
           "file": "single-arm-dumbbell-lateral-raise-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "0e6d5f1f1545208a2c1077136303d112cf52442b0bfc39857b9ae0bf05f137c3",
-          "sizeBytes": 9127
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
+          "sha256": "bc6547e5093b5c1e1cf9f10f118e8af35647d6711229760c6ccc6479c73c8a97",
+          "sizeBytes": 7436
         },
         {
           "id": "drive",
@@ -962,10 +962,10 @@
           "description": "肩部带动手臂平稳向两侧移动。",
           "file": "single-arm-dumbbell-lateral-raise-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "843a877df9f2de4c4060731b2ed3b3a29de944c92d12bd17c79f179750128899",
-          "sizeBytes": 9482
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
+          "sha256": "3b908be229421782738d683f99466932888e8de5bea83d7044eabe8c4e6fbbde",
+          "sizeBytes": 7695
         },
         {
           "id": "finish",
@@ -973,10 +973,10 @@
           "description": "抬到肩部附近停稳，避免耸肩。",
           "file": "single-arm-dumbbell-lateral-raise-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "1e9e9e4267be92cfed1ea35017936da1a286f3700476a5b07699ea7813d60d1c",
-          "sizeBytes": 9441
+          "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
+          "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
+          "sha256": "8207872d4555c11b5a348d15e8a91a12cbb8c965e753a5036541f8b6b5db9e7d",
+          "sizeBytes": 7581
         }
       ]
     },
@@ -990,10 +990,10 @@
           "description": "站稳并让手肘保持轻微弯曲。",
           "file": "cable-lateral-raise-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "7bfa4d398c96d2c294e3fe6d2f7469ef948f9675af9202ea3ecd001e86161c89",
-          "sizeBytes": 10540
+          "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
+          "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
+          "sha256": "6f9131e111b37ed8cc55f710e0a673290c69eaa3b770da2a3d0f29ac17784325",
+          "sizeBytes": 8789
         },
         {
           "id": "drive",
@@ -1001,10 +1001,10 @@
           "description": "肩部带动手臂平稳向两侧移动。",
           "file": "cable-lateral-raise-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "077ef181b768445ef50c33e26519272aa7a70c132218a92e075a0a34a054bf64",
-          "sizeBytes": 10985
+          "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
+          "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
+          "sha256": "8a50f006c438bec0558a96c1c852af91c90e788cabab70014ab01a7708dc1a67",
+          "sizeBytes": 8973
         },
         {
           "id": "finish",
@@ -1012,10 +1012,10 @@
           "description": "抬到肩部附近停稳，避免耸肩。",
           "file": "cable-lateral-raise-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "c98f932ce59b7e372f67c468a32135f12d121b9fe3185294a69a708d15e6c0fb",
-          "sizeBytes": 11067
+          "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
+          "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
+          "sha256": "2774e9d0cf2c7851be2d136e753b901e727b1a9d327c68105551a9faf5f439ae",
+          "sizeBytes": 9346
         }
       ]
     },
@@ -1146,10 +1146,10 @@
           "description": "固定上臂，让手肘处于可控弯曲位置。",
           "file": "cable-triceps-pushdown-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "fdb9dd5b9bd4b968c847c0bc395c2eb9cf1394f113082eb16b34b9ce9c1ee91f",
-          "sizeBytes": 10283
+          "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
+          "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
+          "sha256": "f7bf34554934c50123299e6f5d20318e58b75ea29605e60930fcc472e587214b",
+          "sizeBytes": 11435
         },
         {
           "id": "drive",
@@ -1157,10 +1157,10 @@
           "description": "只移动前臂，避免身体借力。",
           "file": "cable-triceps-pushdown-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "13ec0f404a000ff30a7301f88d97d60da46c821b69c8063a6f1827e33d3c1983",
-          "sizeBytes": 10449
+          "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
+          "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
+          "sha256": "08c1aa1932e3def13babd4a0e28af07db20000c39388d2ea8a130204e78a413a",
+          "sizeBytes": 11657
         },
         {
           "id": "finish",
@@ -1168,10 +1168,10 @@
           "description": "在手肘接近伸直时停稳，不锁死关节。",
           "file": "cable-triceps-pushdown-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "3f84c4bd5f4bf422870771f6166985d8b229ebe86ba1d85ffb591ddd8e074324",
-          "sizeBytes": 10781
+          "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
+          "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
+          "sha256": "a27ac614471b8034968ff27e525dd61486e5c447734eb73ea012fe1ac5f0d00d",
+          "sizeBytes": 11632
         }
       ]
     },
@@ -1185,10 +1185,10 @@
           "description": "固定上臂，让手肘处于可控弯曲位置。",
           "file": "dumbbell-overhead-triceps-extension-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "31a47ecb81e32d1ac200ab55ff06415fd60bf5b5be63cc61e1ef02faa33411a8",
-          "sizeBytes": 9304
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
+          "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
+          "sha256": "1031462d2f8f5c1765283d719daf68a04296e587549e47e910605446fb0e94ac",
+          "sizeBytes": 7804
         },
         {
           "id": "drive",
@@ -1196,10 +1196,10 @@
           "description": "只移动前臂，避免身体借力。",
           "file": "dumbbell-overhead-triceps-extension-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "bc1843a6476aba0bc0f2ccc7108340b51414f4d8ff220c50b8cb252086bfdb4a",
-          "sizeBytes": 9594
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
+          "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
+          "sha256": "c306358d74d3300fe0f99563470a45e2b9624fc109a18c9455fbe6b718902637",
+          "sizeBytes": 8138
         },
         {
           "id": "finish",
@@ -1207,10 +1207,10 @@
           "description": "在手肘接近伸直时停稳，不锁死关节。",
           "file": "dumbbell-overhead-triceps-extension-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "f2855c22508cab88a9c9a1fb33de554570bc8a3c06640dd047e32a96b0d93f28",
-          "sizeBytes": 9506
+          "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
+          "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
+          "sha256": "6bb896a94a53ce319f30a0415e4b311c5931d0226a4df0ca42150f328606bdc9",
+          "sizeBytes": 8368
         }
       ]
     },
@@ -1224,10 +1224,10 @@
           "description": "固定上臂，让手肘处于可控弯曲位置。",
           "file": "dumbbell-lying-triceps-extension-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "ccfb410eeb9cbec0b393d197d44660739344555f1b2b71a52cc02e1640a8292f",
-          "sizeBytes": 9123
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
+          "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
+          "sha256": "ee52d2eb2ef2fb5b016adae4c55e47c8cae1533b2443c5706b4c5d573c17c0f0",
+          "sizeBytes": 10139
         },
         {
           "id": "drive",
@@ -1235,10 +1235,10 @@
           "description": "只移动前臂，避免身体借力。",
           "file": "dumbbell-lying-triceps-extension-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "8c78b59b59fafd803ae4e5730a60ee423e4570756d2411dde9b98bb74c94e618",
-          "sizeBytes": 8201
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
+          "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
+          "sha256": "452e474ec2827d7f441d66ba475afb8634d63d6ed42644b8d2eb19a1215665bc",
+          "sizeBytes": 10466
         },
         {
           "id": "finish",
@@ -1246,10 +1246,10 @@
           "description": "在手肘接近伸直时停稳，不锁死关节。",
           "file": "dumbbell-lying-triceps-extension-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "1ff627a34de535c2513e9295cf88418c0d7419463c88cb0ba2937d74bf2a2471",
-          "sizeBytes": 8529
+          "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
+          "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
+          "sha256": "41be2e9a24b1df4848b9e35ced3430659996093a585670202fb993b3bdb33491",
+          "sizeBytes": 11266
         }
       ]
     },
@@ -1302,10 +1302,10 @@
           "description": "站稳或俯身后先保持躯干稳定。",
           "file": "cable-reverse-fly-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "191a745516488cc30039c7531b3dfdd6b3a62a79c91f843e307ff561be751180",
-          "sizeBytes": 8202
+          "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
+          "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
+          "sha256": "c05fea1cc524814de8e587ba816679e32c08fc8b959f0b5dde6e72c8377869cb",
+          "sizeBytes": 13762
         },
         {
           "id": "drive",
@@ -1313,10 +1313,10 @@
           "description": "肘部向外移动，肩部不要耸起。",
           "file": "cable-reverse-fly-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "972049c33ad74a709999366acdad2f7110f56a76ee201da6f308e246c775c87d",
-          "sizeBytes": 9063
+          "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
+          "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
+          "sha256": "c7f2a502a63907ef9c53b88e54f7801565b928c7c71bbf1e09254f027de5a6a1",
+          "sizeBytes": 14027
         },
         {
           "id": "finish",
@@ -1324,10 +1324,10 @@
           "description": "肩部后侧和上背收紧后受控返回。",
           "file": "cable-reverse-fly-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "ae0125581550e189127c1183c33bc47c06f139df0283f93d79700b172f51a5a9",
-          "sizeBytes": 8029
+          "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
+          "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
+          "sha256": "a44abb761b2a634636b7dd1c61fc87bbbac5afe6d7d57db68a89d28cebd979a8",
+          "sizeBytes": 13799
         }
       ]
     },
@@ -1393,8 +1393,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "0ba344edbef984710fc5a91203566e5b57d94fc5d486240bd50706d8b7c93d76",
-          "sizeBytes": 9319
+          "sha256": "8c2499b6369222c98738bb190fd1adf1d4edd54bc84d72a279297bc08cabfaa7",
+          "sizeBytes": 9363
         },
         {
           "id": "finish",
@@ -1404,8 +1404,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "01949b3ddabf5a47fdf7616a9f4bdf860ad03408e957dec35b1a05235beeeff8",
-          "sizeBytes": 9393
+          "sha256": "512019e644858903a6e2d3fbb473fc31ccadedb2dc7ff831bb96be9eef24b7a1",
+          "sizeBytes": 9514
         }
       ]
     },
@@ -1432,8 +1432,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "916ca1053eb8c98ff12ff0b2bbd2da84d1114b79fd04e62243bccdd4aa49fdf9",
-          "sizeBytes": 10573
+          "sha256": "5fc5407c9aca95d700b4cc52e667e844977aabe36aa80d5279bade7d8d8b2bf3",
+          "sizeBytes": 10587
         },
         {
           "id": "finish",
@@ -1443,8 +1443,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "b5461c877646280ebc6df635839bb148fc9d796125c318f0aa1790ead8bfe786",
-          "sizeBytes": 10578
+          "sha256": "253b18ddd09f7d9d26f00f697245696d64cc379ef7390a8c8ef72a84c10fba1e",
+          "sizeBytes": 10635
         }
       ]
     },
@@ -1458,10 +1458,10 @@
           "description": "站稳并让双臂自然下垂。",
           "file": "machine-shrug-01-setup.jpg",
           "phase": 0.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "9f4c2821c3ae0fd752c05fee56b49cd99677f51b2a80e0e31b7cfe48feb4e0c1",
-          "sizeBytes": 9131
+          "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
+          "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
+          "sha256": "3f065e59297898e622bd75d67e4ddcccabac5dd222bd0da211f5243fee9fa92a",
+          "sizeBytes": 10976
         },
         {
           "id": "drive",
@@ -1469,10 +1469,10 @@
           "description": "保持手肘伸展，将肩部垂直抬高。",
           "file": "machine-shrug-02-drive.jpg",
           "phase": 0.5,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "84e5ad43d459b8e3c73448f91d17860c573864588c18ff31b8378cabcfffc7d8",
-          "sizeBytes": 9165
+          "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
+          "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
+          "sha256": "e557f7d75eded57ff25a7d6cf71a1f6aa569ab4530722df99df46c3b271e567d",
+          "sizeBytes": 11105
         },
         {
           "id": "finish",
@@ -1480,10 +1480,10 @@
           "description": "肩部抬高后短暂停稳，不转动肩膀。",
           "file": "machine-shrug-03-finish.jpg",
           "phase": 1.0,
-          "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
-          "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "782b740fb83efcb67bfe51ebf5e8037a727e1046ad7e728ec4d29fb54732d94e",
-          "sizeBytes": 9211
+          "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
+          "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
+          "sha256": "74fa0695240223b8d44715f102d2a073b8aece627fcf1346d64e9dab1780d6d3",
+          "sizeBytes": 11319
         }
       ]
     },

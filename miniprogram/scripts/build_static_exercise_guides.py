@@ -39,6 +39,20 @@ BENCH_PRESS_SOURCE_FRAMES = (
     SOURCE_ROOT / "bench-press-v8-v7based/frame-100-top.png",
 )
 
+CURATED_TRIPTYCH_SOURCES: dict[str, Path] = {
+    "dumbbell-lateral-raise": SOURCE_ROOT / "dumbbell-lateral-raise-sprite-v4.png",
+    "single-arm-dumbbell-lateral-raise": SOURCE_ROOT
+    / "single-arm-dumbbell-lateral-raise-sprite-v4.png",
+    "cable-lateral-raise": SOURCE_ROOT / "cable-lateral-raise-sprite-v4.png",
+    "cable-triceps-pushdown": SOURCE_ROOT / "cable-triceps-pushdown-sprite-v4.png",
+    "dumbbell-overhead-triceps-extension": SOURCE_ROOT
+    / "dumbbell-overhead-triceps-extension-sprite-v4.png",
+    "dumbbell-lying-triceps-extension": SOURCE_ROOT
+    / "dumbbell-lying-triceps-extension-sprite-v4.png",
+    "cable-reverse-fly": SOURCE_ROOT / "cable-reverse-fly-sprite-v4.png",
+    "machine-shrug": SOURCE_ROOT / "machine-shrug-sprite-v4.png",
+}
+
 
 @dataclass(frozen=True)
 class StageSpec:
@@ -319,6 +333,20 @@ def source_image(
     stage_index: int,
     variant: str = "",
 ) -> tuple[Image.Image, Path, int | None]:
+    triptych_path = CURATED_TRIPTYCH_SOURCES.get(exercise_slug)
+    if triptych_path is not None:
+        with Image.open(triptych_path) as opened:
+            triptych = opened.convert("RGB")
+        left = round(stage_index * triptych.width / 3)
+        right = round((stage_index + 1) * triptych.width / 3)
+        inset_ratio = 0.03 if exercise_slug == "cable-triceps-pushdown" else 0.01
+        inset = max(2, round((right - left) * inset_ratio))
+        return (
+            triptych.crop((left + inset, inset, right - inset, triptych.height - inset)),
+            triptych_path,
+            None,
+        )
+
     if renderer in {"dumbbell-row", "biceps-curl", "lateral-raise", "triceps-extension", "rear-delt", "shrug"}:
         stage = stages_for(renderer)[stage_index]
         rendered = RENDERERS[renderer](rig_parts(), stage.phase, variant)
