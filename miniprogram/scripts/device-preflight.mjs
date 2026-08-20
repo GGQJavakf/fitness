@@ -1,6 +1,8 @@
 import { networkInterfaces } from 'node:os'
 import { spawnSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
+import { readFileSync, readdirSync } from 'node:fs'
+import { dirname, relative, resolve } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import {
   ALLOWED_RELEASE_ENVIRONMENT_KEYS,
@@ -15,6 +17,7 @@ const REQUIRED_ENVIRONMENT = [
   'FITNESS_DB_USERNAME',
   'FITNESS_DB_PASSWORD'
 ]
+const miniprogramRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
 function ipv4Octets(address) {
   const parts = address.split('.').map(Number)
@@ -98,6 +101,39 @@ export function miniprogramBuildEnvironment(environment, apiBaseUrl) {
   return buildEnvironment
 }
 
+export function assertDeviceBuildArtifact(apiBaseUrl, artifactFiles) {
+  const matchedFiles = artifactFiles.filter(({ content }) => content.includes(apiBaseUrl))
+  if (matchedFiles.length === 0) {
+    throw new Error('Built miniprogram does not contain the selected device API origin; refusing to use this artifact on a phone')
+  }
+  return matchedFiles.length
+}
+
+export function verifyDeviceBuildArtifact(
+  apiBaseUrl,
+  distDirectory = resolve(miniprogramRoot, 'dist')
+) {
+  const artifactFiles = javascriptFiles(distDirectory).map((path) => ({
+    path: relative(distDirectory, path),
+    content: readFileSync(path, 'utf8')
+  }))
+  if (artifactFiles.length === 0) {
+    throw new Error('Device build produced no JavaScript artifacts')
+  }
+  return {
+    scannedFiles: artifactFiles.length,
+    matchedFiles: assertDeviceBuildArtifact(apiBaseUrl, artifactFiles)
+  }
+}
+
+function javascriptFiles(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name)
+    if (entry.isDirectory()) return javascriptFiles(path)
+    return entry.isFile() && entry.name.endsWith('.js') ? [path] : []
+  })
+}
+
 export function resolveNpmInvocation(environment, nodeExecutable, platform = process.platform) {
   if (environment.npm_execpath) {
     return {
@@ -175,7 +211,15 @@ function run() {
       stdio: 'inherit'
     })
     if (result.error) throw result.error
-    process.exitCode = result.status ?? 1
+    if (result.status !== 0) {
+      process.exitCode = result.status ?? 1
+      return
+    }
+    const artifactVerification = verifyDeviceBuildArtifact(apiBaseUrl)
+    console.log(
+      `Device artifact gate passed: selected HTTPS API origin found in ${artifactVerification.matchedFiles}`
+      + ` of ${artifactVerification.scannedFiles} JavaScript file(s).`
+    )
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1

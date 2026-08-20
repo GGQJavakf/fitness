@@ -28,6 +28,7 @@ import { createWechatWorkoutDraftStore } from './WechatStorageAdapter'
 import { createWechatWorkoutStartIntentStore } from './WechatWorkoutStartIntentStore'
 import { createWechatTelemetryReporter } from './WechatTelemetryReporter'
 import { createWeappUserScopedDataLifecycle } from './WechatUserScopedDataLifecycle'
+import { currentWeappRuntimeConfigurationIssue } from './runtimeConfiguration'
 import { WorkoutDraftRecoveryRequiredError } from '../../application/ports/WorkoutDraftStore'
 import {
   createWeappCloudBaseAiTextProvider,
@@ -45,6 +46,10 @@ declare const __FITNESS_CLOUDBASE_AI_MODEL_READY__: boolean
 declare const __FITNESS_CLOUDBASE_SERVICE_NAME__: string
 
 const localUserData = createWeappUserScopedDataLifecycle()
+const startupConfigurationIssue = currentWeappRuntimeConfigurationIssue({
+  apiBaseUrl: __FITNESS_API_BASE_URL__,
+  cloudBaseServiceName: __FITNESS_CLOUDBASE_SERVICE_NAME__,
+})
 const sessions = createWeappSessionStore(localUserData)
 const navigationPort = createWeappNavigation()
 const reauthentication = createWeappLogin()
@@ -150,6 +155,7 @@ const telemetry = createWechatTelemetryReporter()
 export function getWeappApplication() {
   return {
     ...fitness,
+    startupConfigurationIssue,
     aiPlanGenerationAvailable,
     startup,
     navigation,

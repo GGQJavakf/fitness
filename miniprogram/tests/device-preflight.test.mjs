@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DEVICE_BUILD_API_BASE_URL_ENVIRONMENT_KEY } from '../../scripts/release-environment.mjs'
 
 import {
+  assertDeviceBuildArtifact,
   buildDeviceApiBaseUrl,
   miniprogramBuildEnvironment,
   missingRequiredEnvironment,
@@ -12,6 +13,18 @@ import {
 } from '../scripts/device-preflight.mjs'
 
 describe('device preflight', () => {
+  it('rejects a device artifact that does not contain the selected HTTPS API origin', () => {
+    expect(() => assertDeviceBuildArtifact(
+      'https://fitness.example.test',
+      [{ path: 'common.js', content: 'const apiBaseUrl="http://127.0.0.1:8080"' }]
+    )).toThrow(/selected device API origin/)
+
+    expect(assertDeviceBuildArtifact(
+      'https://fitness.example.test',
+      [{ path: 'common.js', content: 'const apiBaseUrl="https://fitness.example.test"' }]
+    )).toBe(1)
+  })
+
   it('accepts an explicitly selected private IPv4 address', () => {
     expect(selectDeviceHost('192.168.10.22', [
       { address: '192.168.10.22', internal: false, family: 'IPv4' }

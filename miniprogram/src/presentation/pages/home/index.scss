@@ -162,6 +162,20 @@
   gap: 16px;
 }
 
+.home-page__status--error {
+  border-color: rgba(255, 181, 171, 0.28);
+  background: rgba(168, 68, 59, 0.18);
+}
+
+.home-page__status--error .home-page__status-indicator {
+  background: rgba(255, 181, 171, 0.14);
+}
+
+.home-page__status--error .home-page__status-dot {
+  background: #ffb5ab;
+  box-shadow: 0 0 0 6px rgba(255, 181, 171, 0.08);
+}
+
 .home-page__status-indicator {
   display: flex;
   width: 40px;

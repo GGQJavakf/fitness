@@ -7,13 +7,35 @@ import { runSingleFlight } from './loginSingleFlight'
 
 import './index.scss'
 
+type StartupFailure = 'NONE' | 'CONNECTION' | 'DEVICE_CONFIGURATION'
+
+const deviceConfigurationMessage = '当前真机包仍指向电脑本机地址，手机无法访问。请重新构建真机包后再打开；无需重复登录。'
+
+function startupStatusLabel(
+  failure: StartupFailure,
+  destination: AppDestination | 'LOADING',
+): string {
+  if (failure === 'DEVICE_CONFIGURATION') return '真机包配置错误'
+  if (failure === 'CONNECTION') return '会话恢复失败'
+  if (destination === 'LOADING') return '正在连接'
+  if (destination === 'LOGIN') return '待建立档案'
+  return '训练档案已就绪'
+}
+
 export default function HomePage() {
   const application = getWeappApplication()
-  const [destination, setDestination] = useState<AppDestination | 'LOADING'>('LOADING')
-  const [message, setMessage] = useState('正在恢复本地会话…')
+  const hasDeviceConfigurationIssue = application.startupConfigurationIssue === 'DEVICE_LOOPBACK_API'
+  const [destination, setDestination] = useState<AppDestination | 'LOADING'>(
+    hasDeviceConfigurationIssue ? 'LOGIN' : 'LOADING',
+  )
+  const [message, setMessage] = useState(hasDeviceConfigurationIssue
+    ? deviceConfigurationMessage
+    : '正在恢复本地会话…')
   const [hasActiveWorkout, setHasActiveWorkout] = useState(false)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
-  const [startupFailed, setStartupFailed] = useState(false)
+  const [startupFailure, setStartupFailure] = useState<StartupFailure>(
+    hasDeviceConfigurationIssue ? 'DEVICE_CONFIGURATION' : 'NONE',
+  )
   const loginInFlight = useRef(false)
   const startupInFlight = useRef(false)
   const startupRequestId = useRef(0)
@@ -21,10 +43,16 @@ export default function HomePage() {
 
   async function restoreStartup(): Promise<void> {
     if (startupInFlight.current) return
+    if (hasDeviceConfigurationIssue) {
+      setDestination('LOGIN')
+      setStartupFailure('DEVICE_CONFIGURATION')
+      setMessage(deviceConfigurationMessage)
+      return
+    }
     startupInFlight.current = true
     const requestId = ++startupRequestId.current
     setDestination('LOADING')
-    setStartupFailed(false)
+    setStartupFailure('NONE')
     setMessage('正在恢复本地会话…')
     try {
       const next = await application.startup.start()
@@ -45,7 +73,7 @@ export default function HomePage() {
     } catch {
       if (mounted.current && requestId === startupRequestId.current) {
         setDestination('LOGIN')
-        setStartupFailed(true)
+        setStartupFailure('CONNECTION')
         setMessage('暂时无法恢复会话，请检查网络后重新连接；无需重复登录。')
       }
     } finally {
@@ -75,13 +103,8 @@ export default function HomePage() {
     })
   }
 
-  const statusLabel = startupFailed
-    ? '会话恢复失败'
-    : destination === 'LOADING'
-    ? '正在连接'
-    : destination === 'LOGIN'
-      ? '待建立档案'
-      : '训练档案已就绪'
+  const startupFailed = startupFailure !== 'NONE'
+  const statusLabel = startupStatusLabel(startupFailure, destination)
 
   if (destination === 'LOADING') {
     return (
@@ -116,7 +139,7 @@ export default function HomePage() {
             <Text className='home-page__subtitle'>结合目标、时间和训练条件，为你建立可持续进阶的个性化计划。</Text>
           </View>
 
-          <View className='home-page__status'>
+          <View className={`home-page__status ${startupFailed ? 'home-page__status--error' : ''}`}>
             <View className='home-page__status-indicator'>
               <View className='home-page__status-dot' />
             </View>
@@ -126,7 +149,7 @@ export default function HomePage() {
             </View>
           </View>
 
-          {destination === 'LOGIN' && startupFailed && (
+          {destination === 'LOGIN' && startupFailure === 'CONNECTION' && (
             <Button
               className='home-page__action home-page__action--primary'
               onClick={() => void restoreStartup()}

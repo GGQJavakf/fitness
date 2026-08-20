@@ -3,6 +3,7 @@ import TestRenderer, { act, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const application = vi.hoisted(() => ({
+  startupConfigurationIssue: undefined as 'DEVICE_LOOPBACK_API' | undefined,
   startup: {
     start: vi.fn(),
     login: vi.fn(),
@@ -38,6 +39,24 @@ async function flushPage(): Promise<void> {
 describe('home page runtime behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    application.startupConfigurationIssue = undefined
+  })
+
+  it('shows a build configuration error immediately instead of spinning on a physical-device loopback build', async () => {
+    application.startupConfigurationIssue = 'DEVICE_LOOPBACK_API'
+    let renderer: ReactTestRenderer | undefined
+
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(HomePage))
+      await flushPage()
+    })
+    if (!renderer) throw new Error('home page did not render')
+
+    const failed = JSON.stringify(renderer.toJSON())
+    expect(failed).toContain('真机包配置错误')
+    expect(failed).toContain('重新构建真机包')
+    expect(failed).not.toContain('正在打开你的训练计划')
+    expect(application.startup.start).not.toHaveBeenCalled()
   })
 
   it('renders workout recovery and routes it with the workout-session identifier', async () => {
