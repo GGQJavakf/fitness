@@ -1,4 +1,4 @@
-import { Button, Input, Picker, Text, View } from '@tarojs/components'
+import { Button, Input, ScrollView, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import type {
@@ -6,6 +6,7 @@ import type {
   PlanExerciseOption,
   PlanExerciseReplacementOption,
 } from '../../../application/models'
+import { ApplicationError } from '../../../application/errors'
 import { numericFieldPath, type EditableNumericField, type PlanEditorState } from '../../../application/planEditor'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { exerciseDisplayName, planFieldDisplayName, planIssueDisplayMessage } from '../../copy'
@@ -46,6 +47,7 @@ const patternBodyParts: Readonly<Record<string, string>> = {
 }
 
 type ExerciseOption = PlanExerciseOption | PlanExerciseReplacementOption
+type ExercisePickerMenu = 'BODY_PART' | 'EXERCISE' | null
 
 function exerciseBodyPart(option: ExerciseOption): string {
   if (option.movementPattern && patternBodyParts[option.movementPattern]) {
@@ -78,6 +80,11 @@ function mergeExerciseOptions(
   return [...merged.values()]
 }
 
+function reviewedReplacementsUnavailable(reason: unknown): boolean {
+  return reason instanceof ApplicationError
+    && (reason.code === 'RESOURCE_NOT_FOUND' || reason.code === 'INSUFFICIENT_REPLACEMENTS')
+}
+
 function editableValueError(field: EditableNumericField, raw: string): string {
   if (!raw.trim()) return `请输入${fieldLabels[field]}`
   const value = Number(raw)
@@ -100,6 +107,7 @@ export default function PlanEditorPage() {
   )[]>([])
   const [selectedBodyPart, setSelectedBodyPart] = useState('')
   const [selectedExerciseCode, setSelectedExerciseCode] = useState('')
+  const [openExercisePickerMenu, setOpenExercisePickerMenu] = useState<ExercisePickerMenu>(null)
   const [dayOptions, setDayOptions] = useState<readonly PlanDayOption[]>([])
   const [showDayOptions, setShowDayOptions] = useState(false)
   const [pendingRemove, setPendingRemove] = useState('')
@@ -224,22 +232,25 @@ export default function PlanEditorPage() {
     setBusy(true)
     setError('')
     try {
-      const options = replacing
-        ? mergeExerciseOptions(
-            ...(await Promise.all([
-              application.listPlanExerciseReplacements(dayCode, replacing),
-              application.listPlanExerciseOptions(dayCode),
-            ])),
-          )
-        : [...await application.listPlanExerciseOptions(dayCode)]
+      let options: ExerciseOption[]
+      if (replacing) {
+        const [reviewed, additional] = await Promise.all([
+          application.listPlanExerciseReplacements(dayCode, replacing).catch((reason) => {
+            if (reviewedReplacementsUnavailable(reason)) return []
+            throw reason
+          }),
+          application.listPlanExerciseOptions(dayCode),
+        ])
+        options = mergeExerciseOptions(reviewed, additional)
+      } else {
+        options = [...await application.listPlanExerciseOptions(dayCode)]
+      }
       setExerciseOptions(options)
       setOptionPicker({ dayCode, ...(replacing ? { replacing } : {}) })
+      setOpenExercisePickerMenu(null)
       const initialBodyPart = exerciseBodyParts(options)[0] ?? ''
       setSelectedBodyPart(initialBodyPart)
       setSelectedExerciseCode(options.find((option) => exerciseBodyPart(option) === initialBodyPart)?.exerciseCode ?? '')
-      if (options.length === 0) {
-        setError('当前训练日没有更多符合分化、器械和排除偏好的动作')
-      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '动作候选加载失败')
     } finally {
@@ -275,6 +286,7 @@ export default function PlanEditorPage() {
       setExerciseOptions([])
       setSelectedBodyPart('')
       setSelectedExerciseCode('')
+      setOpenExercisePickerMenu(null)
       setShowDayOptions(false)
       setDayOptions([])
       setPendingRemove('')
@@ -340,6 +352,7 @@ export default function PlanEditorPage() {
                   : '')
                 setPendingRemove('')
                 setOptionPicker(null)
+                setOpenExercisePickerMenu(null)
               }}
             >
               <Text className='editor-day-summary__name'>{day.name}</Text>
@@ -395,6 +408,7 @@ export default function PlanEditorPage() {
                     setExpandedExerciseKey(`${expandedDay.code}:${exercise.exerciseCode}`)
                     setPendingRemove('')
                     setOptionPicker(null)
+                    setOpenExercisePickerMenu(null)
                   }}
                 >
                   <Text className='editor-exercise-summary__name'>{exerciseDisplayName(exercise.exerciseCode)}</Text>
@@ -483,50 +497,104 @@ export default function PlanEditorPage() {
                 <Text className='section-title'>{optionPicker.replacing ? '选择替换动作' : '选择新增动作'}</Text>
                 <Button onClick={() => {
                   setOptionPicker(null)
+                  setExerciseOptions([])
                   setSelectedBodyPart('')
                   setSelectedExerciseCode('')
+                  setOpenExercisePickerMenu(null)
                 }}>取消</Button>
               </View>
+              {exerciseOptions.length === 0 && (
+                <View className='exercise-picker__empty'>
+                  <Text className='exercise-picker__empty-title'>
+                    {optionPicker.replacing ? '当前没有可替换的动作' : '当前没有可添加的动作'}
+                  </Text>
+                  <Text className='exercise-picker__hint'>
+                    已按本训练日分化、器械和排除偏好筛选。请调整可用器械、排除动作，或切换训练日后重试。
+                  </Text>
+                </View>
+              )}
               {exerciseOptions.length > 0 && (
                 <>
                   <Text className='exercise-picker__hint'>先选部位，再选动作</Text>
                   <View className='exercise-picker__field'>
                     <Text className='exercise-picker__label'>1. 训练部位</Text>
-                    <Picker
-                      className='exercise-picker__selector'
-                      mode='selector'
-                      range={availableBodyParts}
-                      value={Math.max(0, availableBodyParts.indexOf(selectedBodyPart))}
-                      onChange={(event) => {
-                        const nextBodyPart = availableBodyParts[Number(event.detail.value)] ?? ''
-                        const firstOption = exerciseOptions.find((option) => exerciseBodyPart(option) === nextBodyPart)
-                        setSelectedBodyPart(nextBodyPart)
-                        setSelectedExerciseCode(firstOption?.exerciseCode ?? '')
-                      }}
+                    <Button
+                      className={`exercise-picker__control ${openExercisePickerMenu === 'BODY_PART' ? 'exercise-picker__control--open' : ''}`.trim()}
+                      aria-label='选择训练部位'
+                      aria-expanded={openExercisePickerMenu === 'BODY_PART'}
+                      onClick={() => setOpenExercisePickerMenu(
+                        openExercisePickerMenu === 'BODY_PART' ? null : 'BODY_PART',
+                      )}
                     >
-                      <View className='exercise-picker__control'>
-                        <Text>{selectedBodyPart || '请选择训练部位'}</Text>
-                        <Text className='exercise-picker__chevron'>展开</Text>
+                      <View className='exercise-picker__control-copy'>
+                        <Text className='exercise-picker__control-value'>{selectedBodyPart || '请选择训练部位'}</Text>
+                        <Text className='exercise-picker__control-meta'>{availableBodyParts.length} 个部位可选</Text>
                       </View>
-                    </Picker>
+                      <View className={`exercise-picker__chevron ${openExercisePickerMenu === 'BODY_PART' ? 'exercise-picker__chevron--open' : ''}`.trim()} />
+                    </Button>
+                    {openExercisePickerMenu === 'BODY_PART' && (
+                      <View className='exercise-picker__menu exercise-picker__body-parts' aria-label='训练部位选项'>
+                        {availableBodyParts.map((bodyPart) => (
+                          <Button
+                            key={bodyPart}
+                            className={`exercise-picker__body-part ${bodyPart === selectedBodyPart ? 'exercise-picker__body-part--active' : ''}`.trim()}
+                            aria-label={`选择训练部位：${bodyPart}`}
+                            onClick={() => {
+                              const firstOption = exerciseOptions.find((option) => exerciseBodyPart(option) === bodyPart)
+                              setSelectedBodyPart(bodyPart)
+                              setSelectedExerciseCode(firstOption ? firstOption.exerciseCode : '')
+                              setOpenExercisePickerMenu('EXERCISE')
+                            }}
+                          >{bodyPart}</Button>
+                        ))}
+                      </View>
+                    )}
                   </View>
                   <View className='exercise-picker__field'>
                     <Text className='exercise-picker__label'>2. 动作</Text>
-                    <Picker
-                      className='exercise-picker__selector'
-                      mode='selector'
-                      range={selectedBodyPartOptions.map((option) => option.name)}
-                      value={Math.max(0, selectedBodyPartOptions.findIndex((option) => option.exerciseCode === selectedExerciseCode))}
-                      onChange={(event) => {
-                        const option = selectedBodyPartOptions[Number(event.detail.value)]
-                        setSelectedExerciseCode(option?.exerciseCode ?? '')
-                      }}
+                    <Button
+                      className={`exercise-picker__control ${openExercisePickerMenu === 'EXERCISE' ? 'exercise-picker__control--open' : ''}`.trim()}
+                      aria-label='选择动作'
+                      aria-expanded={openExercisePickerMenu === 'EXERCISE'}
+                      disabled={selectedBodyPartOptions.length === 0}
+                      onClick={() => setOpenExercisePickerMenu(
+                        openExercisePickerMenu === 'EXERCISE' ? null : 'EXERCISE',
+                      )}
                     >
-                      <View className='exercise-picker__control'>
-                        <Text>{selectedExercise?.name ?? '请选择动作'}</Text>
-                        <Text className='exercise-picker__chevron'>展开</Text>
+                      <View className='exercise-picker__control-copy'>
+                        <Text className='exercise-picker__control-value'>{selectedExercise ? selectedExercise.name : '请选择动作'}</Text>
+                        <Text className='exercise-picker__control-meta'>{selectedBodyPartOptions.length} 个动作可选</Text>
                       </View>
-                    </Picker>
+                      <View className={`exercise-picker__chevron ${openExercisePickerMenu === 'EXERCISE' ? 'exercise-picker__chevron--open' : ''}`.trim()} />
+                    </Button>
+                    {openExercisePickerMenu === 'EXERCISE' && (
+                      <ScrollView scrollY className='exercise-picker__menu exercise-picker__actions' aria-label={`${selectedBodyPart}动作选项`}>
+                        <View className='exercise-picker__action-list'>
+                          {selectedBodyPartOptions.map((option) => {
+                            const active = option.exerciseCode === selectedExerciseCode
+                            return (
+                              <Button
+                                key={option.exerciseCode}
+                                className={`exercise-picker__action ${active ? 'exercise-picker__action--active' : ''}`.trim()}
+                                aria-label={`选择动作：${option.name}`}
+                                onClick={() => {
+                                  setSelectedExerciseCode(option.exerciseCode)
+                                  setOpenExercisePickerMenu(null)
+                                }}
+                              >
+                                <View className='exercise-picker__action-copy'>
+                                  <Text className='exercise-picker__action-name'>{option.name}</Text>
+                                  <Text className='exercise-picker__action-meta'>
+                                    {option.workSets} 组 · {option.repMin}～{option.repMax} 次 · 休息 {option.restSeconds} 秒
+                                  </Text>
+                                </View>
+                                {active && <Text className='exercise-picker__selected-mark'>已选</Text>}
+                              </Button>
+                            )
+                          })}
+                        </View>
+                      </ScrollView>
+                    )}
                   </View>
                   {selectedExercise && (
                     <View className='exercise-picker__preview'>

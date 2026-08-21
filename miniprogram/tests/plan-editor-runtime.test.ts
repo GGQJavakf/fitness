@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import TestRenderer, { act, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApplicationError } from '../src/application/errors'
 import {
   changeNumericField,
   createPlanEditorState,
@@ -35,7 +36,7 @@ const application = vi.hoisted(() => ({
 vi.mock('@tarojs/components', () => ({
   Button: 'button',
   Input: 'input',
-  Picker: 'picker',
+  ScrollView: 'scroll-view',
   Text: 'text',
   View: 'view',
 }))
@@ -106,6 +107,12 @@ function workSetsInput(renderer: ReactTestRenderer) {
 function button(renderer: ReactTestRenderer, label: string) {
   return renderer.root.find(
     (node) => node.type === 'button' && node.props.children === label,
+  )
+}
+
+function labelledButton(renderer: ReactTestRenderer, label: string) {
+  return renderer.root.find(
+    (node) => node.type === 'button' && node.props['aria-label'] === label,
   )
 }
 
@@ -255,16 +262,114 @@ describe('live plan editor number input', () => {
     expect(application.listPlanExerciseReplacements)
       .toHaveBeenCalledWith('DAY_1', 'GOBLET_SQUAT')
     expect(application.listPlanExerciseOptions).toHaveBeenCalledWith('DAY_1')
-    const pickers = renderer.root.findAll((node) => String(node.type) === 'picker')
-    expect(pickers).toHaveLength(2)
+    expect(renderer.root.findAll((node) => String(node.type) === 'picker')).toHaveLength(0)
     expect(JSON.stringify(renderer.toJSON())).toContain('先选部位，再选动作')
     expect(JSON.stringify(renderer.toJSON())).toContain(replacement.name)
 
-    act(() => pickers[0].props.onChange({ detail: { value: '1' } }))
+    act(() => labelledButton(renderer!, '选择训练部位').props.onClick())
+    expect(labelledButton(renderer, '选择训练部位：胸部')).toBeDefined()
+    act(() => labelledButton(renderer!, '选择训练部位：胸部').props.onClick())
     expect(JSON.stringify(renderer.toJSON())).toContain(sameDayOption.name)
+    expect(labelledButton(renderer, `选择动作：${sameDayOption.name}`)).toBeDefined()
+    act(() => labelledButton(renderer!, `选择动作：${sameDayOption.name}`).props.onClick())
     act(() => button(renderer!, '确认替换').props.onClick())
     expect(application.replacePlanExercise)
       .toHaveBeenCalledWith('DAY_1', 'GOBLET_SQUAT', sameDayOption)
+  })
+
+  it('keeps add-action options available when reviewed replacements are unavailable', async () => {
+    const sameDayOption = {
+      exerciseCode: 'DUMBBELL_FLOOR_PRESS',
+      name: '哑铃地板卧推',
+      workSets: 3,
+      repMin: 8,
+      repMax: 12,
+      restSeconds: 90,
+      weightStatus: 'NEEDS_CALIBRATION' as const,
+      movementPattern: 'HORIZONTAL_PUSH',
+      primaryMuscles: ['CHEST', 'TRICEPS'],
+      equipment: ['DUMBBELL'],
+    }
+    application.listPlanExerciseReplacements.mockRejectedValue(
+      new ApplicationError('RESOURCE_NOT_FOUND', '旧服务尚未提供审核替代动作'),
+    )
+    application.listPlanExerciseOptions.mockResolvedValue([sameDayOption])
+    let renderer: ReactTestRenderer | undefined
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(PlanEditorPage))
+    })
+    await act(async () => {
+      button(renderer!, '替换').props.onClick()
+      await flushPage()
+    })
+    if (!renderer) throw new Error('plan editor page did not render')
+
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('先选部位，再选动作')
+    expect(rendered).toContain(sameDayOption.name)
+    expect(rendered).not.toContain('旧服务尚未提供审核替代动作')
+  })
+
+  it('uses in-page body-part and exercise menus when adding an action', async () => {
+    const option = {
+      exerciseCode: 'DUMBBELL_FLOOR_PRESS',
+      name: '哑铃地板卧推',
+      workSets: 3,
+      repMin: 8,
+      repMax: 12,
+      restSeconds: 90,
+      weightStatus: 'NEEDS_CALIBRATION' as const,
+      movementPattern: 'HORIZONTAL_PUSH',
+      primaryMuscles: ['CHEST', 'TRICEPS'],
+      equipment: ['DUMBBELL'],
+    }
+    application.listPlanExerciseOptions.mockResolvedValue([option])
+    let renderer: ReactTestRenderer | undefined
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(PlanEditorPage))
+    })
+    await act(async () => {
+      button(renderer!, '添加动作').props.onClick()
+      await flushPage()
+    })
+    if (!renderer) throw new Error('plan editor page did not render')
+
+    expect(renderer.root.findAll((node) => String(node.type) === 'picker')).toHaveLength(0)
+    expect(JSON.stringify(renderer.toJSON())).toContain('1. 训练部位')
+    expect(JSON.stringify(renderer.toJSON())).toContain('2. 动作')
+    expect(labelledButton(renderer, '选择训练部位').props['aria-expanded']).toBe(false)
+
+    act(() => labelledButton(renderer!, '选择训练部位').props.onClick())
+    expect(labelledButton(renderer, '选择训练部位：胸部')).toBeDefined()
+    act(() => labelledButton(renderer!, '选择训练部位：胸部').props.onClick())
+    expect(labelledButton(renderer, '选择动作').props['aria-expanded']).toBe(true)
+    expect(labelledButton(renderer, `选择动作：${option.name}`)).toBeDefined()
+
+    act(() => labelledButton(renderer!, `选择动作：${option.name}`).props.onClick())
+    expect(labelledButton(renderer, '选择动作').props['aria-expanded']).toBe(false)
+    act(() => button(renderer!, '确认添加').props.onClick())
+    expect(application.addPlanExercise).toHaveBeenCalledWith('DAY_1', option)
+  })
+
+  it('keeps an actionable empty state inside the add-action panel', async () => {
+    application.listPlanExerciseOptions.mockResolvedValue([])
+    let renderer: ReactTestRenderer | undefined
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(PlanEditorPage))
+    })
+    await act(async () => {
+      button(renderer!, '添加动作').props.onClick()
+      await flushPage()
+    })
+    if (!renderer) throw new Error('plan editor page did not render')
+
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('当前没有可添加的动作')
+    expect(rendered).toContain('调整可用器械、排除动作，或切换训练日后重试')
+    expect(rendered).not.toContain('当前训练日没有更多符合分化、器械和排除偏好的动作')
   })
 
   it('explains an empty reviewed replacement set without pretending the request failed', async () => {
@@ -282,7 +387,9 @@ describe('live plan editor number input', () => {
     if (!renderer) throw new Error('plan editor page did not render')
 
     expect(JSON.stringify(renderer.toJSON()))
-      .toContain('当前训练日没有更多符合分化、器械和排除偏好的动作')
+      .toContain('当前没有可替换的动作')
+    expect(JSON.stringify(renderer.toJSON()))
+      .toContain('调整可用器械、排除动作，或切换训练日后重试')
     expect(application.listPlanExerciseOptions).toHaveBeenCalledWith('DAY_1')
   })
 
