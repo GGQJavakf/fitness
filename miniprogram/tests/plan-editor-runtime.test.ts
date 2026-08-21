@@ -35,6 +35,7 @@ const application = vi.hoisted(() => ({
 vi.mock('@tarojs/components', () => ({
   Button: 'button',
   Input: 'input',
+  Picker: 'picker',
   Text: 'text',
   View: 'view',
 }))
@@ -223,9 +224,22 @@ describe('live plan editor number input', () => {
       equipment: ['DUMBBELL'],
       matchReason: 'SAME_PATTERN_MUSCLES_DIFFICULTY',
     }
+    const sameDayOption = {
+      exerciseCode: 'DUMBBELL_FLOOR_PRESS',
+      name: '哑铃地板卧推',
+      workSets: 3,
+      repMin: 8,
+      repMax: 12,
+      restSeconds: 90,
+      weightStatus: 'NEEDS_CALIBRATION' as const,
+      movementPattern: 'HORIZONTAL_PUSH',
+      primaryMuscles: ['CHEST', 'TRICEPS'],
+      equipment: ['DUMBBELL'],
+    }
     const replaced = initialEditor()
     replaced.workingCopy.days[0].exercises[0].exerciseCode = replacement.exerciseCode
     application.listPlanExerciseReplacements.mockResolvedValue([replacement])
+    application.listPlanExerciseOptions.mockResolvedValue([sameDayOption])
     application.replacePlanExercise.mockReturnValue(replaced)
     let renderer: ReactTestRenderer | undefined
 
@@ -240,20 +254,22 @@ describe('live plan editor number input', () => {
 
     expect(application.listPlanExerciseReplacements)
       .toHaveBeenCalledWith('DAY_1', 'GOBLET_SQUAT')
-    expect(application.listPlanExerciseOptions).not.toHaveBeenCalled()
-    expect(JSON.stringify(renderer.toJSON())).toContain('同动作模式、同主要肌群、同难度')
+    expect(application.listPlanExerciseOptions).toHaveBeenCalledWith('DAY_1')
+    const pickers = renderer.root.findAll((node) => String(node.type) === 'picker')
+    expect(pickers).toHaveLength(2)
+    expect(JSON.stringify(renderer.toJSON())).toContain('先选部位，再选动作')
+    expect(JSON.stringify(renderer.toJSON())).toContain(replacement.name)
 
-    const replacementButton = renderer.root.find(
-      (node) => node.type === 'button'
-        && node.findAllByType('text').some((text) => text.props.children === '双哑铃前蹲'),
-    )
-    act(() => replacementButton.props.onClick())
+    act(() => pickers[0].props.onChange({ detail: { value: '1' } }))
+    expect(JSON.stringify(renderer.toJSON())).toContain(sameDayOption.name)
+    act(() => button(renderer!, '确认替换').props.onClick())
     expect(application.replacePlanExercise)
-      .toHaveBeenCalledWith('DAY_1', 'GOBLET_SQUAT', replacement)
+      .toHaveBeenCalledWith('DAY_1', 'GOBLET_SQUAT', sameDayOption)
   })
 
   it('explains an empty reviewed replacement set without pretending the request failed', async () => {
     application.listPlanExerciseReplacements.mockResolvedValue([])
+    application.listPlanExerciseOptions.mockResolvedValue([])
     let renderer: ReactTestRenderer | undefined
 
     act(() => {
@@ -266,8 +282,8 @@ describe('live plan editor number input', () => {
     if (!renderer) throw new Error('plan editor page did not render')
 
     expect(JSON.stringify(renderer.toJSON()))
-      .toContain('当前没有与原动作模式、主要肌群和难度一致且符合器械条件的替换动作')
-    expect(application.listPlanExerciseOptions).not.toHaveBeenCalled()
+      .toContain('当前训练日没有更多符合分化、器械和排除偏好的动作')
+    expect(application.listPlanExerciseOptions).toHaveBeenCalledWith('DAY_1')
   })
 
   it('progressively discloses one day, one exercise, and optional advanced tools', () => {

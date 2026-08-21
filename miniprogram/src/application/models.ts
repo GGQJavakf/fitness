@@ -59,6 +59,9 @@ export interface PlanExercise {
 
 export interface PlanExerciseOption extends PlanExercise {
   name: string
+  movementPattern?: string
+  primaryMuscles?: string[]
+  equipment?: string[]
 }
 
 export interface PlanExerciseReplacementOption extends PlanExerciseOption {

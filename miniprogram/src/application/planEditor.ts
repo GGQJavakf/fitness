@@ -132,7 +132,13 @@ export function addPlanExercise(
     throw new Error('动作已在当前训练日中')
   }
   if (day.exercises.length >= 8) throw new Error('每个训练日最多包含 8 个动作')
-  const { name: _name, ...exercise } = option
+  const {
+    name: _name,
+    movementPattern: _movementPattern,
+    primaryMuscles: _primaryMuscles,
+    equipment: _equipment,
+    ...exercise
+  } = option
   validatePrescribedExercise(exercise)
   day.exercises.push({ ...exercise })
   return afterStructuralEdit(state, workingCopy, state.lockCommands)
@@ -147,7 +153,13 @@ export function addPlanDay(state: PlanEditorState, option: PlanDayOption): PlanE
   if (!option.code || option.code.includes('/') || !option.name.trim() || option.exercises.length === 0) {
     throw new Error('服务端训练日处方无效')
   }
-  const exercises = option.exercises.map(({ name: _name, ...exercise }) => {
+  const exercises = option.exercises.map(({
+    name: _name,
+    movementPattern: _movementPattern,
+    primaryMuscles: _primaryMuscles,
+    equipment: _equipment,
+    ...exercise
+  }) => {
     validatePrescribedExercise(exercise)
     return { ...exercise }
   })
@@ -219,14 +231,14 @@ export function replacePlanExercise(
     throw new Error('动作已在当前训练日中')
   }
   const lockCommands = commandsWithoutExercise(state, dayCode, exerciseCode, '规则锁定动作不能替换')
-  const { exerciseCode: replacementCode, workSets, repMin, repMax, restSeconds } = option
   const replacement: PlanExercise = {
-    exerciseCode: replacementCode,
-    workSets,
-    repMin,
-    repMax,
-    restSeconds,
-    weightStatus: 'NEEDS_CALIBRATION',
+    exerciseCode: option.exerciseCode,
+    workSets: option.workSets,
+    repMin: option.repMin,
+    repMax: option.repMax,
+    restSeconds: option.restSeconds,
+    weightStatus: option.weightStatus,
+    ...(typeof option.targetWeightKg === 'number' ? { targetWeightKg: option.targetWeightKg } : {}),
   }
   validatePrescribedExercise(replacement)
   day.exercises[index] = replacement

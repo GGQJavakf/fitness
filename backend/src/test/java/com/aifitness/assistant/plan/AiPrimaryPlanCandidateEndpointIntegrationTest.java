@@ -88,6 +88,9 @@ class AiPrimaryPlanCandidateEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
                 .andExpect(jsonPath("$.data.candidate.plan.trainingSplit").value("PUSH_PULL_LEGS"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].name").value("推日"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[1].name").value("拉日"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[2].name").value("腿日"))
                 .andReturn().getResponse().getContentAsString();
         String candidateId = objectMapper.readTree(candidateResponse)
                 .at("/data/candidate/candidateId").asText();

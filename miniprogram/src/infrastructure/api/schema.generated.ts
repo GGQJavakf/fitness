@@ -1127,6 +1127,9 @@ export interface components {
             repMax: number;
             restSeconds: number;
             weightStatus: components["schemas"]["WeightStatus"];
+            movementPattern: string;
+            primaryMuscles: string[];
+            equipment: string[];
         };
         PlanExerciseOptionListData: {
             items: components["schemas"]["PlanExerciseOption"][];

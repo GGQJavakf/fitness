@@ -63,7 +63,12 @@ class PlanExerciseOptionEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.items[0].repMin").isNumber())
                 .andExpect(jsonPath("$.data.items[0].repMax").isNumber())
                 .andExpect(jsonPath("$.data.items[0].restSeconds").isNumber())
-                .andExpect(jsonPath("$.data.items[0].weightStatus").value("NEEDS_CALIBRATION"));
+                .andExpect(jsonPath("$.data.items[0].weightStatus").value("NEEDS_CALIBRATION"))
+                .andExpect(jsonPath("$.data.items[0].movementPattern").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].primaryMuscles").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].equipment").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("DUMBBELL_FLOOR_PRESS")));
 
         mvc.perform(get("/api/v1/plans/{planId}/exercise-replacements", planId)
                         .queryParam("dayCode", dayCode)
@@ -122,7 +127,8 @@ class PlanExerciseOptionEndpointIntegrationTest {
         return json(mvc.perform(post("/api/v1/plans/candidates")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"profileVersion\":1,\"lockedFields\":{}}"))
+                        .content("{\"profileVersion\":1,\"trainingSplit\":\"PUSH_PULL_LEGS\","
+                                + "\"lockedFields\":{}}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString()).at("/data/candidate");
     }

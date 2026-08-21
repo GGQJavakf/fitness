@@ -8,6 +8,7 @@ import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.profile.application.ProfileService;
+import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
 import java.math.BigDecimal;
 import java.util.Comparator;
@@ -61,22 +62,40 @@ public final class PlanExerciseOptionService {
         if (template == null) return List.of();
 
         Set<UUID> excluded = profiles.excludedExerciseIds(user);
+        UserProfile.ExperienceLevel experience = profiles.getProfile(user).details().experience();
         Map<String, ExerciseCatalog.Exercise> eligible = exercises
                 .list(user, ExerciseQueryService.Filter.none()).stream()
                 .filter(exercise -> !excluded.contains(exercise.stableId()))
+                .filter(exercise -> ExerciseDifficultyEligibility.allows(experience, exercise.difficulty()))
                 .collect(Collectors.toUnmodifiableMap(ExerciseCatalog.Exercise::code, Function.identity()));
-        Map<String, PlanTemplateCatalog.ExerciseSlot> firstPrescription = new LinkedHashMap<>();
+        Map<String, ExerciseCatalog.Exercise> catalog = exercises.catalog().stream()
+                .collect(Collectors.toUnmodifiableMap(ExerciseCatalog.Exercise::code, Function.identity()));
+        Map<String, PlanTemplateCatalog.ExerciseSlot> prescriptionsByCode = new LinkedHashMap<>();
+        Map<String, PlanTemplateCatalog.ExerciseSlot> prescriptionsByPattern = new LinkedHashMap<>();
         PlanGenerationEngine.SessionFocus targetFocus = sessionFocus(draft, targetDay);
         template.days().stream()
                 .filter(day -> PlanGenerationEngine.SessionFocus.infer(day.code(), day.name()) == targetFocus)
                 .flatMap(day -> day.exercises().stream())
-                .forEach(slot -> firstPrescription.putIfAbsent(slot.exerciseCode(), slot));
+                .forEach(slot -> {
+                    prescriptionsByCode.putIfAbsent(slot.exerciseCode(), slot);
+                    ExerciseCatalog.Exercise prescribedExercise = catalog.get(slot.exerciseCode());
+                    if (prescribedExercise != null) {
+                        prescriptionsByPattern.putIfAbsent(prescribedExercise.movementPattern(), slot);
+                    }
+                });
 
-        return firstPrescription.values().stream()
-                .filter(slot -> !existingCodes.contains(slot.exerciseCode()))
-                .filter(slot -> eligible.containsKey(slot.exerciseCode()))
-                .map(slot -> toOption(slot, eligible.get(slot.exerciseCode())))
-                .sorted(java.util.Comparator.comparing(Option::exerciseCode))
+        return eligible.values().stream()
+                .filter(exercise -> !existingCodes.contains(exercise.code()))
+                .filter(exercise -> targetFocus.allows(exercise.movementPattern()))
+                .map(exercise -> {
+                    PlanTemplateCatalog.ExerciseSlot prescription = prescriptionsByCode.get(exercise.code());
+                    if (prescription == null) {
+                        prescription = prescriptionsByPattern.get(exercise.movementPattern());
+                    }
+                    return prescription == null ? null : toOption(prescription, exercise);
+                })
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparing(Option::movementPattern).thenComparing(Option::exerciseCode))
                 .toList();
     }
 
@@ -93,7 +112,8 @@ public final class PlanExerciseOptionService {
 
         TrainingPlan active = plans.getActive(user);
         if (!active.id().equals(planId)) throw new PlanVersionService.PlanNotFoundException();
-        PlanDraft.Day targetDay = active.activeVersion().plan().days().stream()
+        PlanDraft draft = active.activeVersion().plan();
+        PlanDraft.Day targetDay = draft.days().stream()
                 .filter(day -> day.code().equals(dayCode))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("dayCode does not exist in the active plan"));
@@ -111,6 +131,7 @@ public final class PlanExerciseOptionService {
                 .map(PlanDraft.Exercise::exerciseCode)
                 .collect(Collectors.toUnmodifiableSet());
         Set<UUID> excluded = profiles.excludedExerciseIds(user);
+        PlanGenerationEngine.SessionFocus targetFocus = sessionFocus(draft, targetDay);
         Map<String, ExerciseCatalog.Exercise> eligible = exercises
                 .list(user, ExerciseQueryService.Filter.none()).stream()
                 .filter(exercise -> !excluded.contains(exercise.stableId()))
@@ -124,6 +145,7 @@ public final class PlanExerciseOptionService {
                 .map(eligible::get)
                 .filter(Objects::nonNull)
                 .filter(candidate -> equivalent(source, candidate))
+                .filter(candidate -> targetFocus.allows(candidate.movementPattern()))
                 .limit(4)
                 .map(candidate -> toReplacementOption(sourcePrescription, source, candidate))
                 .toList();
@@ -240,8 +262,12 @@ public final class PlanExerciseOptionService {
             PlanTemplateCatalog.ExerciseSlot slot,
             ExerciseCatalog.Exercise exercise) {
         return new Option(
-                slot.exerciseCode(), exercise.name(), slot.workSets(), slot.repMin(), slot.repMax(),
-                slot.restSeconds(), PlanDraft.WeightStatus.valueOf(slot.initialWeightState()));
+                exercise.code(), exercise.name(), slot.workSets(), slot.repMin(), slot.repMax(),
+                slot.restSeconds(), isBodyweight(exercise.equipment())
+                        ? PlanDraft.WeightStatus.BODYWEIGHT
+                        : PlanDraft.WeightStatus.NEEDS_CALIBRATION,
+                exercise.movementPattern(), exercise.primaryMuscles().stream().sorted().toList(),
+                exercise.equipment().stream().sorted().toList());
     }
 
     public record Option(
@@ -251,7 +277,15 @@ public final class PlanExerciseOptionService {
             int repMin,
             int repMax,
             int restSeconds,
-            PlanDraft.WeightStatus weightStatus) {}
+            PlanDraft.WeightStatus weightStatus,
+            String movementPattern,
+            List<String> primaryMuscles,
+            List<String> equipment) {
+        public Option {
+            primaryMuscles = List.copyOf(primaryMuscles);
+            equipment = List.copyOf(equipment);
+        }
+    }
 
     public record ReplacementOption(
             String exerciseCode,

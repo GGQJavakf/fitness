@@ -1,4 +1,4 @@
-import { Button, Input, Text, View } from '@tarojs/components'
+import { Button, Input, Picker, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import type {
@@ -21,6 +21,62 @@ const fieldLabels: Record<EditableNumericField, string> = {
   targetWeightKg: '目标重量（KG）',
 }
 const editableFields = Object.keys(fieldLabels) as EditableNumericField[]
+const bodyPartDefinitions = [
+  { name: '胸部', muscles: ['CHEST'] },
+  { name: '背部', muscles: ['BACK', 'LATS'] },
+  { name: '肩部', muscles: ['SHOULDERS'] },
+  { name: '手臂', muscles: ['BICEPS', 'TRICEPS', 'FOREARMS'] },
+  { name: '臀腿', muscles: ['GLUTES', 'QUADRICEPS', 'HAMSTRINGS', 'CALVES'] },
+  { name: '核心', muscles: ['CORE', 'ABS'] },
+] as const
+const patternBodyParts: Readonly<Record<string, string>> = {
+  HORIZONTAL_PUSH: '胸部',
+  VERTICAL_PUSH: '肩部',
+  SHOULDER_ABDUCTION: '肩部',
+  SHOULDER_HORIZONTAL_ABDUCTION: '肩部',
+  SCAPULAR_ELEVATION: '肩部',
+  HORIZONTAL_PULL: '背部',
+  VERTICAL_PULL: '背部',
+  ELBOW_FLEXION: '手臂',
+  ELBOW_EXTENSION: '手臂',
+  SQUAT: '臀腿',
+  HINGE: '臀腿',
+  CALF_RAISE: '臀腿',
+  CORE: '核心',
+}
+
+type ExerciseOption = PlanExerciseOption | PlanExerciseReplacementOption
+
+function exerciseBodyPart(option: ExerciseOption): string {
+  if (option.movementPattern && patternBodyParts[option.movementPattern]) {
+    return patternBodyParts[option.movementPattern]
+  }
+  return bodyPartDefinitions.find((definition) =>
+    definition.muscles.some((muscle) => option.primaryMuscles?.includes(muscle)),
+  )?.name ?? '其他'
+}
+
+function exerciseBodyParts(options: readonly ExerciseOption[]): string[] {
+  const available = new Set(options.map(exerciseBodyPart))
+  const preferred = options.find((option) => 'matchReason' in option)
+  return [...new Set([
+    ...(preferred ? [exerciseBodyPart(preferred)] : []),
+    ...bodyPartDefinitions.map((definition) => definition.name),
+    '其他',
+  ])].filter((name) => available.has(name))
+}
+
+function mergeExerciseOptions(
+  preferred: readonly ExerciseOption[],
+  additional: readonly ExerciseOption[],
+): ExerciseOption[] {
+  const merged = new Map<string, ExerciseOption>()
+  preferred.forEach((option) => merged.set(option.exerciseCode, option))
+  additional.forEach((option) => {
+    if (!merged.has(option.exerciseCode)) merged.set(option.exerciseCode, option)
+  })
+  return [...merged.values()]
+}
 
 function editableValueError(field: EditableNumericField, raw: string): string {
   if (!raw.trim()) return `请输入${fieldLabels[field]}`
@@ -42,6 +98,8 @@ export default function PlanEditorPage() {
   const [exerciseOptions, setExerciseOptions] = useState<readonly (
     PlanExerciseOption | PlanExerciseReplacementOption
   )[]>([])
+  const [selectedBodyPart, setSelectedBodyPart] = useState('')
+  const [selectedExerciseCode, setSelectedExerciseCode] = useState('')
   const [dayOptions, setDayOptions] = useState<readonly PlanDayOption[]>([])
   const [showDayOptions, setShowDayOptions] = useState(false)
   const [pendingRemove, setPendingRemove] = useState('')
@@ -167,14 +225,20 @@ export default function PlanEditorPage() {
     setError('')
     try {
       const options = replacing
-        ? await application.listPlanExerciseReplacements(dayCode, replacing)
-        : await application.listPlanExerciseOptions(dayCode)
+        ? mergeExerciseOptions(
+            ...(await Promise.all([
+              application.listPlanExerciseReplacements(dayCode, replacing),
+              application.listPlanExerciseOptions(dayCode),
+            ])),
+          )
+        : [...await application.listPlanExerciseOptions(dayCode)]
       setExerciseOptions(options)
       setOptionPicker({ dayCode, ...(replacing ? { replacing } : {}) })
+      const initialBodyPart = exerciseBodyParts(options)[0] ?? ''
+      setSelectedBodyPart(initialBodyPart)
+      setSelectedExerciseCode(options.find((option) => exerciseBodyPart(option) === initialBodyPart)?.exerciseCode ?? '')
       if (options.length === 0) {
-        setError(replacing
-          ? '当前没有与原动作模式、主要肌群和难度一致且符合器械条件的替换动作；可以保留原动作或删除后添加其他动作。'
-          : '当前器械、排除偏好和模板下没有更多可用动作')
+        setError('当前训练日没有更多符合分化、器械和排除偏好的动作')
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '动作候选加载失败')
@@ -209,6 +273,8 @@ export default function PlanEditorPage() {
       application.telemetry.track('plan_edited', { fieldKind: 'structure' })
       setOptionPicker(null)
       setExerciseOptions([])
+      setSelectedBodyPart('')
+      setSelectedExerciseCode('')
       setShowDayOptions(false)
       setDayOptions([])
       setPendingRemove('')
@@ -243,6 +309,9 @@ export default function PlanEditorPage() {
   const activeExercise = expandedDay?.exercises.find(
     (exercise) => `${expandedDay.code}:${exercise.exerciseCode}` === expandedExerciseKey,
   ) ?? expandedDay?.exercises[0]
+  const availableBodyParts = exerciseBodyParts(exerciseOptions)
+  const selectedBodyPartOptions = exerciseOptions.filter((option) => exerciseBodyPart(option) === selectedBodyPart)
+  const selectedExercise = selectedBodyPartOptions.find((option) => option.exerciseCode === selectedExerciseCode)
 
   return (
     <View className='screen'>
@@ -412,17 +481,69 @@ export default function PlanEditorPage() {
             <View className='exercise-option-panel'>
               <View className='editor-exercise__heading'>
                 <Text className='section-title'>{optionPicker.replacing ? '选择替换动作' : '选择新增动作'}</Text>
-                <Button onClick={() => setOptionPicker(null)}>取消</Button>
+                <Button onClick={() => {
+                  setOptionPicker(null)
+                  setSelectedBodyPart('')
+                  setSelectedExerciseCode('')
+                }}>取消</Button>
               </View>
-              {exerciseOptions.map((option) => (
-                <Button key={option.exerciseCode} className='exercise-option' onClick={() => chooseExercise(option)}>
-                  <Text>{option.name}</Text>
-                  <Text className='code-label'>{option.workSets} 组 · {option.repMin}～{option.repMax} 次 · 休息 {option.restSeconds} 秒</Text>
-                  {'matchReason' in option && (
-                    <Text className='code-label'>同动作模式、同主要肌群、同难度；原训练处方保持不变</Text>
+              {exerciseOptions.length > 0 && (
+                <>
+                  <Text className='exercise-picker__hint'>先选部位，再选动作</Text>
+                  <View className='exercise-picker__field'>
+                    <Text className='exercise-picker__label'>1. 训练部位</Text>
+                    <Picker
+                      className='exercise-picker__selector'
+                      mode='selector'
+                      range={availableBodyParts}
+                      value={Math.max(0, availableBodyParts.indexOf(selectedBodyPart))}
+                      onChange={(event) => {
+                        const nextBodyPart = availableBodyParts[Number(event.detail.value)] ?? ''
+                        const firstOption = exerciseOptions.find((option) => exerciseBodyPart(option) === nextBodyPart)
+                        setSelectedBodyPart(nextBodyPart)
+                        setSelectedExerciseCode(firstOption?.exerciseCode ?? '')
+                      }}
+                    >
+                      <View className='exercise-picker__control'>
+                        <Text>{selectedBodyPart || '请选择训练部位'}</Text>
+                        <Text className='exercise-picker__chevron'>展开</Text>
+                      </View>
+                    </Picker>
+                  </View>
+                  <View className='exercise-picker__field'>
+                    <Text className='exercise-picker__label'>2. 动作</Text>
+                    <Picker
+                      className='exercise-picker__selector'
+                      mode='selector'
+                      range={selectedBodyPartOptions.map((option) => option.name)}
+                      value={Math.max(0, selectedBodyPartOptions.findIndex((option) => option.exerciseCode === selectedExerciseCode))}
+                      onChange={(event) => {
+                        const option = selectedBodyPartOptions[Number(event.detail.value)]
+                        setSelectedExerciseCode(option?.exerciseCode ?? '')
+                      }}
+                    >
+                      <View className='exercise-picker__control'>
+                        <Text>{selectedExercise?.name ?? '请选择动作'}</Text>
+                        <Text className='exercise-picker__chevron'>展开</Text>
+                      </View>
+                    </Picker>
+                  </View>
+                  {selectedExercise && (
+                    <View className='exercise-picker__preview'>
+                      <Text>{selectedExercise.workSets} 组 · {selectedExercise.repMin}～{selectedExercise.repMax} 次 · 休息 {selectedExercise.restSeconds} 秒</Text>
+                      <Text className='code-label'>使用所选动作的安全处方；器械动作会按需要重新校准重量</Text>
+                      {'matchReason' in selectedExercise && (
+                        <Text className='code-label'>优先推荐：同动作模式、同主要肌群、同难度</Text>
+                      )}
+                    </View>
                   )}
-                </Button>
-              ))}
+                  <Button
+                    className='primary-action exercise-picker__confirm'
+                    disabled={!selectedExercise}
+                    onClick={() => selectedExercise && chooseExercise(selectedExercise)}
+                  >{optionPicker.replacing ? '确认替换' : '确认添加'}</Button>
+                </>
+              )}
             </View>
           )}
         </View>

@@ -371,7 +371,7 @@ public final class PlanCandidateService {
                             AiPlanDay day = proposal.days().get(dayIndex);
                             return new PlanGenerationEngine.Day(
                                 day.code(),
-                                day.name().trim(),
+                                canonicalDayName(trainingSplit, dayIndex, day.name()),
                                 day.exercises().stream()
                                         .map(exercise -> {
                                             PlanValidationEngine.ExerciseFacts facts =
@@ -397,6 +397,15 @@ public final class PlanCandidateService {
                         .toList(),
                 PlanGenerationEngine.WeightUnit.KG,
                 reference);
+    }
+
+    private static String canonicalDayName(TrainingSplit trainingSplit, int dayIndex, String proposedName) {
+        if (trainingSplit != TrainingSplit.PUSH_PULL_LEGS) return proposedName.trim();
+        return switch (dayIndex % 3) {
+            case 0 -> "推日";
+            case 1 -> "拉日";
+            default -> "腿日";
+        };
     }
 
     private UserProfile currentProfile(AuthenticatedUserId user, long profileVersion) {
