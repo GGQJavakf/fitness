@@ -2,11 +2,29 @@ import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-import { exerciseDisplayName } from '../../copy'
+import { exerciseDisplayName, weekdayDisplayName } from '../../copy'
 
 import './index.scss'
 
 const application = getWeappApplication()
+
+function sourceEyebrow(source: string | undefined): string {
+  if (source === 'AI_PERSONALIZED') return 'AI PERSONALIZED PLAN'
+  if (source === 'SYSTEM_PRESET') return 'SYSTEM PERSONAL PRESET'
+  return 'RULE-BASED TRAINING PLAN'
+}
+
+function sourceTitle(source: string | undefined): string {
+  if (source === 'AI_PERSONALIZED') return '你的 AI 个性化训练方案'
+  if (source === 'SYSTEM_PRESET') return '你的五日增肌个人预设'
+  return '你的规则生成训练方案'
+}
+
+function sourceDescription(source: string | undefined): string {
+  if (source === 'AI_PERSONALIZED') return 'AI 已结合目标、经验、训练频率、器械与额外偏好生成，并通过服务端规则校验。'
+  if (source === 'SYSTEM_PRESET') return '动作顺序、组次、休息、热身、超级组和进阶规则均按固定版本载入；确认前不会覆盖当前计划。'
+  return '已按你的档案与器械由确定性规则引擎生成，并通过安全校验。'
+}
 
 export default function PlanCandidatesPage() {
   const [candidate] = useState(() => application.getCandidate())
@@ -90,23 +108,17 @@ export default function PlanCandidatesPage() {
             <View className='recommendation-hero__mark-core' />
           </View>
           <Text className='recommendation-hero__eyebrow'>
-            {candidate.generationSource === 'AI_PERSONALIZED'
-              ? 'AI PERSONALIZED PLAN'
-              : 'RULE-BASED TRAINING PLAN'}
+            {sourceEyebrow(candidate.generationSource)}
           </Text>
         </View>
         <Text className='recommendation-hero__title'>
           {candidate.status === 'READY'
-            ? candidate.generationSource === 'AI_PERSONALIZED'
-              ? '你的 AI 个性化训练方案'
-              : '你的规则生成训练方案'
+            ? sourceTitle(candidate.generationSource)
             : '需要补充训练条件'}
         </Text>
         <Text className='recommendation-hero__subtitle'>
           {candidate.status === 'READY'
-            ? candidate.generationSource === 'AI_PERSONALIZED'
-              ? 'AI 已结合目标、经验、训练频率、器械与额外偏好生成，并通过服务端规则校验。'
-              : '已按你的档案与器械由确定性规则引擎生成，并通过安全校验。'
+            ? sourceDescription(candidate.generationSource)
             : '当前信息暂时无法组成安全有效的训练方案。'}
         </Text>
         {candidate.generationLabel && (
@@ -150,9 +162,29 @@ export default function PlanCandidatesPage() {
             <Text className='recommendation-day__index'>{String(dayIndex + 1).padStart(2, '0')}</Text>
             <View className='recommendation-day__title-group'>
               <Text className='recommendation-day__title'>{day.name}</Text>
-              <Text className='recommendation-day__count'>{day.exercises.length} 个动作 · 按顺序完成</Text>
+              <Text className='recommendation-day__count'>
+                {[weekdayDisplayName(day.weekday), day.focus, day.estimatedMinutesLabel].filter(Boolean).join(' · ') || `${day.exercises.length} 个动作 · 按顺序完成`}
+              </Text>
             </View>
           </View>
+          {(day.warmup?.length ?? 0) > 0 && (
+            <View className='recommendation-warmup'>
+              <Text className='recommendation-warmup__title'>热身</Text>
+              {day.warmup?.map((step, index) => (
+                <Text className='recommendation-warmup__step' key={`${day.code}-warmup-${index}`}>
+                  {index + 1}. {step.instruction}{step.prescription ? ` · ${step.prescription}` : ''}{step.optional ? '（可选）' : ''}
+                </Text>
+              ))}
+            </View>
+          )}
+          {(day.notes?.length ?? 0) > 0 && (
+            <View className='recommendation-notes'>
+              <Text className='recommendation-notes__title'>训练提示</Text>
+              {day.notes.map((note, index) => (
+                <Text className='recommendation-notes__item' key={`${day.code}-note-${index}`}>• {note}</Text>
+              ))}
+            </View>
+          )}
           {day.exercises.map((exercise) => (
             <View key={exercise.exerciseCode} className='recommendation-exercise'>
               <View className='recommendation-exercise__heading'>
@@ -162,7 +194,26 @@ export default function PlanCandidatesPage() {
               <View className='recommendation-exercise__meta'>
                 <Text className='recommendation-exercise__tag'>{exercise.restLabel}</Text>
                 <Text className='recommendation-exercise__tag'>{exercise.weightLabel}</Text>
+                {exercise.targetRirLabel && <Text className='recommendation-exercise__tag'>{exercise.targetRirLabel}</Text>}
+                {exercise.eccentricLabel && <Text className='recommendation-exercise__tag'>{exercise.eccentricLabel}</Text>}
+                {exercise.perSide && <Text className='recommendation-exercise__tag'>每侧完成</Text>}
+                {exercise.executionGroup && (
+                  <Text className='recommendation-exercise__tag recommendation-exercise__tag--group'>
+                    超级组 {exercise.executionGroup.replace(/^SUPERSET_/, '')} · 第 {exercise.executionOrder} 个动作
+                  </Text>
+                )}
               </View>
+              {exercise.optionalSetDescription && (
+                <Text className='recommendation-exercise__optional'>{exercise.optionalSetDescription}</Text>
+              )}
+              {(exercise.notes?.length ?? 0) > 0 && (
+                <View className='recommendation-exercise__notes'>
+                  <Text className='recommendation-exercise__notes-title'>动作提示</Text>
+                  {exercise.notes.map((note, index) => (
+                    <Text className='recommendation-exercise__note' key={`${exercise.exerciseCode}-note-${index}`}>• {note}</Text>
+                  ))}
+                </View>
+              )}
               <Button
                 className='recommendation-exercise__guide'
                 onClick={() => void application.navigation.open('EXERCISE_DETAIL', {

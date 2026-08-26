@@ -32,7 +32,7 @@ describe('presentation copy', () => {
       .filter((exercise) => exercise.active)
       .map((exercise) => exercise.code)
 
-    expect(activeCodes).toHaveLength(47)
+    expect(activeCodes).toHaveLength(63)
     for (const code of activeCodes) {
       expect(exerciseDisplayName(code), code).toMatch(/[\u3400-\u9fff]/u)
       expect(exerciseDisplayName(code), code).not.toBe(code)

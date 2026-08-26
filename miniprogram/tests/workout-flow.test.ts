@@ -1,15 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  areRequiredWorkSetsComplete,
   createWorkoutFlow,
   beginWorkSets,
+  chooseOptionalSet,
   completeGeneralWarmup,
   completedRampSets,
+  isOptionalSetInProgress,
   isWorkoutPrescriptionFinished,
+  pendingOptionalSetChoice,
   recordWorkoutSet,
+  restSecondsAfterRecordedSet,
   markWorkoutSyncPending,
   remainingRampWarmupSets,
   replaceExerciseForSession,
+  restoreWorkoutFlow,
   setWorkoutExerciseWeight,
   summarizeWorkout,
 } from '../src/application/workoutFlow'
@@ -45,7 +51,122 @@ function createWorkFlow() {
   return beginWorkSets(completeGeneralWarmup(createWorkoutFlow(baseInput)))
 }
 
+function createCompletedTuesdayOptionalFlow(safetyFlag?: 'PAIN' | 'DIZZINESS') {
+  let state = completeGeneralWarmup(createWorkoutFlow({
+    clientSessionKey: 'tuesday-optional-session',
+    planVersionId: 'tuesday-plan',
+    startedAtUtc: '2026-08-21T00:00:00.000Z',
+    exercises: [
+      {
+        snapshotExerciseKey: 'machine-row', exerciseCode: 'MACHINE_SEATED_ROW', name: '器械坐姿划船',
+        targetWorkSets: 1, targetReps: 12, restSeconds: 90, weightStatus: 'BODYWEIGHT',
+        optionalSetRule: {
+          conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+          exclusiveChoiceGroup: 'TUESDAY_BONUS',
+          additionalSets: 1,
+        },
+      },
+      {
+        snapshotExerciseKey: 'dumbbell-curl', exerciseCode: 'DUMBBELL_CURL', name: '哑铃弯举',
+        targetWorkSets: 1, targetReps: 12, restSeconds: 60, weightStatus: 'BODYWEIGHT',
+        optionalSetRule: {
+          conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+          exclusiveChoiceGroup: 'TUESDAY_BONUS',
+          additionalSets: 1,
+        },
+      },
+    ],
+  }))
+  state = recordWorkoutSet(state, {
+    clientSetKey: 'row-work', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+    actualWeightKg: 0, actualReps: 12,
+  })
+  return recordWorkoutSet(state, {
+    clientSetKey: 'curl-work', exerciseIndex: 1, setType: 'WORK', status: 'COMPLETED',
+    actualWeightKg: 0, actualReps: 12, safetyFlag,
+  })
+}
+
 describe('workout execution state', () => {
+  it('preserves an explicit repetition range and safely normalizes legacy single-target snapshots', () => {
+    const ranged = createWorkoutFlow({
+      ...baseInput,
+      exercises: [{
+        snapshotExerciseKey: 'range-exercise',
+        exerciseCode: 'RANGE_EXERCISE',
+        name: '区间动作',
+        targetWorkSets: 3,
+        targetRepMin: 8,
+        targetRepMax: 12,
+        restSeconds: 90,
+      }],
+    })
+
+    expect(ranged.exercises[0]).toMatchObject({ targetRepMin: 8, targetRepMax: 12 })
+    const restoredRange = restoreWorkoutFlow(JSON.parse(JSON.stringify(ranged)))
+    expect(restoredRange.exercises[0]).toMatchObject({ targetRepMin: 8, targetRepMax: 12 })
+
+    const legacy = JSON.parse(JSON.stringify(createWorkoutFlow(baseInput)))
+    delete legacy.exercises[0].targetRepMin
+    delete legacy.exercises[0].targetRepMax
+    legacy.exercises[0].targetReps = 10
+
+    const restoredLegacy = restoreWorkoutFlow(legacy)
+    expect(restoredLegacy.exercises[0]).toMatchObject({ targetRepMin: 10, targetRepMax: 10 })
+    expect(restoredLegacy.exercises[0]).not.toHaveProperty('targetReps')
+  })
+
+  it('keeps the fixed warmup instructions in the executable session snapshot', () => {
+    const state = createWorkoutFlow({
+      ...baseInput,
+      warmupPrescription: {
+        ...authoritativeWarmup,
+        instructions: [
+          { instruction: '跑步机快走或慢跑', prescription: '1 分钟', optional: false },
+          { instruction: '史密斯卧推 70% 预热', prescription: '4 次', optional: false },
+        ],
+      },
+    })
+
+    expect(state.warmup.instructions).toEqual([
+      { instruction: '跑步机快走或慢跑', prescription: '1 分钟', optional: false },
+      { instruction: '史密斯卧推 70% 预热', prescription: '4 次', optional: false },
+    ])
+  })
+
+  it('alternates supersets and rests only after both actions finish the round', () => {
+    let state = beginWorkSets(completeGeneralWarmup(createWorkoutFlow({
+      clientSessionKey: 'superset-session',
+      planVersionId: 'superset-plan',
+      exercises: [
+        {
+          snapshotExerciseKey: 'lateral-raise', exerciseCode: 'LATERAL_RAISE', name: '哑铃侧平举',
+          targetWorkSets: 2, targetReps: 15, restSeconds: 60, weightStatus: 'BODYWEIGHT',
+          executionGroup: 'MONDAY_FINISHER', executionOrder: 1,
+        },
+        {
+          snapshotExerciseKey: 'pushdown', exerciseCode: 'CABLE_TRICEPS_PUSHDOWN', name: '三头下压',
+          targetWorkSets: 2, targetReps: 12, restSeconds: 60, weightStatus: 'BODYWEIGHT',
+          executionGroup: 'MONDAY_FINISHER', executionOrder: 2,
+        },
+      ],
+    })))
+
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'superset-a-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 15,
+    })
+    expect(state).toMatchObject({ currentExerciseIndex: 1, currentSetIndex: 0 })
+    expect(restSecondsAfterRecordedSet(state, 0)).toBeNull()
+
+    state = recordWorkoutSet(state, {
+      clientSetKey: 'superset-b-1', exerciseIndex: 1, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })
+    expect(state).toMatchObject({ currentExerciseIndex: 0, currentSetIndex: 1 })
+    expect(restSecondsAfterRecordedSet(state, 1)).toBe(60)
+  })
+
   it('moves explicitly through general warmup, ramp sets, and work sets', () => {
     const general = createWorkoutFlow({ ...baseInput, warmupPrescription: authoritativeWarmup })
     expect(general.warmup).toMatchObject({
@@ -281,6 +402,74 @@ describe('workout execution state', () => {
 
     expect(isWorkoutPrescriptionFinished(oneSet)).toBe(false)
     expect(isWorkoutPrescriptionFinished(finished)).toBe(true)
+  })
+
+  it('offers exactly one Tuesday bonus set within 42 minutes and persists the selected branch', () => {
+    const completed = createCompletedTuesdayOptionalFlow()
+
+    expect(areRequiredWorkSetsComplete(completed)).toBe(true)
+    expect(isWorkoutPrescriptionFinished(completed)).toBe(false)
+    expect(pendingOptionalSetChoice(completed, '2026-08-21T00:41:00.000Z')).toEqual({
+      choiceGroup: 'TUESDAY_BONUS',
+      conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+      eligible: true,
+      candidateExerciseIndices: [0, 1],
+    })
+
+    const selected = chooseOptionalSet(completed, 'TUESDAY_BONUS', 0, '2026-08-21T00:41:00.000Z')
+    const restored = restoreWorkoutFlow(JSON.parse(JSON.stringify(selected)))
+    expect(restored).toMatchObject({
+      currentExerciseIndex: 0,
+      currentSetIndex: 1,
+      optionalSetChoices: { TUESDAY_BONUS: 0 },
+    })
+    expect(isOptionalSetInProgress(restored)).toBe(true)
+    expect(() => chooseOptionalSet(restored, 'TUESDAY_BONUS', 1, '2026-08-21T00:41:01.000Z'))
+      .toThrow(/not available/i)
+    expect(() => recordWorkoutSet(restored, {
+      clientSetKey: 'wrong-extra', exerciseIndex: 1, setType: 'EXTRA', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })).toThrow(/not active/i)
+
+    const finished = recordWorkoutSet(restored, {
+      clientSetKey: 'row-extra', exerciseIndex: 0, setType: 'EXTRA', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })
+    expect(isWorkoutPrescriptionFinished(finished)).toBe(true)
+    expect(finished.exercises[0].sets.filter((set) => set.setType === 'EXTRA')).toHaveLength(1)
+    expect(finished.exercises[1].sets.filter((set) => set.setType === 'EXTRA')).toHaveLength(0)
+    expect(summarizeWorkout(finished).completedWorkSets).toBe(2)
+  })
+
+  it('blocks the Tuesday bonus set after 42 minutes but still allows finishing the workout', () => {
+    const completed = createCompletedTuesdayOptionalFlow()
+    const nowUtc = '2026-08-21T00:42:01.000Z'
+
+    expect(pendingOptionalSetChoice(completed, nowUtc)).toMatchObject({ eligible: false })
+    expect(() => chooseOptionalSet(completed, 'TUESDAY_BONUS', 0, nowUtc)).toThrow(/not eligible/i)
+
+    const skipped = chooseOptionalSet(completed, 'TUESDAY_BONUS', null, nowUtc)
+    expect(isWorkoutPrescriptionFinished(skipped)).toBe(true)
+    expect(skipped.optionalSetChoices).toEqual({ TUESDAY_BONUS: null })
+  })
+
+  it('never offers or records an optional set after a safety stop', () => {
+    const stopped = createCompletedTuesdayOptionalFlow('DIZZINESS')
+
+    expect(areRequiredWorkSetsComplete(stopped)).toBe(true)
+    expect(stopped.safetyNotice).toMatch(/立即停止训练/)
+    expect(pendingOptionalSetChoice(stopped, '2026-08-21T00:41:00.000Z')).toBeNull()
+    expect(() => chooseOptionalSet(
+      stopped,
+      'TUESDAY_BONUS',
+      0,
+      '2026-08-21T00:41:00.000Z',
+    )).toThrow(/not available/i)
+    expect(() => recordWorkoutSet(stopped, {
+      clientSetKey: 'unsafe-extra', exerciseIndex: 0, setType: 'EXTRA', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })).toThrow(/stopped for safety/i)
+    expect(stopped.optionalSetChoices).toEqual({})
   })
 
   it('rejects additional work facts after the prescription is complete', () => {

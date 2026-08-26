@@ -47,10 +47,27 @@ public record WorkoutExerciseSnapshot(
             int restSeconds,
             String weightStatus,
             Optional<BigDecimal> targetWeightKg,
-            String unit) {
+            String unit,
+            Optional<Integer> targetRirMin,
+            Optional<Integer> targetRirMax,
+            Optional<Integer> eccentricSeconds,
+            boolean perSide,
+            Optional<String> executionGroup,
+            Optional<Integer> executionOrder,
+            Optional<OptionalSetRule> optionalSetRule) {
         public Prescription(
                 int workSets, int repMin, int repMax, int restSeconds, String weightStatus, String unit) {
-            this(workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty(), unit);
+            this(workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty(), unit,
+                    Optional.empty(), Optional.empty(), Optional.empty(), false,
+                    Optional.empty(), Optional.empty(), Optional.empty());
+        }
+
+        public Prescription(
+                int workSets, int repMin, int repMax, int restSeconds, String weightStatus,
+                Optional<BigDecimal> targetWeightKg, String unit) {
+            this(workSets, repMin, repMax, restSeconds, weightStatus, targetWeightKg, unit,
+                    Optional.empty(), Optional.empty(), Optional.empty(), false,
+                    Optional.empty(), Optional.empty(), Optional.empty());
         }
 
         public Prescription {
@@ -66,6 +83,25 @@ public record WorkoutExerciseSnapshot(
             if (!"KG".equals(unit)) {
                 throw new IllegalArgumentException("P0 workout snapshots only support KG");
             }
+            targetRirMin = positiveOptional(targetRirMin, "target RIR minimum", true);
+            targetRirMax = positiveOptional(targetRirMax, "target RIR maximum", true);
+            eccentricSeconds = positiveOptional(eccentricSeconds, "eccentric seconds", false);
+            if (targetRirMin.isPresent() != targetRirMax.isPresent()
+                    || targetRirMin.isPresent()
+                    && (targetRirMin.orElseThrow() > targetRirMax.orElseThrow()
+                    || targetRirMax.orElseThrow() > 10)) {
+                throw new IllegalArgumentException("target RIR range is invalid");
+            }
+            if (eccentricSeconds.filter(value -> value > 10).isPresent()) {
+                throw new IllegalArgumentException("eccentric seconds is invalid");
+            }
+            executionGroup = Objects.requireNonNull(executionGroup, "execution group must not be null")
+                    .map(String::trim).filter(value -> !value.isEmpty());
+            executionOrder = positiveOptional(executionOrder, "execution order", false);
+            if (executionGroup.isPresent() != executionOrder.isPresent()) {
+                throw new IllegalArgumentException("execution group and order must be provided together");
+            }
+            optionalSetRule = Objects.requireNonNull(optionalSetRule, "optional set rule must not be null");
         }
 
         /** Retargets an immutable prescription when a replacement changes its load mode. */
@@ -76,12 +112,16 @@ public record WorkoutExerciseSnapshot(
             if (isBodyweight(replacement)) {
                 return new Prescription(
                         workSets, repMin, repMax, restSeconds,
-                        "BODYWEIGHT", Optional.empty(), unit);
+                        "BODYWEIGHT", Optional.empty(), unit,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule);
             }
             if (isBodyweight(source) || !source.equals(replacement)) {
                 return new Prescription(
                         workSets, repMin, repMax, restSeconds,
-                        "NEEDS_CALIBRATION", Optional.empty(), unit);
+                        "NEEDS_CALIBRATION", Optional.empty(), unit,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule);
             }
             return this;
         }
@@ -97,6 +137,27 @@ public record WorkoutExerciseSnapshot(
 
         private static boolean isBodyweight(Set<String> equipment) {
             return equipment.size() == 1 && equipment.contains("BODYWEIGHT");
+        }
+
+        private static Optional<Integer> positiveOptional(
+                Optional<Integer> value, String field, boolean allowZero) {
+            Optional<Integer> normalized = Objects.requireNonNull(value, field + " must not be null");
+            if (normalized.filter(number -> allowZero ? number < 0 : number <= 0).isPresent()) {
+                throw new IllegalArgumentException(field + " is invalid");
+            }
+            return normalized;
+        }
+
+        public record OptionalSetRule(
+                String conditionCode, String exclusiveChoiceGroup, int additionalSets,
+                Optional<String> description) {
+            public OptionalSetRule {
+                conditionCode = required(conditionCode, "optional set condition code");
+                exclusiveChoiceGroup = required(exclusiveChoiceGroup, "optional set exclusive group");
+                if (additionalSets != 1) throw new IllegalArgumentException("optional set amount must be one");
+                description = Objects.requireNonNull(description, "optional set description must not be null")
+                        .map(String::trim).filter(value -> !value.isEmpty());
+            }
         }
     }
 

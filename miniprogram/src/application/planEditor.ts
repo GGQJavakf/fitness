@@ -446,6 +446,10 @@ function toValidationDraft(plan: PlanDraft): PlanValidationDraft {
     templateCode: plan.templateCode,
     trainingSplit: plan.trainingSplit,
     name: plan.name,
+    presetCode: plan.presetCode,
+    presetVersion: plan.presetVersion,
+    executionRules: plan.executionRules ? [...plan.executionRules] : undefined,
+    progressionRules: plan.progressionRules ? [...plan.progressionRules] : undefined,
     days: plan.days.map((day) => ({
       ...day,
       exercises: day.exercises.map((exercise) => ({ ...exercise })),

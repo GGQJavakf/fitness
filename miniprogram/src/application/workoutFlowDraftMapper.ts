@@ -12,7 +12,9 @@ import {
 
 interface PersistedPlanSnapshot {
   planVersionId: string
+  startedAtUtc?: string
   exercises: readonly Omit<WorkoutExerciseState, 'sets'>[]
+  optionalSetChoices?: Readonly<Record<string, number | null>>
   syncStatus: WorkoutSyncStatus
   automaticProgressionEligible: boolean
   safetyNotice: string | null
@@ -30,7 +32,9 @@ export function toWorkoutDraft(
 ): WorkoutDraft {
   const planSnapshot: PersistedPlanSnapshot = {
     planVersionId: state.planVersionId,
+    startedAtUtc: state.startedAtUtc,
     exercises: state.exercises.map(({ sets: _sets, ...exercise }) => exercise),
+    optionalSetChoices: state.optionalSetChoices,
     syncStatus: state.syncStatus,
     automaticProgressionEligible: state.automaticProgressionEligible,
     safetyNotice: state.safetyNotice,
@@ -78,7 +82,11 @@ export function restoreFlowFromDraft(draft: WorkoutDraft): WorkoutFlowState {
     schemaVersion: 1,
     clientSessionKey: draft.clientSessionKey,
     planVersionId: snapshot.planVersionId,
+    startedAtUtc: typeof snapshot.startedAtUtc === 'string' ? snapshot.startedAtUtc : undefined,
     exercises,
+    optionalSetChoices: isRecord(snapshot.optionalSetChoices)
+      ? snapshot.optionalSetChoices as Readonly<Record<string, number | null>>
+      : undefined,
     currentExerciseIndex: draft.currentExerciseIndex,
     currentSetIndex: draft.currentSetIndex,
     restTimer: draft.restTimer as RestTimerState | null,

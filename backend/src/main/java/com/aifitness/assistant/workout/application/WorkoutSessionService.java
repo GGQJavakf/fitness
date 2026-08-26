@@ -86,10 +86,15 @@ public final class WorkoutSessionService {
                 item.exerciseName(), item.contentVersion(), item.equipment(),
                 new WorkoutExerciseSnapshot.Prescription(
                         item.workSets(), item.repMin(), item.repMax(), item.restSeconds(),
-                        item.weightStatus(), item.targetWeightKg(), item.unit()),
+                        item.weightStatus(), item.targetWeightKg(), item.unit(),
+                        item.targetRirMin(), item.targetRirMax(), item.eccentricSeconds(), item.perSide(),
+                        item.executionGroup(), item.executionOrder(),
+                        item.optionalSetRule().map(rule -> new WorkoutExerciseSnapshot.Prescription.OptionalSetRule(
+                                rule.conditionCode(), rule.exclusiveChoiceGroup(), rule.additionalSets(),
+                                rule.description()))),
                 WorkoutExerciseSnapshot.Status.PENDING)).toList();
         Optional<WorkoutWarmupPrescription> warmupPrescription = warmups
-                .map(service -> toSnapshot(service.prescribe(user, source.exercises()), exercises));
+                .map(service -> toSnapshot(service.prescribe(user, source.exercises()), exercises, source.warmup()));
         WorkoutSession session = new WorkoutSession(
                 sessionId, user.value(), source.planId(), source.planVersionId(), source.versionNumber(),
                 source.trainingDayId(), source.trainingDayCode(), command.clientSessionKey(),
@@ -99,7 +104,8 @@ public final class WorkoutSessionService {
 
     private static WorkoutWarmupPrescription toSnapshot(
             WorkoutWarmupPrescriptionEngine.Prescription value,
-            java.util.List<WorkoutExerciseSnapshot> exercises) {
+            java.util.List<WorkoutExerciseSnapshot> exercises,
+            java.util.List<PlanWorkoutSnapshotQuery.WarmupStepSource> instructions) {
         return new WorkoutWarmupPrescription(
                 value.schemaVersion(),
                 value.ruleVersion(),
@@ -121,6 +127,8 @@ public final class WorkoutSessionService {
                             ramp.calibrationCode(),
                             ramp.calibrationMessage());
                 }),
+                instructions.stream().map(step -> new WorkoutWarmupPrescription.Instruction(
+                        step.instruction(), step.prescription(), step.optional())).toList(),
                 value.countsTowardTrainingVolume(),
                 value.countsTowardProgression());
     }

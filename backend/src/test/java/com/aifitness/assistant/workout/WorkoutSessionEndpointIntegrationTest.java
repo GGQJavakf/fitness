@@ -6,11 +6,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.FitnessAssistantApplication;
+import com.aifitness.assistant.workout.api.WorkoutSessionController;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,14 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class WorkoutSessionEndpointIntegrationTest {
+
+    @Test
+    void serializesAbsentOptionalSetRuleDescriptionAsOmitted() {
+        JsonNode serialized = objectMapper.valueToTree(new WorkoutSessionController.OptionalSetRuleData(
+                "TUESDAY_UNDER_42_GOOD_STATE", "TUESDAY_BONUS", 1, Optional.empty()));
+
+        assertThat(serialized.has("description")).isFalse();
+    }
 
     @Test
     void serializesRecoverableActiveSetsWithoutNullOptionalFields() throws Exception {

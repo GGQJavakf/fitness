@@ -16,6 +16,7 @@ import type {
   AiPlanProposal,
   PlanGenerationContextData,
   PlanGenerationSource,
+  PlanPresetSummary,
 } from './models'
 import {
   AiDiagnosticError,
@@ -97,6 +98,7 @@ export interface OnboardingPersistencePort {
   saveEquipment(request: UpdateEquipmentRequest): Promise<VersionedResource>
   savePreferences(request: UpdatePreferencesRequest): Promise<VersionedResource>
   getPlanGenerationContext?(profileVersion: number): Promise<PlanGenerationContextData>
+  listPlanPresets(): Promise<readonly PlanPresetSummary[]>
   generateCandidate(
     request: {
       profileVersion: number
@@ -105,6 +107,7 @@ export interface OnboardingPersistencePort {
       additionalRequirements?: string
       aiProposal?: AiPlanProposal
       fallbackAllowed?: boolean
+      presetCode?: string
     },
   ): Promise<PlanCandidateGenerationData>
 }
@@ -141,6 +144,13 @@ export interface CandidateExerciseViewModel {
   repRange: string
   restLabel: string
   weightLabel: string
+  targetRirLabel?: string
+  eccentricLabel?: string
+  perSide?: boolean
+  executionGroup?: string
+  executionOrder?: number
+  optionalSetDescription?: string
+  notes: string[]
 }
 
 export interface CandidateViewModel {
@@ -154,6 +164,11 @@ export interface CandidateViewModel {
   days: Array<{
     code: string
     name: string
+    weekday?: string
+    focus?: string
+    estimatedMinutesLabel?: string
+    warmup: Array<{ instruction: string; prescription?: string; optional: boolean }>
+    notes: string[]
     exercises: CandidateExerciseViewModel[]
   }>
   reason?: string
@@ -388,21 +403,50 @@ export function buildCandidateViewModel(
     generationSource,
     generationLabel: generationSource === 'AI_PERSONALIZED'
       ? 'AI 个性化计划 · 规则已校验'
-      : '规则生成计划 · 已通过安全校验',
+      : generationSource === 'SYSTEM_PRESET'
+        ? '系统个人预设 · 完整处方已载入'
+        : '规则生成计划 · 已通过安全校验',
     explanationMessage: explanationMessage(candidate.explanationStatus, candidate.explanation),
     notices: candidateNotices(candidate.validationIssues),
     days: candidate.plan.days.map((day) => ({
       code: day.code,
       name: day.name,
+      weekday: day.weekday,
+      focus: day.focus,
+      estimatedMinutesLabel: day.estimatedMinutesMin && day.estimatedMinutesMax
+        ? `${day.estimatedMinutesMin}～${day.estimatedMinutesMax} 分钟`
+        : undefined,
+      warmup: day.warmup ?? [],
+      notes: day.notes ?? [],
       exercises: day.exercises.map((exercise) => ({
         exerciseCode: exercise.exerciseCode,
         workSets: exercise.workSets,
         repRange: `${exercise.repMin}～${exercise.repMax} 次`,
         restLabel: `休息 ${exercise.restSeconds} 秒`,
         weightLabel: weightLabel(exercise.weightStatus),
+        targetRirLabel: exercise.targetRirMin !== undefined && exercise.targetRirMax !== undefined
+          ? `RIR ${exercise.targetRirMin}～${exercise.targetRirMax}`
+          : undefined,
+        eccentricLabel: exercise.eccentricSeconds
+          ? `下放约 ${exercise.eccentricSeconds} 秒`
+          : undefined,
+        perSide: exercise.perSide,
+        executionGroup: exercise.executionGroup,
+        executionOrder: exercise.executionOrder,
+        optionalSetDescription: optionalSetDescription(exercise.optionalSetRule),
+        notes: exercise.notes ?? [],
       })),
     })),
   }
+}
+
+function optionalSetDescription(rule: { conditionCode: string; description?: string } | undefined): string | undefined {
+  if (!rule) return undefined
+  if (rule.description) return rule.description
+  if (rule.conditionCode === 'TUESDAY_UNDER_42_GOOD_STATE') {
+    return '当天用时在 42 分钟以内且状态良好，可在坐姿划船或哑铃弯举中任选一项增加 1 组；不要两项都加。'
+  }
+  return '满足当天条件时可增加 1 个补充组。'
 }
 
 function candidateNotices(issues: ValidationIssue[]): string[] {

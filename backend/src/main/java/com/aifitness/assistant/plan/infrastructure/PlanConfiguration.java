@@ -2,6 +2,7 @@ package com.aifitness.assistant.plan.infrastructure;
 
 import com.aifitness.assistant.content.application.ExerciseQueryService;
 import com.aifitness.assistant.content.application.TemplateQueryService;
+import com.aifitness.assistant.content.domain.ContentEnvironment;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
 import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.application.PlanRepository;
@@ -9,6 +10,7 @@ import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.application.PlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.plan.application.WarningConfirmationStore;
 import com.aifitness.assistant.plan.application.InMemoryWarningConfirmationStore;
+import com.aifitness.assistant.plan.domain.SystemPlanPresetCatalog;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
 import com.aifitness.assistant.rules.domain.PlanRulePolicy;
@@ -52,10 +54,19 @@ public class PlanConfiguration {
             PlanGenerationEngine generator,
             PlanValidationEngine validator,
             PlanRulePolicy policy,
+            SystemPlanPresetCatalog presets,
             Clock clock,
             @Value("${fitness.plan.candidate-cache-capacity:512}") int candidateCacheCapacity) {
         return new PlanCandidateService(
-                profiles, templates, exercises, generator, validator, policy, clock, candidateCacheCapacity);
+                profiles, templates, exercises, generator, validator, policy, presets, clock, candidateCacheCapacity);
+    }
+
+    @Bean
+    SystemPlanPresetCatalog systemPlanPresetCatalog(
+            ObjectMapper objectMapper,
+            @Value("${fitness.content.environment:local}") String environment) {
+        return ClasspathSystemPlanPresetCatalogLoader.load(
+                objectMapper, ContentEnvironment.fromExternalName(environment));
     }
 
     @Bean

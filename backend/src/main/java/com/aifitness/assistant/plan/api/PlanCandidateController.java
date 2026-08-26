@@ -45,6 +45,11 @@ public final class PlanCandidateController {
         return response(candidates.generationContext(user, profileVersion));
     }
 
+    @GetMapping("/presets")
+    public ApiResponse<PresetListData> presets(AuthenticatedUserId user) {
+        return response(new PresetListData(candidates.listPresets()));
+    }
+
     @PostMapping("/candidates")
     public ApiResponse<GenerationData> generate(
             AuthenticatedUserId user, @RequestBody CandidateRequest request) {
@@ -59,7 +64,8 @@ public final class PlanCandidateController {
                 validAdditionalRequirements(request.additionalRequirements()),
                 request.aiProposal(),
                 request.fallbackAllowed() == null || request.fallbackAllowed(),
-                request.trainingSplit());
+                request.trainingSplit(),
+                validPresetCode(request.presetCode()));
         return response(new GenerationData(
                 generated.status(),
                 generated.candidate().map(candidate -> CandidateData.from(
@@ -113,13 +119,26 @@ public final class PlanCandidateController {
                                 + "of non-medical training preferences without control text"));
     }
 
+    private static String validPresetCode(String value) {
+        if (value == null || value.isBlank()) return null;
+        if (!value.matches("[A-Z0-9_]{1,64}")) {
+            throw new IllegalArgumentException("presetCode is invalid");
+        }
+        return value;
+    }
+
     public record CandidateRequest(
             Long profileVersion,
             PlanCandidateService.TrainingSplit trainingSplit,
             Map<String, Integer> lockedFields,
             String additionalRequirements,
             PlanCandidateService.AiPlanProposal aiProposal,
-            Boolean fallbackAllowed) {}
+            Boolean fallbackAllowed,
+            String presetCode) {}
+
+    public record PresetListData(List<PlanCandidateService.PresetSummary> items) {
+        public PresetListData { items = List.copyOf(items); }
+    }
 
     public record ValidateRequest(PlanController.PlanData plan, RuleReferenceData ruleReference) {}
 

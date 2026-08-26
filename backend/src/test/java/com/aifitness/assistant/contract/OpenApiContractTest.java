@@ -49,6 +49,7 @@ class OpenApiContractTest {
             "GET /api/v1/workout-sessions/{sessionId}/exercises/{snapshotId}/replacements",
             "GET /api/v1/plan-templates",
             "POST /api/v1/plans/candidates",
+            "GET /api/v1/plans/presets",
             "GET /api/v1/plans/generation-context",
             "GET /api/v1/plans/{planId}/exercise-options",
             "GET /api/v1/plans/{planId}/exercise-replacements",
@@ -372,6 +373,11 @@ class OpenApiContractTest {
         assertThat(required(schemas, "WorkoutPrescriptionSnapshot"))
                 .containsExactlyInAnyOrder(
                         "workSets", "repMin", "repMax", "restSeconds", "weightStatus", "unit");
+        assertThat(map(map(map(schemas.get("WorkoutPrescriptionSnapshot"))
+                .get("properties")).get("optionalSetRule")))
+                .containsEntry("$ref", "#/components/schemas/WorkoutOptionalSetRule");
+        assertThat(map(map(schemas.get("WorkoutOptionalSetRule")).get("properties")))
+                .containsKey("description");
         assertThat(required(schemas, "UpsertSetRequest"))
                 .contains("sessionExerciseId", "clientOperationSeq", "target", "actual", "expectedSessionVersion");
         assertThat(required(schemas, "WorkoutSetData"))

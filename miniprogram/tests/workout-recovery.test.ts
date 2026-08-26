@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { resumeRestTimer, startRestTimer } from '../src/domain/workout/RestTimer'
+import { ActiveWorkoutExistsError } from '../src/application/errors'
 import {
   beginWorkSets,
   completeGeneralWarmup,
@@ -15,13 +16,82 @@ import type { WorkoutDraft, WorkoutDraftStore } from '../src/application/ports/W
 import { WorkoutFlowService } from '../src/application/use-cases/WorkoutFlowService'
 
 describe('workout recovery', () => {
+  it('preserves server repetition ranges through fresh start, active recovery, and draft persistence', async () => {
+    let stored: WorkoutDraft | null = null
+    const store: WorkoutDraftStore = {
+      loadActive: async () => stored,
+      save: async (draft) => { stored = draft },
+      clearActive: async () => { stored = null },
+    }
+    const serverSession = {
+      id: 'server-range-session',
+      planVersionId: 'server-plan-version',
+      version: 1,
+      startedAt: '2026-08-21T09:00:00.000Z',
+      exercises: [{
+        id: 'server-exercise',
+        exerciseCode: 'SERVER_ROW',
+        exerciseName: '服务端划船',
+        prescription: {
+          workSets: 3,
+          repMin: 8,
+          repMax: 12,
+          restSeconds: 90,
+          weightStatus: 'BODYWEIGHT' as const,
+        },
+      }],
+    }
+    const fresh = new WorkoutFlowService(
+      store,
+      { nowUtc: () => '2026-08-21T09:00:00.000Z' },
+      undefined, undefined, undefined,
+      { startWorkoutSession: async () => serverSession },
+    )
+
+    const started = await fresh.startOrResume({
+      clientSessionKey: 'fresh-range-client',
+      planId: 'plan-id',
+      planVersionNo: 1,
+      planDayId: 'day-id',
+    })
+    expect(started.state.exercises[0]).toMatchObject({ targetRepMin: 8, targetRepMax: 12 })
+    expect(started.state.exercises[0]).not.toHaveProperty('targetReps')
+    expect((stored!.planSnapshot.exercises as Array<Record<string, unknown>>)[0]).toMatchObject({
+      targetRepMin: 8,
+      targetRepMax: 12,
+    })
+
+    stored = null
+    const activeSession = {
+      ...serverSession,
+      clientSessionKey: 'active-range-client',
+      status: 'IN_PROGRESS' as const,
+    }
+    const recovery = new WorkoutFlowService(
+      store,
+      { nowUtc: () => '2026-08-21T09:00:00.000Z' },
+      undefined, undefined, undefined,
+      { startWorkoutSession: async () => { throw new ActiveWorkoutExistsError({ session: activeSession, sets: [] }) } },
+    )
+    const recovered = await recovery.startOrResume({
+      clientSessionKey: 'competing-range-client',
+      planId: 'plan-id',
+      planVersionNo: 1,
+      planDayId: 'day-id',
+    })
+
+    expect(recovered.kind).toBe('RESUME_REQUIRED')
+    expect(recovered.state.exercises[0]).toMatchObject({ targetRepMin: 8, targetRepMax: 12 })
+    expect(recovered.state.exercises[0]).not.toHaveProperty('targetReps')
+  })
+
   it('restores position, completed facts, offline status, and timestamp rest state after process loss', () => {
     let state = createWorkoutFlow({
       clientSessionKey: 'recover-session',
       planVersionId: 'plan-version-9',
       exercises: [{
         snapshotExerciseKey: 'exercise-a', exerciseCode: 'row', name: '划船',
-        targetWorkSets: 2, targetReps: 8, restSeconds: 90,
+        targetWorkSets: 2, targetRepMin: 8, targetRepMax: 10, restSeconds: 90,
       }],
     })
     state = beginWorkSets(completeGeneralWarmup(state))
@@ -43,6 +113,8 @@ describe('workout recovery', () => {
     expect(restored.currentExerciseIndex).toBe(0)
     expect(restored.currentSetIndex).toBe(1)
     expect(restored.exercises[0].sets[0].status).toBe('COMPLETED')
+    expect(restored.exercises[0]).toMatchObject({ targetRepMin: 8, targetRepMax: 10 })
+    expect(restored.exercises[0]).not.toHaveProperty('targetReps')
     expect(restored.syncStatus).toBe('OFFLINE_PENDING')
     expect(restored.warmup.phase).toBe('WORK')
     expect(rest.remainingSeconds).toBe(30)
@@ -124,8 +196,110 @@ describe('workout recovery', () => {
     expect(restored?.exercises[0].sessionWeightKg).toBe(22.5)
   })
 
+  it('persists the selected Tuesday optional-set branch across page recovery', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-08-21T09:41:00.000Z' },
+    )
+    let state = await service.start({
+      clientSessionKey: 'optional-recovery-session',
+      planVersionId: 'tuesday-plan',
+      startedAtUtc: '2026-08-21T09:00:00.000Z',
+      exercises: [
+        {
+          snapshotExerciseKey: 'machine-row', exerciseCode: 'MACHINE_SEATED_ROW', name: '器械坐姿划船',
+          targetWorkSets: 1, targetReps: 12, restSeconds: 90, weightStatus: 'BODYWEIGHT',
+          optionalSetRule: {
+            conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+            exclusiveChoiceGroup: 'TUESDAY_BONUS',
+            additionalSets: 1,
+          },
+        },
+        {
+          snapshotExerciseKey: 'dumbbell-curl', exerciseCode: 'DUMBBELL_CURL', name: '哑铃弯举',
+          targetWorkSets: 1, targetReps: 12, restSeconds: 60, weightStatus: 'BODYWEIGHT',
+          optionalSetRule: {
+            conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+            exclusiveChoiceGroup: 'TUESDAY_BONUS',
+            additionalSets: 1,
+          },
+        },
+      ],
+    })
+    state = await service.completeGeneralWarmup(state)
+    state = await service.recordSet(state, {
+      clientSetKey: 'row-work', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })
+    state = await service.recordSet(state, {
+      clientSetKey: 'curl-work', exerciseIndex: 1, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 0, actualReps: 12,
+    })
+    await service.chooseOptionalSet(state, 'TUESDAY_BONUS', 0)
+
+    const restored = await service.load()
+    expect(restored).toMatchObject({
+      startedAtUtc: '2026-08-21T09:00:00.000Z',
+      currentExerciseIndex: 0,
+      currentSetIndex: 1,
+      optionalSetChoices: { TUESDAY_BONUS: 0 },
+    })
+  })
+
+  it('restores a safety-stopped optional workout without reopening the bonus choice', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-08-21T09:41:00.000Z' },
+    )
+    let state = await service.start({
+      clientSessionKey: 'optional-safety-recovery',
+      planVersionId: 'tuesday-plan',
+      startedAtUtc: '2026-08-21T09:00:00.000Z',
+      exercises: [{
+        snapshotExerciseKey: 'machine-row', exerciseCode: 'MACHINE_SEATED_ROW', name: '器械坐姿划船',
+        targetWorkSets: 1, targetRepMin: 10, targetRepMax: 12, restSeconds: 90,
+        weightStatus: 'BODYWEIGHT',
+        optionalSetRule: {
+          conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+          exclusiveChoiceGroup: 'TUESDAY_BONUS',
+          additionalSets: 1,
+        },
+      }],
+    })
+    state = await service.completeGeneralWarmup(state)
+    await service.recordSet(state, {
+      clientSetKey: 'unsafe-work', exerciseIndex: 0, setType: 'WORK', status: 'FAILED',
+      actualWeightKg: 0, actualReps: 0, safetyFlag: 'PAIN',
+    })
+
+    const restored = await service.load()
+    expect(restored?.safetyNotice).toMatch(/立即停止训练/)
+    expect(restored?.exercises[0]).toMatchObject({ targetRepMin: 10, targetRepMax: 12 })
+    await expect(service.chooseOptionalSet(restored!, 'TUESDAY_BONUS', 0))
+      .rejects.toThrow(/not available/i)
+    expect((stored!.planSnapshot.optionalSetChoices as Record<string, number | null>)).toEqual({})
+  })
+
   it('rejects malformed persisted state instead of fabricating completed work', () => {
     expect(() => restoreWorkoutFlow({ clientSessionKey: 'broken' })).toThrow(/workout state/i)
+
+    const malformedSets = JSON.parse(JSON.stringify(createWorkoutFlow({
+      clientSessionKey: 'broken-sets',
+      planVersionId: 'plan-version',
+      exercises: [{
+        snapshotExerciseKey: 'exercise-id',
+        exerciseCode: 'ROW',
+        name: '划船',
+        targetWorkSets: 2,
+        targetReps: 8,
+        restSeconds: 60,
+      }],
+    })))
+    malformedSets.exercises[0].sets = null
+
+    expect(() => restoreWorkoutFlow(malformedSets)).toThrow('workout state is invalid')
   })
 
   it('restores legacy ramp drafts without inferring client-side warmup weights', () => {
@@ -547,7 +721,11 @@ describe('workout recovery', () => {
 
     const updated = await service.replaceCurrentExercise(state, candidate)
 
-    expect(updated.exercises[0]).toMatchObject({ exerciseCode: 'SAFE_ROW', replacedExerciseCode: 'ROW', targetReps: 10, weightStatus: 'NEEDS_CALIBRATION' })
+    expect(updated.exercises[0]).toMatchObject({
+      exerciseCode: 'SAFE_ROW', replacedExerciseCode: 'ROW',
+      targetRepMin: 8, targetRepMax: 10, weightStatus: 'NEEDS_CALIBRATION',
+    })
+    expect(updated.exercises[0]).not.toHaveProperty('targetReps')
     expect(stored!.lastServerVersion).toBe(2)
     expect(stored!.planSnapshot).toMatchObject({ planVersionId: 'plan-version' })
   })

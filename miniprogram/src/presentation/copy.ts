@@ -46,6 +46,22 @@ const EXERCISE_NAMES: Readonly<Record<string, string>> = {
   DEAD_BUG: '死虫式',
   BIRD_DOG: '鸟狗式',
   PLANK: '平板支撑',
+  SMITH_FLAT_BENCH_PRESS: '史密斯平板卧推',
+  INCLINE_DUMBBELL_BENCH_PRESS_30: '30°上斜哑铃卧推',
+  SEATED_MACHINE_SHOULDER_PRESS: '器械坐姿推肩',
+  LEANING_PEC_DECK_FLY: '前倾蝴蝶夹胸',
+  MACHINE_SEATED_ROW: '器械坐姿划船',
+  REVERSE_PEC_DECK_FLY: '反飞鸟器械',
+  SMITH_SQUAT: '史密斯深蹲',
+  SEATED_LEG_PRESS: '坐姿腿举',
+  DUMBBELL_REVERSE_LUNGE: '哑铃反向箭步蹲',
+  SEATED_LEG_EXTENSION: '坐姿腿屈伸',
+  MACHINE_CRUNCH: '卷腹机',
+  INCLINE_DUMBBELL_FLY: '上斜哑铃飞鸟',
+  MACHINE_HIP_THRUST: '器械臀桥',
+  MACHINE_LEG_CURL: '腿弯举器械',
+  MACHINE_HIP_ABDUCTION: '臀外展器械',
+  STANDING_CALF_RAISE: '站姿提踵',
 }
 
 const PLAN_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
@@ -100,6 +116,18 @@ export function exerciseDisplayName(value: string): string {
 export function trainingDayDisplayName(value: string): string {
   const matched = /^DAY[_\s-]*(.+)$/i.exec(value)
   return matched ? `训练日 ${matched[1]}` : readableCode(value)
+}
+
+export function weekdayDisplayName(value?: string): string {
+  return ({
+    MONDAY: '周一',
+    TUESDAY: '周二',
+    WEDNESDAY: '周三',
+    THURSDAY: '周四',
+    FRIDAY: '周五',
+    SATURDAY: '周六',
+    SUNDAY: '周日',
+  } as Record<string, string>)[value ?? ''] ?? readableCode(value ?? '')
 }
 
 export function planIssueDisplayMessage(reasonCode: string): string {

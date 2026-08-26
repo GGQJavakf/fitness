@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -65,13 +66,26 @@ public final class JdbcPlanWorkoutSnapshotQuery implements PlanWorkoutSnapshotQu
                             row.getString("content_version"), equipment,
                             number(prescription, "workSets"), number(prescription, "repMin"),
                             number(prescription, "repMax"), number(prescription, "restSeconds"),
-                            row.getString("weight_status"), decimal(prescription, "targetWeightKg"), "KG");
+                            row.getString("weight_status"), decimal(prescription, "targetWeightKg"), "KG",
+                            optionalNumber(prescription, "targetRirMin"),
+                            optionalNumber(prescription, "targetRirMax"),
+                            optionalNumber(prescription, "eccentricSeconds"),
+                            Boolean.TRUE.equals(prescription.get("perSide")),
+                            optionalText(prescription, "executionGroup"),
+                            optionalNumber(prescription, "executionOrder"),
+                            optionalSetRule(prescription.get("optionalSetRule")));
                 }, bytes(header.dayId()), bytes(header.versionId()));
         if (sources.isEmpty()) {
             throw new PlanSnapshotNotFoundException();
         }
+        String firstPrescription = jdbc.queryForObject("""
+                SELECT prescription_json FROM plan_exercise
+                WHERE training_day_id = ? AND plan_version_id = ? AND status = 'ACTIVE'
+                ORDER BY exercise_order LIMIT 1
+                """, String.class, bytes(header.dayId()), bytes(header.versionId()));
+        List<WarmupStepSource> warmup = warmup(readJson(firstPrescription).get("warmup"));
         return new PlanDaySource(
-                planId, header.versionId(), versionNumber, header.dayId(), trainingDayCode, sources);
+                planId, header.versionId(), versionNumber, header.dayId(), trainingDayCode, warmup, sources);
     }
 
     private Map<String, Object> readJson(String value) {
@@ -102,6 +116,36 @@ public final class JdbcPlanWorkoutSnapshotQuery implements PlanWorkoutSnapshotQu
         Object value = values.get(field);
         return value == null ? java.util.Optional.empty()
                 : java.util.Optional.of(new BigDecimal(String.valueOf(value)));
+    }
+
+    private static Optional<Integer> optionalNumber(Map<String, Object> values, String field) {
+        Object value = values.get(field);
+        return value instanceof Number number ? Optional.of(number.intValue()) : Optional.empty();
+    }
+
+    private static Optional<String> optionalText(Map<String, Object> values, String field) {
+        return Optional.ofNullable(values.get(field)).map(String::valueOf)
+                .map(String::trim).filter(value -> !value.isEmpty());
+    }
+
+    private static List<WarmupStepSource> warmup(Object raw) {
+        if (!(raw instanceof List<?> values)) return List.of();
+        return values.stream().filter(Map.class::isInstance).map(Map.class::cast).map(value -> {
+            Map<String, Object> item = new java.util.LinkedHashMap<>();
+            value.forEach((key, entry) -> item.put(String.valueOf(key), entry));
+            return new WarmupStepSource(
+                    text(item, "instruction"), optionalText(item, "prescription"),
+                    Boolean.TRUE.equals(item.get("optional")));
+        }).toList();
+    }
+
+    private static Optional<OptionalSetRuleSource> optionalSetRule(Object raw) {
+        if (!(raw instanceof Map<?, ?> values)) return Optional.empty();
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        values.forEach((key, value) -> item.put(String.valueOf(key), value));
+        return Optional.of(new OptionalSetRuleSource(
+                text(item, "conditionCode"), text(item, "exclusiveChoiceGroup"),
+                number(item, "additionalSets"), optionalText(item, "description")));
     }
 
     private static byte[] bytes(UUID value) {

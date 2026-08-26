@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aifitness.local/schema/plan-preset-v1",
+  "title": "System Plan Preset V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["metadata", "presets"],
+  "properties": {
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/preset" }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "enum": ["AI_DRAFT", "RETIRED"] } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": false }, "environments": { "maxItems": 0 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "AI_VALIDATED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "items": { "enum": ["local", "test", "staging-experience"] }, "minItems": 1 } } } } } } }
+    },
+    {
+      "if": { "properties": { "metadata": { "properties": { "status": { "const": "PUBLIC_RELEASE_APPROVED" } } } } },
+      "then": { "properties": { "metadata": { "properties": { "activation": { "properties": { "enabled": { "const": true }, "environments": { "contains": { "const": "public" } } } } } } } }
+    }
+  ],
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "version", "status", "sourceReferences", "activation"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "kind": { "const": "SYSTEM_PLAN_PRESET" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "status": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] },
+        "sourceReferences": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "activation": { "$ref": "#/$defs/activation" }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "environments"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "environments": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["local", "test", "staging-experience", "public"] }
+        }
+      }
+    },
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "version", "templateCode", "name", "goal", "weeklyFrequency", "sessionMinutes", "location", "trainingSplit", "executionRules", "progressionRules", "days"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "templateCode": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "name": { "type": "string", "minLength": 2 },
+        "goal": { "enum": ["STRENGTH", "HYPERTROPHY", "GENERAL_FITNESS"] },
+        "weeklyFrequency": { "type": "integer", "minimum": 2, "maximum": 6 },
+        "sessionMinutes": { "type": "integer", "minimum": 1 },
+        "location": { "enum": ["HOME", "GYM"] },
+        "trainingSplit": { "enum": ["UPPER_LOWER", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"] },
+        "executionRules": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "progressionRules": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "days": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/day" }
+        }
+      }
+    },
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "weekday", "name", "focus", "estimatedMinutes", "warmup", "notes", "exercises"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "weekday": { "enum": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"] },
+        "name": { "type": "string", "minLength": 2 },
+        "focus": { "type": "string", "minLength": 1 },
+        "estimatedMinutes": { "$ref": "#/$defs/estimatedMinutes" },
+        "warmup": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/warmupStep" }
+        },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "exercises": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/exercise" }
+        }
+      }
+    },
+    "estimatedMinutes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 1 },
+        "max": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "warmupStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instruction", "prescription"],
+      "properties": {
+        "instruction": { "type": "string", "minLength": 1 },
+        "prescription": { "type": "string", "minLength": 1 },
+        "optional": { "type": "boolean" }
+      }
+    },
+    "exercise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exerciseCode", "workSets", "repRange", "restSeconds", "weightStatus"],
+      "dependentRequired": {
+        "targetRirMin": ["targetRirMax"],
+        "targetRirMax": ["targetRirMin"],
+        "executionGroup": ["executionOrder"],
+        "executionOrder": ["executionGroup"]
+      },
+      "properties": {
+        "exerciseCode": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "workSets": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "repRange": { "$ref": "#/$defs/repRange" },
+        "restSeconds": { "type": "integer", "minimum": 0, "maximum": 300 },
+        "weightStatus": { "enum": ["NEEDS_CALIBRATION", "BODYWEIGHT", "KNOWN"] },
+        "targetWeightKg": { "type": "number", "minimum": 0, "multipleOf": 0.01 },
+        "targetRirMin": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "targetRirMax": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "eccentricSeconds": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "perSide": { "type": "boolean" },
+        "executionGroup": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "executionOrder": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "optionalSetRule": { "$ref": "#/$defs/optionalSetRule" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "repRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "type": "integer", "minimum": 1, "maximum": 30 },
+        "max": { "type": "integer", "minimum": 1, "maximum": 30 }
+      }
+    },
+    "optionalSetRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conditionCode", "exclusiveChoiceGroup", "additionalSets"],
+      "properties": {
+        "conditionCode": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "exclusiveChoiceGroup": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "additionalSets": { "const": 1 }
+      }
+    }
+  }
+}

@@ -29,10 +29,13 @@ import type {
 import { ActiveWorkoutExistsError } from '../errors'
 import {
   createWorkoutFlow,
+  areRequiredWorkSetsComplete,
   beginWorkSets,
+  chooseOptionalSet,
   completeGeneralWarmup,
   isWorkoutPrescriptionFinished,
   recordWorkoutSet,
+  restSecondsAfterRecordedSet,
   replaceExerciseForSession,
   restoreWorkoutFlow,
   setWorkoutExerciseWeight,
@@ -52,6 +55,7 @@ export interface StartWorkoutFlowInput {
   warmupPrescription?: import('../workoutFlow').WorkoutWarmupPrescriptionSnapshot
   serverSessionId?: string
   serverVersion?: number
+  startedAtUtc?: string
 }
 
 export type StartOrResumeWorkoutInput = StartWorkoutSessionRequest & {
@@ -121,16 +125,25 @@ export class WorkoutFlowService {
         planVersionId: session.planVersionId,
         serverSessionId: session.id,
         serverVersion: session.version,
+        startedAtUtc: session.startedAt ?? this.clock.nowUtc(),
         warmupPrescription: session.warmupPrescription,
         exercises: session.exercises.map((exercise) => ({
           snapshotExerciseKey: exercise.id,
           exerciseCode: exercise.exerciseCode,
           name: exercise.exerciseName,
           targetWorkSets: exercise.prescription.workSets,
-          targetReps: exercise.prescription.repMax,
+          targetRepMin: exercise.prescription.repMin,
+          targetRepMax: exercise.prescription.repMax,
           restSeconds: exercise.prescription.restSeconds,
           weightStatus: exercise.prescription.weightStatus,
           targetWeightKg: exercise.prescription.targetWeightKg,
+          targetRirMin: exercise.prescription.targetRirMin,
+          targetRirMax: exercise.prescription.targetRirMax,
+          eccentricSeconds: exercise.prescription.eccentricSeconds,
+          perSide: exercise.prescription.perSide,
+          executionGroup: exercise.prescription.executionGroup,
+          executionOrder: exercise.prescription.executionOrder,
+          optionalSetRule: exercise.prescription.optionalSetRule,
         })),
       })
       return { kind: 'STARTED', state }
@@ -166,16 +179,25 @@ export class WorkoutFlowService {
     const base = createWorkoutFlow({
       clientSessionKey: session.clientSessionKey,
       planVersionId: session.planVersionId,
+      startedAtUtc: session.startedAt ?? this.clock.nowUtc(),
       warmupPrescription: session.warmupPrescription,
       exercises: session.exercises.map((exercise) => ({
         snapshotExerciseKey: exercise.id,
         exerciseCode: exercise.exerciseCode,
         name: exercise.exerciseName,
         targetWorkSets: exercise.prescription.workSets,
-        targetReps: exercise.prescription.repMax,
+        targetRepMin: exercise.prescription.repMin,
+        targetRepMax: exercise.prescription.repMax,
         restSeconds: exercise.prescription.restSeconds,
         weightStatus: exercise.prescription.weightStatus,
         targetWeightKg: exercise.prescription.targetWeightKg,
+        targetRirMin: exercise.prescription.targetRirMin,
+        targetRirMax: exercise.prescription.targetRirMax,
+        eccentricSeconds: exercise.prescription.eccentricSeconds,
+        perSide: exercise.prescription.perSide,
+        executionGroup: exercise.prescription.executionGroup,
+        executionOrder: exercise.prescription.executionOrder,
+        optionalSetRule: exercise.prescription.optionalSetRule,
       })),
     })
     const effectiveSets = active.sets
@@ -242,7 +264,10 @@ export class WorkoutFlowService {
   }
 
   private async startNew(input: StartWorkoutFlowInput): Promise<WorkoutFlowState> {
-    const created = createWorkoutFlow(input)
+    const created = createWorkoutFlow({
+      ...input,
+      startedAtUtc: input.startedAtUtc ?? this.clock.nowUtc(),
+    })
     const state = {
       ...created,
       warmup: {
@@ -288,18 +313,22 @@ export class WorkoutFlowService {
       let updated = recordWorkoutSet(current, input)
       if (updated === current) return current
       const prescriptionFinished = isWorkoutPrescriptionFinished(updated)
-      if (prescriptionFinished) {
+      const requiredWorkFinished = areRequiredWorkSetsComplete(updated)
+      if (prescriptionFinished || requiredWorkFinished) {
         updated = { ...updated, restTimer: null }
       } else if (input.setType === 'WORK' && input.status === 'COMPLETED') {
         const exercise = updated.exercises[input.exerciseIndex]
-        updated = {
-          ...updated,
-          restTimer: startRestTimer({
-            sourceSetKey: input.clientSetKey,
-            configuredDurationSeconds: exercise.restSeconds,
-            nowUtc: this.clock.nowUtc(),
-          }),
-        }
+        const restSeconds = restSecondsAfterRecordedSet(updated, input.exerciseIndex)
+        updated = restSeconds === null
+          ? { ...updated, restTimer: null }
+          : {
+              ...updated,
+              restTimer: startRestTimer({
+                sourceSetKey: input.clientSetKey,
+                configuredDurationSeconds: restSeconds ?? exercise.restSeconds,
+                nowUtc: this.clock.nowUtc(),
+              }),
+            }
       }
       if (!previous.sessionId) {
         await this.persist(updated, previous)
@@ -326,7 +355,7 @@ export class WorkoutFlowService {
           setOrder: input.setType === 'WARMUP'
             ? updated.exercises[input.exerciseIndex].sets.filter((set) => set.setType === 'WARMUP').length
             : current.currentSetIndex + 1,
-          target: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: input.setType === 'WARMUP' ? (record.actualReps ?? 0) : updated.exercises[input.exerciseIndex].targetReps },
+          target: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: input.setType === 'WARMUP' ? (record.actualReps ?? 0) : updated.exercises[input.exerciseIndex].targetRepMax },
           actual: { weight: { value: record.actualWeightKg ?? 0, unit: 'KG' }, reps: record.actualReps ?? 0 },
           remainingReps: toRemainingReps(record.rir),
           completionStatus: record.status,
@@ -390,6 +419,19 @@ export class WorkoutFlowService {
     weightKg: number,
   ): Promise<WorkoutFlowState> {
     return this.mutate(state, (current) => setWorkoutExerciseWeight(current, exerciseIndex, weightKg))
+  }
+
+  async chooseOptionalSet(
+    state: WorkoutFlowState,
+    choiceGroup: string,
+    exerciseIndex: number | null,
+  ): Promise<WorkoutFlowState> {
+    return this.mutate(state, (current) => chooseOptionalSet(
+      current,
+      choiceGroup,
+      exerciseIndex,
+      this.clock.nowUtc(),
+    ))
   }
 
   async adjustRest(state: WorkoutFlowState, seconds: 15 | -15): Promise<WorkoutFlowState> {
@@ -668,10 +710,18 @@ export class WorkoutFlowService {
         exerciseCode: effective.exerciseCode,
         name: effective.exerciseName,
         targetWorkSets: effective.prescription.workSets,
-        targetReps: effective.prescription.repMax,
+        targetRepMin: effective.prescription.repMin,
+        targetRepMax: effective.prescription.repMax,
         restSeconds: effective.prescription.restSeconds,
         weightStatus: effective.prescription.weightStatus,
         targetWeightKg: effective.prescription.targetWeightKg,
+        targetRirMin: effective.prescription.targetRirMin,
+        targetRirMax: effective.prescription.targetRirMax,
+        eccentricSeconds: effective.prescription.eccentricSeconds,
+        perSide: effective.prescription.perSide,
+        executionGroup: effective.prescription.executionGroup,
+        executionOrder: effective.prescription.executionOrder,
+        optionalSetRule: effective.prescription.optionalSetRule,
       })
       const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
       await this.drafts.save({ ...mapped, lastServerVersion: session.version }, draft.revision)

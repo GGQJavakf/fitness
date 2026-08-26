@@ -249,33 +249,82 @@ public final class PlanController {
             PlanDraft.TrainingSplit trainingSplit,
             String name,
             List<DayData> days,
-            Map<String, FieldLock.Status> locks) {
+            Map<String, FieldLock.Status> locks,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String presetCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String presetVersion,
+            List<String> executionRules,
+            List<String> progressionRules) {
+        public PlanData(
+                String templateCode,
+                PlanDraft.TrainingSplit trainingSplit,
+                String name,
+                List<DayData> days,
+                Map<String, FieldLock.Status> locks) {
+            this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of());
+        }
+
         PlanDraft toDomain() {
             if (days == null || days.stream().anyMatch(java.util.Objects::isNull)) {
                 throw new IllegalArgumentException("plan days are required");
             }
             return new PlanDraft(
                     templateCode, trainingSplit, name, days.stream().map(DayData::toDomain).toList(),
-                    Map.of());
+                    Map.of(), presetCode, presetVersion,
+                    executionRules == null ? List.of() : executionRules,
+                    progressionRules == null ? List.of() : progressionRules);
         }
 
         static PlanData from(PlanDraft plan) {
             return new PlanData(
                     plan.templateCode(), plan.trainingSplit(), plan.name(),
-                    plan.days().stream().map(DayData::from).toList(), plan.locks());
+                    plan.days().stream().map(DayData::from).toList(), plan.locks(),
+                    plan.presetCode(), plan.presetVersion(),
+                    plan.executionRules(), plan.progressionRules());
         }
     }
 
-    public record DayData(String code, String name, List<ExerciseData> exercises) {
+    public record DayData(
+            String code,
+            String name,
+            List<ExerciseData> exercises,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String weekday,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String focus,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer estimatedMinutesMin,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer estimatedMinutesMax,
+            List<WarmupStepData> warmup,
+            List<String> notes) {
+        public DayData(String code, String name, List<ExerciseData> exercises) {
+            this(code, name, exercises, null, null, null, null, List.of(), List.of());
+        }
+
         PlanDraft.Day toDomain() {
             if (exercises == null || exercises.stream().anyMatch(java.util.Objects::isNull)) {
                 throw new IllegalArgumentException("day exercises are required");
             }
-            return new PlanDraft.Day(code, name, exercises.stream().map(ExerciseData::toDomain).toList());
+            return new PlanDraft.Day(
+                    code, name, exercises.stream().map(ExerciseData::toDomain).toList(), weekday, focus,
+                    estimatedMinutesMin == null ? 0 : estimatedMinutesMin,
+                    estimatedMinutesMax == null ? 0 : estimatedMinutesMax,
+                    warmup == null ? List.of() : warmup.stream().map(WarmupStepData::toDomain).toList(),
+                    notes == null ? List.of() : notes);
         }
 
         static DayData from(PlanDraft.Day day) {
-            return new DayData(day.code(), day.name(), day.exercises().stream().map(ExerciseData::from).toList());
+            return new DayData(
+                    day.code(), day.name(), day.exercises().stream().map(ExerciseData::from).toList(),
+                    day.weekday(), day.focus(), nullablePositive(day.estimatedMinutesMin()),
+                    nullablePositive(day.estimatedMinutesMax()),
+                    day.warmup().stream().map(WarmupStepData::from).toList(), day.notes());
+        }
+    }
+
+    public record WarmupStepData(String instruction, String prescription, boolean optional) {
+        PlanDraft.WarmupStep toDomain() {
+            return new PlanDraft.WarmupStep(instruction, prescription, optional);
+        }
+
+        static WarmupStepData from(PlanDraft.WarmupStep step) {
+            return new WarmupStepData(step.instruction(), step.prescription(), step.optional());
         }
     }
 
@@ -286,18 +335,60 @@ public final class PlanController {
             int repMax,
             int restSeconds,
             PlanDraft.WeightStatus weightStatus,
-            @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal targetWeightKg) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) BigDecimal targetWeightKg,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer targetRirMin,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer targetRirMax,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer eccentricSeconds,
+            boolean perSide,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String executionGroup,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Integer executionOrder,
+            @JsonInclude(JsonInclude.Include.NON_NULL) OptionalSetRuleData optionalSetRule,
+            List<String> notes) {
+        public ExerciseData(
+                String exerciseCode,
+                int workSets,
+                int repMin,
+                int repMax,
+                int restSeconds,
+                PlanDraft.WeightStatus weightStatus,
+                BigDecimal targetWeightKg) {
+            this(exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus, targetWeightKg,
+                    null, null, null, false, null, null, null, List.of());
+        }
+
         PlanDraft.Exercise toDomain() {
             return new PlanDraft.Exercise(
                     exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus,
-                    Optional.ofNullable(targetWeightKg));
+                    Optional.ofNullable(targetWeightKg), targetRirMin, targetRirMax, eccentricSeconds,
+                    perSide, executionGroup, executionOrder == null ? 0 : executionOrder,
+                    optionalSetRule == null ? null : optionalSetRule.toDomain(),
+                    notes == null ? List.of() : notes);
         }
 
         static ExerciseData from(PlanDraft.Exercise exercise) {
             return new ExerciseData(
                     exercise.exerciseCode(), exercise.workSets(), exercise.repMin(), exercise.repMax(),
-                    exercise.restSeconds(), exercise.weightStatus(), exercise.targetWeightKg().orElse(null));
+                    exercise.restSeconds(), exercise.weightStatus(), exercise.targetWeightKg().orElse(null),
+                    exercise.targetRirMin(), exercise.targetRirMax(), exercise.eccentricSeconds(),
+                    exercise.perSide(), exercise.executionGroup(), nullablePositive(exercise.executionOrder()),
+                    OptionalSetRuleData.from(exercise.optionalSetRule()), exercise.notes());
         }
+    }
+
+    public record OptionalSetRuleData(
+            String conditionCode, String exclusiveChoiceGroup, int additionalSets) {
+        PlanDraft.OptionalSetRule toDomain() {
+            return new PlanDraft.OptionalSetRule(conditionCode, exclusiveChoiceGroup, additionalSets);
+        }
+
+        static OptionalSetRuleData from(PlanDraft.OptionalSetRule rule) {
+            return rule == null ? null : new OptionalSetRuleData(
+                    rule.conditionCode(), rule.exclusiveChoiceGroup(), rule.additionalSets());
+        }
+    }
+
+    private static Integer nullablePositive(int value) {
+        return value == 0 ? null : value;
     }
 
     public record RuleReferenceData(String ruleVersion, String templateVersion, String contentVersion) {

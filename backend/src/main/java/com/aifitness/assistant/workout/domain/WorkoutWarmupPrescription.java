@@ -12,16 +12,34 @@ public record WorkoutWarmupPrescription(
         String ruleVersion,
         GeneralWarmup generalWarmup,
         Optional<RampWarmup> rampWarmup,
+        List<Instruction> instructions,
         boolean countsTowardTrainingVolume,
         boolean countsTowardProgression) {
+
+    public WorkoutWarmupPrescription(
+            String schemaVersion, String ruleVersion, GeneralWarmup generalWarmup,
+            Optional<RampWarmup> rampWarmup, boolean countsTowardTrainingVolume,
+            boolean countsTowardProgression) {
+        this(schemaVersion, ruleVersion, generalWarmup, rampWarmup, List.of(),
+                countsTowardTrainingVolume, countsTowardProgression);
+    }
 
     public WorkoutWarmupPrescription {
         schemaVersion = required(schemaVersion, "warmup schema version");
         ruleVersion = required(ruleVersion, "warmup rule version");
         Objects.requireNonNull(generalWarmup, "general warmup must not be null");
         rampWarmup = Objects.requireNonNull(rampWarmup, "ramp warmup must not be null");
+        instructions = List.copyOf(Objects.requireNonNull(instructions, "warmup instructions must not be null"));
         if (countsTowardTrainingVolume || countsTowardProgression) {
             throw new IllegalArgumentException("warmup must not count toward official volume or progression");
+        }
+    }
+
+    public record Instruction(String instruction, Optional<String> prescription, boolean optional) {
+        public Instruction {
+            instruction = required(instruction, "warmup instruction");
+            prescription = Objects.requireNonNull(prescription, "warmup instruction prescription must not be null")
+                    .map(String::trim).filter(value -> !value.isEmpty());
         }
     }
 

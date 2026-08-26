@@ -19,18 +19,50 @@ export interface WarmupExecutionState {
   readonly rampSets: readonly RampWarmupSet[]
   readonly calibrationMessage: string | null
   readonly maximumRampSets: number
+  readonly instructions: readonly WorkoutWarmupInstruction[]
 }
 
-export interface WorkoutExerciseSnapshot {
+export interface WorkoutWarmupInstruction {
+  readonly instruction: string
+  readonly prescription?: string
+  readonly optional: boolean
+}
+
+interface WorkoutExerciseSnapshotBase {
   readonly snapshotExerciseKey: string
   readonly exerciseCode: string
   readonly name: string
   readonly targetWorkSets: number
-  readonly targetReps: number
   readonly restSeconds: number
   readonly weightStatus?: 'KNOWN' | 'NEEDS_CALIBRATION' | 'BODYWEIGHT'
   readonly targetWeightKg?: number
+  readonly targetRirMin?: number
+  readonly targetRirMax?: number
+  readonly eccentricSeconds?: number
+  readonly perSide?: boolean
+  readonly executionGroup?: string
+  readonly executionOrder?: number
+  readonly optionalSetRule?: {
+    readonly conditionCode: string
+    readonly exclusiveChoiceGroup: string
+    readonly additionalSets: 1
+    readonly description?: string
+  }
 }
+
+export type WorkoutExerciseSnapshot = WorkoutExerciseSnapshotBase & (
+  | {
+      readonly targetRepMin: number
+      readonly targetRepMax: number
+      readonly targetReps?: never
+    }
+  | {
+      /** Legacy single-target input retained only to recover schemaVersion 1 drafts. */
+      readonly targetReps: number
+      readonly targetRepMin?: never
+      readonly targetRepMax?: never
+    }
+)
 
 export interface WorkoutSetRecord {
   readonly clientSetKey: string
@@ -44,7 +76,9 @@ export interface WorkoutSetRecord {
   readonly discomfort: 'NONE' | 'DISCOMFORT' | 'PAIN'
 }
 
-export interface WorkoutExerciseState extends WorkoutExerciseSnapshot {
+export interface WorkoutExerciseState extends WorkoutExerciseSnapshotBase {
+  readonly targetRepMin: number
+  readonly targetRepMax: number
   readonly replacedExerciseCode?: string
   readonly sessionWeightKg?: number
   readonly sets: readonly WorkoutSetRecord[]
@@ -69,6 +103,7 @@ export interface WorkoutWarmupPrescriptionSnapshot {
     readonly sets: readonly RampWarmupSet[]
     readonly calibrationMessage?: string
   }
+  readonly instructions?: readonly WorkoutWarmupInstruction[]
   readonly countsTowardTrainingVolume: false
   readonly countsTowardProgression: false
 }
@@ -77,7 +112,9 @@ export interface WorkoutFlowState {
   readonly schemaVersion: 1
   readonly clientSessionKey: string
   readonly planVersionId: string
+  readonly startedAtUtc?: string
   readonly exercises: readonly WorkoutExerciseState[]
+  readonly optionalSetChoices?: Readonly<Record<string, number | null>>
   readonly currentExerciseIndex: number
   readonly currentSetIndex: number
   readonly restTimer: RestTimerState | null
@@ -99,12 +136,20 @@ export interface RecordWorkoutSetInput {
   readonly discomfort?: 'NONE' | 'DISCOMFORT' | 'PAIN'
 }
 
+export interface PendingOptionalSetChoice {
+  readonly choiceGroup: string
+  readonly conditionCode: string
+  readonly eligible: boolean
+  readonly candidateExerciseIndices: readonly number[]
+}
+
 export function createWorkoutFlow(input: {
   clientSessionKey: string
   planVersionId: string
   exercises: readonly WorkoutExerciseSnapshot[]
   warmupDurationSeconds?: 180 | 300 | 480
   warmupPrescription?: WorkoutWarmupPrescriptionSnapshot
+  startedAtUtc?: string
 }): WorkoutFlowState {
   if (input.clientSessionKey.trim().length === 0 || input.planVersionId.trim().length === 0) {
     throw new Error('workout session and plan version are required')
@@ -116,7 +161,9 @@ export function createWorkoutFlow(input: {
     schemaVersion: 1,
     clientSessionKey: input.clientSessionKey,
     planVersionId: input.planVersionId,
+    startedAtUtc: normalizeUtc(input.startedAtUtc ?? '1970-01-01T00:00:00.000Z'),
     exercises: input.exercises.map(createExerciseState),
+    optionalSetChoices: {},
     currentExerciseIndex: 0,
     currentSetIndex: 0,
     restTimer: null,
@@ -190,8 +237,82 @@ export function setWorkoutExerciseWeight(
 
 export function isWorkoutPrescriptionFinished(state: WorkoutFlowState): boolean {
   validateStateShape(state)
+  if (!areRequiredWorkSetsComplete(state)) return false
+  const choices = optionalChoicesOf(state)
+  return optionalChoiceGroups(state.exercises).every((group) => {
+    if (!Object.prototype.hasOwnProperty.call(choices, group)) return false
+    const exerciseIndex = choices[group]
+    if (exerciseIndex === null) return true
+    const exercise = state.exercises[exerciseIndex]
+    return exercise !== undefined
+      && exercise.optionalSetRule?.exclusiveChoiceGroup === group
+      && exercise.sets.filter((set) => set.setType === 'EXTRA').length
+        >= exercise.optionalSetRule.additionalSets
+  })
+}
+
+export function areRequiredWorkSetsComplete(state: WorkoutFlowState): boolean {
+  validateStateShape(state)
   return state.exercises.every((exercise) =>
     exercise.sets.filter((set) => set.setType === 'WORK').length >= exercise.targetWorkSets)
+}
+
+export function pendingOptionalSetChoice(
+  state: WorkoutFlowState,
+  nowUtc: string,
+): PendingOptionalSetChoice | null {
+  validateStateShape(state)
+  if (state.safetyNotice !== null) return null
+  if (!areRequiredWorkSetsComplete(state)) return null
+  const choices = optionalChoicesOf(state)
+  const group = optionalChoiceGroups(state.exercises)
+    .find((candidate) => !Object.prototype.hasOwnProperty.call(choices, candidate))
+  if (!group) return null
+  const candidateExerciseIndices = state.exercises
+    .map((exercise, index) => ({ exercise, index }))
+    .filter(({ exercise }) => exercise.optionalSetRule?.exclusiveChoiceGroup === group)
+    .map(({ index }) => index)
+  const conditionCode = state.exercises[candidateExerciseIndices[0]]?.optionalSetRule?.conditionCode ?? ''
+  return {
+    choiceGroup: group,
+    conditionCode,
+    eligible: conditionCode !== 'TUESDAY_UNDER_42_GOOD_STATE'
+      || elapsedSeconds(state.startedAtUtc ?? '1970-01-01T00:00:00.000Z', nowUtc) <= 42 * 60,
+    candidateExerciseIndices,
+  }
+}
+
+export function chooseOptionalSet(
+  state: WorkoutFlowState,
+  choiceGroup: string,
+  exerciseIndex: number | null,
+  nowUtc: string,
+): WorkoutFlowState {
+  const pending = pendingOptionalSetChoice(state, nowUtc)
+  if (!pending || pending.choiceGroup !== choiceGroup) {
+    throw new Error('optional set choice is not available')
+  }
+  if (exerciseIndex !== null
+    && (!pending.eligible || !pending.candidateExerciseIndices.includes(exerciseIndex))) {
+    throw new Error('optional set choice is not eligible')
+  }
+  const optionalSetChoices = { ...optionalChoicesOf(state), [choiceGroup]: exerciseIndex }
+  return {
+    ...state,
+    optionalSetChoices,
+    ...derivePosition(state.exercises, optionalSetChoices),
+  }
+}
+
+export function isOptionalSetInProgress(state: WorkoutFlowState): boolean {
+  validateStateShape(state)
+  if (state.safetyNotice !== null) return false
+  if (!areRequiredWorkSetsComplete(state)) return false
+  const exercise = state.exercises[state.currentExerciseIndex]
+  const group = exercise?.optionalSetRule?.exclusiveChoiceGroup
+  if (!group || optionalChoicesOf(state)[group] !== state.currentExerciseIndex) return false
+  return exercise.sets.filter((set) => set.setType === 'EXTRA').length
+    < exercise.optionalSetRule!.additionalSets
 }
 
 export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSetInput): WorkoutFlowState {
@@ -218,9 +339,14 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
     if (JSON.stringify(existing) === JSON.stringify(record)) return state
     throw new Error('clientSetKey already identifies different workout facts')
   }
+  if (state.safetyNotice !== null) throw new Error('workout was stopped for safety')
   if (record.setType === 'WORK'
     && exercise.sets.filter((set) => set.setType === 'WORK').length >= exercise.targetWorkSets) {
     throw new Error('prescribed work sets are already complete')
+  }
+  if (record.setType === 'EXTRA'
+    && (!isOptionalSetInProgress(state) || input.exerciseIndex !== state.currentExerciseIndex)) {
+    throw new Error('optional set is not active')
   }
   if (record.setType === 'WARMUP') {
     if (state.warmup.phase !== 'RAMP') throw new Error('ramp warmup sets can only be recorded during ramp warmup')
@@ -236,7 +362,7 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   const exercises = state.exercises.map((item, index) => index === input.exerciseIndex
     ? { ...item, sets: [...item.sets, record] }
     : item)
-  const position = derivePosition(exercises)
+  const position = derivePosition(exercises, optionalChoicesOf(state))
   const unsafe = record.safetyFlag !== null || record.discomfort !== 'NONE'
   return {
     ...state,
@@ -248,20 +374,34 @@ export function recordWorkoutSet(state: WorkoutFlowState, input: RecordWorkoutSe
   }
 }
 
+export function restSecondsAfterRecordedSet(
+  state: WorkoutFlowState,
+  completedExerciseIndex: number,
+): number | null {
+  validateStateShape(state)
+  const completed = state.exercises[completedExerciseIndex]
+  if (!completed) throw new Error('exerciseIndex is outside the workout snapshot')
+  const next = state.exercises[state.currentExerciseIndex]
+  const continuesSuperset = completed.executionGroup !== undefined
+    && next?.executionGroup === completed.executionGroup
+    && (next.executionOrder ?? 0) > (completed.executionOrder ?? 0)
+  return continuesSuperset ? null : completed.restSeconds
+}
+
 export function replaceExerciseForSession(
   state: WorkoutFlowState,
   exerciseIndex: number,
   replacement: WorkoutExerciseSnapshot,
 ): WorkoutFlowState {
   validateStateShape(state)
-  validateExercise(replacement)
+  const normalizedReplacement = normalizeExerciseSnapshot(replacement)
   const current = state.exercises[exerciseIndex]
   if (!current) throw new Error('exerciseIndex is outside the workout snapshot')
   const exercises = state.exercises.map((item, index) => index === exerciseIndex
     ? {
-        ...replacement,
+        ...normalizedReplacement,
         replacedExerciseCode: current.exerciseCode,
-        sessionWeightKg: initialSessionWeight(replacement),
+        sessionWeightKg: initialSessionWeight(normalizedReplacement),
         sets: item.sets,
       }
     : item)
@@ -290,21 +430,37 @@ export function restoreWorkoutFlow(value: unknown): WorkoutFlowState {
   }
   const candidate = value as unknown as WorkoutFlowState
   const warmup = normalizeRestoredWarmup(candidate.warmup)
-  const state = { ...candidate, warmup }
+  let exercises: readonly WorkoutExerciseState[]
+  try {
+    exercises = candidate.exercises.map((exercise) => {
+      const { sets, ...snapshot } = exercise
+      const normalized = {
+        ...normalizeExerciseSnapshot(snapshot as WorkoutExerciseSnapshot),
+        sets: sets.map((set) => normalizeSet(set)),
+      }
+      return normalized.weightStatus !== 'BODYWEIGHT'
+          && normalized.sessionWeightKg === undefined
+          && initialSessionWeight(normalized) !== undefined
+        ? { ...normalized, sessionWeightKg: initialSessionWeight(normalized) }
+        : normalized
+    })
+  } catch {
+    throw new Error('workout state is invalid')
+  }
+  const restoredChoices = normalizeOptionalSetChoices(candidate.optionalSetChoices, exercises)
+  const state = {
+    ...candidate,
+    startedAtUtc: normalizeUtc(candidate.startedAtUtc ?? '1970-01-01T00:00:00.000Z'),
+    optionalSetChoices: restoredChoices,
+    warmup,
+    exercises,
+  }
   try {
     validateStateShape(state)
   } catch {
     throw new Error('workout state is invalid')
   }
-  const exercises = state.exercises.map((exercise) => {
-    const normalized = { ...exercise, sets: exercise.sets.map((set) => normalizeSet(set)) }
-    return normalized.weightStatus !== 'BODYWEIGHT'
-        && normalized.sessionWeightKg === undefined
-        && initialSessionWeight(normalized) !== undefined
-      ? { ...normalized, sessionWeightKg: initialSessionWeight(normalized) }
-      : normalized
-  })
-  return { ...state, exercises, ...derivePosition(exercises) }
+  return { ...state, ...derivePosition(exercises, restoredChoices) }
 }
 
 export function summarizeWorkout(state: WorkoutFlowState): {
@@ -380,12 +536,47 @@ export function workoutSafetyNotice(flag: WorkoutSafetyFlag | null): string {
   return '出现明显不适，请停止训练；如需帮助，请咨询合格专业人员。本提示不作诊断。'
 }
 
-function derivePosition(exercises: readonly WorkoutExerciseState[]): Pick<WorkoutFlowState, 'currentExerciseIndex' | 'currentSetIndex'> {
+function derivePosition(
+  exercises: readonly WorkoutExerciseState[],
+  optionalSetChoices: Readonly<Record<string, number | null>> = {},
+): Pick<WorkoutFlowState, 'currentExerciseIndex' | 'currentSetIndex'> {
   for (let exerciseIndex = 0; exerciseIndex < exercises.length; exerciseIndex += 1) {
     const exercise = exercises[exerciseIndex]
+    if (exercise.executionGroup) {
+      const grouped = exercises
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => item.executionGroup === exercise.executionGroup)
+      const pending = grouped
+        .map(({ item, index }) => ({
+          item,
+          index,
+          attempted: item.sets.filter((set) => set.setType === 'WORK').length,
+        }))
+        .filter(({ item, attempted }) => attempted < item.targetWorkSets)
+        .sort((left, right) => left.attempted - right.attempted
+          || (left.item.executionOrder ?? left.index) - (right.item.executionOrder ?? right.index))
+      if (pending.length > 0) {
+        return { currentExerciseIndex: pending[0].index, currentSetIndex: pending[0].attempted }
+      }
+      exerciseIndex = grouped[grouped.length - 1].index
+      continue
+    }
     const attemptedWorkSets = exercise.sets.filter((set) => set.setType === 'WORK').length
     if (attemptedWorkSets < exercise.targetWorkSets) {
       return { currentExerciseIndex: exerciseIndex, currentSetIndex: attemptedWorkSets }
+    }
+  }
+  for (const group of optionalChoiceGroups(exercises)) {
+    const selectedIndex = optionalSetChoices[group]
+    if (selectedIndex === null || selectedIndex === undefined) continue
+    const selected = exercises[selectedIndex]
+    if (!selected || selected.optionalSetRule?.exclusiveChoiceGroup !== group) continue
+    const attemptedExtraSets = selected.sets.filter((set) => set.setType === 'EXTRA').length
+    if (attemptedExtraSets < selected.optionalSetRule.additionalSets) {
+      return {
+        currentExerciseIndex: selectedIndex,
+        currentSetIndex: selected.targetWorkSets + attemptedExtraSets,
+      }
     }
   }
   const lastIndex = exercises.length - 1
@@ -395,6 +586,19 @@ function derivePosition(exercises: readonly WorkoutExerciseState[]): Pick<Workou
 function validateStateShape(state: WorkoutFlowState): void {
   if (state.schemaVersion !== 1 || state.clientSessionKey.trim().length === 0 || state.planVersionId.trim().length === 0) {
     throw new Error('workout state is invalid')
+  }
+  normalizeUtc(state.startedAtUtc ?? '1970-01-01T00:00:00.000Z')
+  if (state.optionalSetChoices !== undefined && !isRecord(state.optionalSetChoices)) {
+    throw new Error('workout state is invalid')
+  }
+  for (const [group, exerciseIndex] of Object.entries(optionalChoicesOf(state))) {
+    if (group.trim().length === 0 || !(exerciseIndex === null || Number.isSafeInteger(exerciseIndex))) {
+      throw new Error('workout state is invalid')
+    }
+    if (exerciseIndex !== null
+      && state.exercises[exerciseIndex]?.optionalSetRule?.exclusiveChoiceGroup !== group) {
+      throw new Error('workout state is invalid')
+    }
   }
   if (!Array.isArray(state.exercises) || state.exercises.length === 0) throw new Error('workout state is invalid')
   if (!['GENERAL', 'RAMP', 'WORK'].includes(state.warmup.phase)
@@ -408,6 +612,7 @@ function validateStateShape(state: WorkoutFlowState): void {
         && state.warmup.rampExerciseIndex < state.exercises.length)
     || !['READY', 'CALIBRATION_REQUIRED', 'NOT_REQUIRED'].includes(state.warmup.rampStatus)
     || !Array.isArray(state.warmup.rampSets)
+    || !Array.isArray(state.warmup.instructions)
     || !Number.isSafeInteger(state.warmup.maximumRampSets) || state.warmup.maximumRampSets < 0
     || !(typeof state.warmup.calibrationMessage === 'string' || state.warmup.calibrationMessage === null)) {
     throw new Error('workout state is invalid')
@@ -415,6 +620,11 @@ function validateStateShape(state: WorkoutFlowState): void {
   state.warmup.rampSets.forEach((set) => {
     if (!Number.isFinite(set.weightKg) || set.weightKg <= 0
       || !Number.isSafeInteger(set.reps) || set.reps <= 0) throw new Error('workout state is invalid')
+  })
+  state.warmup.instructions.forEach((step) => {
+    if (typeof step.instruction !== 'string' || step.instruction.trim().length === 0
+      || !(step.prescription === undefined || typeof step.prescription === 'string')
+      || typeof step.optional !== 'boolean') throw new Error('workout state is invalid')
   })
   if (state.warmup.rampStatus === 'READY'
     && (state.warmup.rampExerciseIndex === null || state.warmup.rampSets.length === 0)) {
@@ -444,24 +654,105 @@ function validateStateShape(state: WorkoutFlowState): void {
   })
 }
 
-function validateExercise(exercise: WorkoutExerciseSnapshot): void {
+function validateExercise(exercise: WorkoutExerciseSnapshot | WorkoutExerciseState): void {
+  const normalized = normalizeExerciseSnapshot(exercise)
   if (exercise.snapshotExerciseKey.trim().length === 0
     || exercise.exerciseCode.trim().length === 0
     || exercise.name.trim().length === 0
     || !Number.isSafeInteger(exercise.targetWorkSets) || exercise.targetWorkSets <= 0
-    || !Number.isSafeInteger(exercise.targetReps) || exercise.targetReps <= 0
+    || !Number.isSafeInteger(normalized.targetRepMin) || normalized.targetRepMin <= 0
+    || !Number.isSafeInteger(normalized.targetRepMax) || normalized.targetRepMax < normalized.targetRepMin
     || !Number.isSafeInteger(exercise.restSeconds) || exercise.restSeconds <= 0) {
     throw new Error('workout exercise snapshot is invalid')
+  }
+  if (exercise.executionGroup !== undefined
+    && (exercise.executionGroup.trim().length === 0
+      || !Number.isSafeInteger(exercise.executionOrder)
+      || Number(exercise.executionOrder) <= 0)) {
+    throw new Error('workout exercise execution group is invalid')
   }
 }
 
 function createExerciseState(exercise: WorkoutExerciseSnapshot): WorkoutExerciseState {
-  const sessionWeightKg = initialSessionWeight(exercise)
+  const normalized = normalizeExerciseSnapshot(exercise)
+  const sessionWeightKg = initialSessionWeight(normalized)
   return {
-    ...exercise,
+    ...normalized,
     ...(sessionWeightKg === undefined ? {} : { sessionWeightKg }),
     sets: [],
   }
+}
+
+function normalizeExerciseSnapshot(
+  exercise: WorkoutExerciseSnapshot | WorkoutExerciseState,
+): Omit<WorkoutExerciseState, 'sets'> {
+  const candidate = exercise as WorkoutExerciseSnapshotBase & {
+    readonly targetRepMin?: unknown
+    readonly targetRepMax?: unknown
+    readonly targetReps?: unknown
+    readonly replacedExerciseCode?: string
+    readonly sessionWeightKg?: number
+  }
+  const hasExplicitRange = candidate.targetRepMin !== undefined || candidate.targetRepMax !== undefined
+  const targetRepMin = hasExplicitRange ? candidate.targetRepMin : candidate.targetReps
+  const targetRepMax = hasExplicitRange ? candidate.targetRepMax : candidate.targetReps
+  if (!Number.isSafeInteger(targetRepMin) || Number(targetRepMin) <= 0
+    || !Number.isSafeInteger(targetRepMax) || Number(targetRepMax) < Number(targetRepMin)) {
+    throw new Error('workout exercise snapshot is invalid')
+  }
+  const {
+    targetRepMin: _targetRepMin,
+    targetRepMax: _targetRepMax,
+    targetReps: _legacyTargetReps,
+    ...base
+  } = candidate
+  return {
+    ...base,
+    targetRepMin: Number(targetRepMin),
+    targetRepMax: Number(targetRepMax),
+  }
+}
+
+function optionalChoiceGroups(exercises: readonly WorkoutExerciseState[]): readonly string[] {
+  return [...new Set(exercises
+    .map((exercise) => exercise.optionalSetRule?.exclusiveChoiceGroup)
+    .filter((group): group is string => Boolean(group)))]
+}
+
+function optionalChoicesOf(state: WorkoutFlowState): Readonly<Record<string, number | null>> {
+  return state.optionalSetChoices ?? {}
+}
+
+function normalizeOptionalSetChoices(
+  value: unknown,
+  exercises: readonly WorkoutExerciseState[],
+): Readonly<Record<string, number | null>> {
+  const normalized: Record<string, number | null> = {}
+  if (isRecord(value)) {
+    for (const [group, exerciseIndex] of Object.entries(value)) {
+      if (exerciseIndex === null || Number.isSafeInteger(exerciseIndex)) {
+        normalized[group] = exerciseIndex as number | null
+      }
+    }
+  }
+  exercises.forEach((exercise, index) => {
+    const group = exercise.optionalSetRule?.exclusiveChoiceGroup
+    if (group && exercise.sets.some((set) => set.setType === 'EXTRA')) normalized[group] = index
+  })
+  return normalized
+}
+
+function normalizeUtc(value: string): string {
+  if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+    throw new Error('workout state is invalid')
+  }
+  return value
+}
+
+function elapsedSeconds(startedAtUtc: string, nowUtc: string): number {
+  const start = Date.parse(normalizeUtc(startedAtUtc))
+  const now = Date.parse(normalizeUtc(nowUtc))
+  return Math.max(0, Math.floor((now - start) / 1000))
 }
 
 function initialSessionWeight(exercise: WorkoutExerciseSnapshot): number | undefined {
@@ -502,6 +793,7 @@ function createWarmupState(input: {
       rampSets: [],
       calibrationMessage: null,
       maximumRampSets: 0,
+      instructions: prescription.instructions ?? [],
     }
   }
   const rampExerciseIndex = input.exercises.findIndex((exercise) => exercise.snapshotExerciseKey === ramp.exerciseId)
@@ -520,6 +812,7 @@ function createWarmupState(input: {
       ? '当前无法确定精确器械档位，请先校准正式重量；不会自动生成热身重量。'
       : null),
     maximumRampSets: rampSets.length,
+    instructions: prescription.instructions ?? [],
   }
 }
 
@@ -528,11 +821,14 @@ function legacyWarmupState(durationSeconds: 180 | 300 | 480 = 180): WarmupExecut
     phase: 'GENERAL', prescriptionVersion: 'legacy-client-v1', ruleVersion: 'legacy',
     generalDurationSeconds: durationSeconds, generalTimer: null, rampExerciseIndex: null,
     rampStatus: 'NOT_REQUIRED', rampSets: [], calibrationMessage: null, maximumRampSets: 0,
+    instructions: [],
   }
 }
 
 function normalizeRestoredWarmup(value: WarmupExecutionState): WarmupExecutionState {
-  if (typeof value.prescriptionVersion === 'string') return value
+  if (typeof value.prescriptionVersion === 'string') {
+    return { ...value, instructions: Array.isArray(value.instructions) ? value.instructions : [] }
+  }
   const legacy = legacyWarmupState(
     Number.isSafeInteger(value.generalDurationSeconds) && value.generalDurationSeconds > 0
       ? value.generalDurationSeconds as 180 | 300 | 480

@@ -8,10 +8,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.FitnessAssistantApplication;
+import com.aifitness.assistant.common.domain.RuleReference;
+import com.aifitness.assistant.identity.application.WechatLoginService;
+import com.aifitness.assistant.plan.application.PlanRepository;
+import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -27,6 +35,8 @@ class PlanExerciseOptionEndpointIntegrationTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private PlanRepository plans;
+    @Autowired private WechatLoginService loginService;
 
     @Test
     void returnsOnlyOwnedEligibleTemplatePrescriptionsForStructuralEditing() throws Exception {
@@ -123,6 +133,44 @@ class PlanExerciseOptionEndpointIntegrationTest {
                 .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
     }
 
+    @Test
+    void usesTheSelectedSplitTemplateForAThreeDayLegacyActivePlan() throws Exception {
+        String token = loginAndConfigure("CABLE");
+        UUID userId = loginService.authenticate(token).value();
+        UUID planId = UUID.randomUUID();
+        PlanDraft legacyPlan = new PlanDraft(
+                "FULL_BODY_3_DAY_V1", PlanDraft.TrainingSplit.PUSH_PULL_LEGS,
+                "初学者肌肥大训练计划",
+                List.of(
+                        new PlanDraft.Day("DAY_1", "训练日1", List.of(
+                                exercise("PUSH_UP"), exercise("BODYWEIGHT_SQUAT"),
+                                exercise("SEATED_CABLE_ROW"), exercise("PLANK"),
+                                exercise("GLUTE_BRIDGE_EXERCISE"))),
+                        new PlanDraft.Day("DAY_2", "训练日2", List.of(exercise("SEATED_CABLE_ROW"))),
+                        new PlanDraft.Day("DAY_3", "训练日3", List.of(exercise("BODYWEIGHT_SQUAT")))),
+                Map.of());
+        plans.create(userId, new TrainingPlanVersion(
+                UUID.randomUUID(), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
+                legacyPlan, new RuleReference("rule-v1", "template-v1", "content-v1"),
+                Set.of(), Instant.now()));
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-options", planId)
+                        .queryParam("dayCode", "DAY_1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("INCLINE_PUSH_UP")));
+    }
+
+    private static PlanDraft.Exercise exercise(String code) {
+        PlanDraft.WeightStatus weightStatus = Set.of(
+                "PUSH_UP", "BODYWEIGHT_SQUAT", "PLANK", "GLUTE_BRIDGE_EXERCISE").contains(code)
+                ? PlanDraft.WeightStatus.BODYWEIGHT
+                : PlanDraft.WeightStatus.NEEDS_CALIBRATION;
+        return new PlanDraft.Exercise(code, 3, 8, 12, 90, weightStatus);
+    }
+
     private JsonNode generateCandidate(String token) throws Exception {
         return json(mvc.perform(post("/api/v1/plans/candidates")
                         .header("Authorization", "Bearer " + token)
@@ -134,6 +182,10 @@ class PlanExerciseOptionEndpointIntegrationTest {
     }
 
     private String loginAndConfigure() throws Exception {
+        return loginAndConfigure("DUMBBELL", "BENCH", "CABLE", "MACHINE");
+    }
+
+    private String loginAndConfigure(String... equipmentTypes) throws Exception {
         String token = login();
         mvc.perform(put("/api/v1/profile")
                         .header("Authorization", "Bearer " + token)
@@ -144,7 +196,7 @@ class PlanExerciseOptionEndpointIntegrationTest {
                                  "expectedVersion":0}
                                 """))
                 .andExpect(status().isOk());
-        String items = java.util.Arrays.stream(new String[] {"DUMBBELL", "BENCH", "CABLE", "MACHINE"})
+        String items = java.util.Arrays.stream(equipmentTypes)
                 .map(type -> """
                         {"clientEquipmentKey":"%s","equipmentType":"%s",
                          "minIncrement":{"value":1,"unit":"KG"},

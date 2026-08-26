@@ -667,6 +667,36 @@
   margin-bottom: 16px;
 }
 
+.session-prescription-cues {
+  display: flex;
+  margin: 18px 0;
+  padding: 18px 20px;
+  border-left: 6px solid #55d6a6;
+  border-radius: 0 16px 16px 0;
+  background: #eef6f2;
+  color: #486159;
+  font-size: 22px;
+  line-height: 1.5;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-hero--optional {
+  background: linear-gradient(145deg, #082f28, #0b5c4d);
+}
+
+.session-optional-choice {
+  display: flex;
+  margin-top: 22px;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.session-optional-choice__action {
+  min-height: 82px;
+  font-size: 23px;
+}
+
 @media (max-width: 360px) {
   .session-hero--warmup,
   .session-hero--rest {

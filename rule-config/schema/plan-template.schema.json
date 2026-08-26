@@ -87,7 +87,7 @@
         "kind": { "const": "PLAN_TEMPLATE" },
         "version": { "const": "1.8.0" },
         "ruleVersion": { "const": "1.6.0" },
-        "contentVersion": { "const": "1.7.1" },
+        "contentVersion": { "const": "1.8.0" },
         "status": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] },
         "generatedAt": { "type": "string", "format": "date-time" },
         "promptConstraints": { "type": "array", "minItems": 4, "items": { "type": "string", "minLength": 8 } },

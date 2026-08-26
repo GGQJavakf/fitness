@@ -5,9 +5,11 @@ import com.aifitness.assistant.rules.domain.PlanRulePolicy;
 import com.aifitness.assistant.rules.infrastructure.ClasspathPlanRulePolicyLoader;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.StreamSupport;
 import org.junit.jupiter.api.Test;
@@ -54,6 +56,9 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
                 .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(3))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].estimatedMinutesMin").doesNotExist())
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].estimatedMinutesMax").doesNotExist())
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[0].executionOrder").doesNotExist())
                 .andExpect(jsonPath("$.data.candidate.plan.days[*].exercises[*].weightStatus")
                         .value(org.hamcrest.Matchers.hasItem("NEEDS_CALIBRATION")))
                 .andExpect(jsonPath("$.data.candidate.ruleReference.ruleVersion").value("1.6.0"))
@@ -186,6 +191,111 @@ class PlanCandidateEndpointIntegrationTest {
                         "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION");
         org.assertj.core.api.Assertions.assertThat(exerciseCodes(fiveDay, "SHOULDERS_A"))
                 .containsOnlyOnce("DUMBBELL_OVERHEAD_PRESS");
+    }
+
+    @Test
+    void listsSelectsAndActivatesTheFixedFiveDayHypertrophyPresetWithoutRewritingItsPrescription()
+            throws Exception {
+        String token = login();
+        configureProfile(token, 5, 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
+        configureEquipment(token);
+
+        mvc.perform(get("/api/v1/plans/presets")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].code")
+                        .value("PERSONAL_5_DAY_HYPERTROPHY_V1"))
+                .andExpect(jsonPath("$.data.items[0].days.length()").value(5));
+
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"PERSONAL_5_DAY_HYPERTROPHY_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andExpect(jsonPath("$.data.candidate.generationSource").value("SYSTEM_PRESET"))
+                .andExpect(jsonPath("$.data.candidate.plan.presetVersion").value("1.0.0"))
+                .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(5))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].estimatedMinutesMin").value(44))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].warmup.length()").value(5))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[0].workSets").value(4))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[0].repMin").value(6))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[4].repMax").value(20))
+                .andExpect(jsonPath("$.data.candidate.plan.days[0].exercises[4].executionGroup")
+                        .value("MONDAY_ARMS"))
+                .andExpect(jsonPath("$.data.candidate.plan.days[1].exercises[2].perSide").value(true))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+        mvc.perform(post("/api/v1/plans/validate")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(presetValidationRequest(candidate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(true));
+
+        String candidateId = candidate.path("candidateId").asText();
+        mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + candidateId + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.activeVersion.plan.presetCode")
+                        .value("PERSONAL_5_DAY_HYPERTROPHY_V1"))
+                .andExpect(jsonPath("$.data.activeVersion.plan.days[3].exercises[5].executionOrder")
+                        .value(2));
+    }
+
+    @Test
+    void rejectsUnsafePrescriptionWhenValidatingOrEditingASystemPreset() throws Exception {
+        String token = login();
+        configureProfile(token, 5, 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
+        configureEquipment(token);
+
+        JsonNode candidate = generatePresetCandidate(token);
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("workSets", 0),
+                "WORK_SETS_OUT_OF_RANGE", "/days/0/exercises/0/workSets");
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("workSets", 7),
+                "WORK_SETS_OUT_OF_RANGE", "/days/0/exercises/0/workSets");
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("repMin", 0),
+                "REP_RANGE_OUT_OF_RANGE", "/days/0/exercises/0/repRange");
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("repMax", 31),
+                "REP_RANGE_OUT_OF_RANGE", "/days/0/exercises/0/repRange");
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("repMin", exercise.path("repMax").asInt() + 1),
+                "REP_RANGE_OUT_OF_RANGE", "/days/0/exercises/0/repRange");
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("restSeconds", 301),
+                "REST_OUT_OF_RANGE", "/days/0/exercises/0/restSeconds");
+
+        JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + candidate.path("candidateId").asText() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        ObjectNode unsafePlan = candidate.path("plan").deepCopy();
+        ((ObjectNode) unsafePlan.at("/days/0/exercises/0")).put("workSets", 0);
+        mvc.perform(post("/api/v1/plans/{planId}/versions", created.at("/data/planId").asText())
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "baseVersionNumber", 1,
+                                "plan", unsafePlan,
+                                "locks", Map.of()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.data.validationIssues[*].severity")
+                        .value(org.hamcrest.Matchers.hasItem("ERROR")))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("WORK_SETS_OUT_OF_RANGE")));
     }
 
     @Test
@@ -626,6 +736,48 @@ class PlanCandidateEndpointIntegrationTest {
                         "name", plan.path("name"),
                         "days", plan.path("days")),
                 "ruleReference", candidate.path("ruleReference")));
+    }
+
+    private String presetValidationRequest(JsonNode candidate) throws Exception {
+        return objectMapper.writeValueAsString(Map.of(
+                "plan", candidate.path("plan"),
+                "ruleReference", candidate.path("ruleReference")));
+    }
+
+    private JsonNode generatePresetCandidate(String token) throws Exception {
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"PERSONAL_5_DAY_HYPERTROPHY_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).at("/data/candidate");
+    }
+
+    private void assertPresetPrescriptionRejected(
+            String token,
+            JsonNode candidate,
+            Consumer<ObjectNode> mutation,
+            String reasonCode,
+            String fieldPath) throws Exception {
+        ObjectNode unsafeCandidate = candidate.deepCopy();
+        mutation.accept((ObjectNode) unsafeCandidate.at("/plan/days/0/exercises/0"));
+        mvc.perform(post("/api/v1/plans/validate")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(presetValidationRequest(unsafeCandidate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(false))
+                .andExpect(jsonPath("$.data.validationIssues[*].severity")
+                        .value(org.hamcrest.Matchers.hasItem("ERROR")))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem(reasonCode)))
+                .andExpect(jsonPath("$.data.validationIssues[*].fieldPath")
+                        .value(org.hamcrest.Matchers.hasItem(fieldPath)));
     }
 
     private JsonNode generateCandidate(String token) throws Exception {

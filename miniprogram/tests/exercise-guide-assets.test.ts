@@ -68,13 +68,19 @@ function sha256(value: Buffer): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function pngColorType(path: string): number {
+  const value = readFileSync(path)
+  expect(value.subarray(1, 4).toString('ascii'), path).toBe('PNG')
+  return value[25]
+}
+
 describe('original golden-cat static exercise breakdown pack', () => {
   it('covers every active action with two to four static JPEG stages', () => {
     const exercises = activeExercises()
     const pack = manifest()
     const byCode = new Map(pack.assets.map((entry) => [entry.exerciseCode, entry]))
 
-    expect(exercises).toHaveLength(47)
+    expect(exercises).toHaveLength(63)
     expect([...byCode.keys()]).toEqual(expect.arrayContaining([
       'DUMBBELL_BICEPS_CURL',
       'CABLE_TRICEPS_PUSHDOWN',
@@ -116,6 +122,14 @@ describe('original golden-cat static exercise breakdown pack', () => {
         expect(stage.sha256, stage.file).toBe(sha256(bytes))
       }
     }
+  })
+
+  it('keeps generated exercise images within 1.75 MiB to reserve about 0.25 MiB for subpackage code', () => {
+    const totalBytes = manifest().assets
+      .flatMap((entry) => entry.stages)
+      .reduce((sum, stage) => sum + statSync(resolve(assetRoot, stage.file)).size, 0)
+
+    expect(totalBytes).toBeLessThanOrEqual(1.75 * 1024 * 1024)
   })
 
   it('locks every stage to the approved character and excludes dynamic or third-party runtime media', () => {
@@ -163,6 +177,22 @@ describe('original golden-cat static exercise breakdown pack', () => {
       ['DUMBBELL_LYING_TRICEPS_EXTENSION', 'dumbbell-lying-triceps-extension-sprite-v4.png'],
       ['CABLE_REVERSE_FLY', 'cable-reverse-fly-sprite-v4.png'],
       ['MACHINE_SHRUG', 'machine-shrug-sprite-v4.png'],
+      ['SMITH_FLAT_BENCH_PRESS', 'smith-flat-bench-press-sprite-v1.png'],
+      ['INCLINE_DUMBBELL_BENCH_PRESS_30', 'incline-dumbbell-bench-press-30-sprite-v1.png'],
+      ['SEATED_MACHINE_SHOULDER_PRESS', 'seated-machine-shoulder-press-sprite-v1.png'],
+      ['LEANING_PEC_DECK_FLY', 'leaning-pec-deck-fly-sprite-v1.png'],
+      ['MACHINE_SEATED_ROW', 'machine-seated-row-sprite-v1.png'],
+      ['REVERSE_PEC_DECK_FLY', 'reverse-pec-deck-fly-sprite-v1.png'],
+      ['SMITH_SQUAT', 'smith-squat-sprite-v1.png'],
+      ['SEATED_LEG_PRESS', 'seated-leg-press-sprite-v1.png'],
+      ['DUMBBELL_REVERSE_LUNGE', 'dumbbell-reverse-lunge-sprite-v1.png'],
+      ['SEATED_LEG_EXTENSION', 'seated-leg-extension-sprite-v1.png'],
+      ['MACHINE_CRUNCH', 'machine-crunch-sprite-v1.png'],
+      ['INCLINE_DUMBBELL_FLY', 'incline-dumbbell-fly-sprite-v1.png'],
+      ['MACHINE_HIP_THRUST', 'machine-hip-thrust-sprite-v1.png'],
+      ['MACHINE_LEG_CURL', 'machine-leg-curl-sprite-v1.png'],
+      ['MACHINE_HIP_ABDUCTION', 'machine-hip-abduction-sprite-v1.png'],
+      ['STANDING_CALF_RAISE', 'standing-calf-raise-sprite-v1.png'],
     ])
     for (const [exerciseCode, sourceFile] of curatedTriptychs) {
       const stages = byCode.get(exerciseCode)?.stages ?? []
@@ -171,6 +201,10 @@ describe('original golden-cat static exercise breakdown pack', () => {
         .toEqual(Array(3).fill(`assets-source/exercise-guides/${sourceFile}`))
       expect(stages.map((stage) => stage.sourceGridIndex), exerciseCode)
         .toEqual([undefined, undefined, undefined])
+      expect(
+        [0, 2, 3].includes(pngColorType(resolve(projectRoot, 'assets-source/exercise-guides', sourceFile))),
+        `${sourceFile} must not contain an alpha channel that can reveal a dark viewer background`
+      ).toBe(true)
     }
   })
 
@@ -203,6 +237,7 @@ describe('original golden-cat static exercise breakdown pack', () => {
     const readme = readFileSync(resolve(assetRoot, 'README.md'), 'utf8')
 
     expect(readme).toContain('原创金渐层猫静态动作分解图')
+    expect(readme).toContain(`${manifest().assets.length} 个动作`)
     expect(readme).toContain('2～4 张')
     expect(readme).toContain('不使用 GIF、动态 WebP、MP4')
     expect(readme).toContain('不包含第三方动作素材')

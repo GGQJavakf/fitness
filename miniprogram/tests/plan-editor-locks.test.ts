@@ -58,6 +58,62 @@ describe('plan editor locks', () => {
     expect(edited.locks[workSetsPath]).toBe('USER_LOCKED')
   })
 
+  it('preserves fixed-preset identity and rules in validation and save requests', async () => {
+    const presetPlan = {
+      ...originalPlan,
+      templateCode: 'PERSONAL_5_DAY_HYPERTROPHY_V1',
+      trainingSplit: 'BODY_PART_FIVE_DAY' as const,
+      presetCode: 'PERSONAL_5_DAY_HYPERTROPHY_V1',
+      presetVersion: '1.0.0',
+      executionRules: ['复合动作保留约 2 次余力。'],
+      progressionRules: ['使用双进阶法。'],
+      locks: {},
+    }
+    const state = createPlanEditorState({
+      planId: 'plan-1',
+      baseVersion: 1,
+      plan: presetPlan,
+      validationResult: { valid: true, validationIssues: [] },
+    })
+    expect(buildSaveCommand(state).plan).toMatchObject({
+      trainingSplit: 'BODY_PART_FIVE_DAY',
+      presetCode: 'PERSONAL_5_DAY_HYPERTROPHY_V1',
+      presetVersion: '1.0.0',
+      executionRules: presetPlan.executionRules,
+      progressionRules: presetPlan.progressionRules,
+    })
+
+    const validatePlan = vi.fn().mockResolvedValue({ valid: true, validationIssues: [] })
+    const activePlan = {
+      ...createActivePlan(),
+      activeVersion: {
+        ...createActivePlan().activeVersion,
+        plan: presetPlan,
+      },
+    }
+    const application = createFitnessApplication(createUnusedOnboardingPort(), {
+      validatePlan,
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn().mockResolvedValue(activePlan),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    })
+    await application.loadActivePlan()
+    application.openPlanEditor()
+    await application.validateEditor()
+
+    expect(validatePlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        trainingSplit: 'BODY_PART_FIVE_DAY',
+        presetCode: 'PERSONAL_5_DAY_HYPERTROPHY_V1',
+        presetVersion: '1.0.0',
+        executionRules: presetPlan.executionRules,
+        progressionRules: presetPlan.progressionRules,
+      }),
+      activePlan.activeVersion.ruleReference,
+    )
+  })
+
   it.each(['workSets', 'repMin', 'repMax', 'restSeconds'] as const)(
     'uses the stable field path and auto-locks a user edit to %s',
     (field) => {
@@ -358,6 +414,7 @@ describe('plan editor locks', () => {
       saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
       saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
       savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      listPlanPresets: vi.fn().mockResolvedValue([]),
       generateCandidate: vi.fn().mockResolvedValue({
         status: 'CANDIDATE_READY',
         candidate,
@@ -531,6 +588,7 @@ describe('plan editor locks', () => {
       saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
       saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
       savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      listPlanPresets: vi.fn().mockResolvedValue([]),
       generateCandidate: vi.fn().mockResolvedValue({
         status: 'CANDIDATE_READY',
         candidate,
@@ -587,6 +645,7 @@ describe('plan editor locks', () => {
       saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
       saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
       savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      listPlanPresets: vi.fn().mockResolvedValue([]),
       generateCandidate: vi.fn().mockResolvedValue({
         status: 'CANDIDATE_READY',
         candidate,
@@ -647,6 +706,7 @@ function createUnusedOnboardingPort(): OnboardingPersistencePort {
     saveProfile: vi.fn(),
     saveEquipment: vi.fn(),
     savePreferences: vi.fn(),
+    listPlanPresets: vi.fn().mockResolvedValue([]),
     generateCandidate: vi.fn(),
   }
 }

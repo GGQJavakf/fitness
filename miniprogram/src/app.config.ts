@@ -3,6 +3,7 @@ export default defineAppConfig({
     'presentation/pages/home/index',
     'presentation/pages/onboarding/index',
     'presentation/pages/plan-candidates/index',
+    'presentation/pages/plan-presets/index',
     'presentation/pages/plan/index',
     'presentation/pages/plan-editor/index',
     'presentation/pages/my/index',

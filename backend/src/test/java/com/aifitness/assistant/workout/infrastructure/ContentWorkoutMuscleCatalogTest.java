@@ -14,7 +14,7 @@ class ContentWorkoutMuscleCatalogTest {
     @Test
     void keepsReleasedOneSixWorkoutFactsReadableAfterTheCatalogUpgrade() {
         ExerciseQueryService exercises = mock(ExerciseQueryService.class);
-        when(exercises.version()).thenReturn("1.7.1");
+        when(exercises.version()).thenReturn("1.8.0");
         ContentWorkoutMuscleCatalog catalog = new ContentWorkoutMuscleCatalog(exercises, new ObjectMapper());
 
         assertThat(catalog.primaryMuscles("CONTRALATERAL_LIMB_RAISE", "1.6.0"))

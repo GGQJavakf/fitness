@@ -15,14 +15,27 @@ public record PlanDraft(
         TrainingSplit trainingSplit,
         String name,
         List<Day> days,
-        Map<String, FieldLock.Status> locks) {
+        Map<String, FieldLock.Status> locks,
+        String presetCode,
+        String presetVersion,
+        List<String> executionRules,
+        List<String> progressionRules) {
+
+    public PlanDraft(
+            String templateCode,
+            TrainingSplit trainingSplit,
+            String name,
+            List<Day> days,
+            Map<String, FieldLock.Status> locks) {
+        this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of());
+    }
 
     public PlanDraft(
             String templateCode,
             String name,
             List<Day> days,
             Map<String, FieldLock.Status> locks) {
-        this(templateCode, inferTrainingSplit(templateCode), name, days, locks);
+        this(templateCode, inferTrainingSplit(templateCode), name, days, locks, null, null, List.of(), List.of());
     }
 
     public PlanDraft {
@@ -43,6 +56,15 @@ public record PlanDraft(
             }
         }
         locks = Map.copyOf(locks == null ? Map.of() : locks);
+        if ((presetCode == null) != (presetVersion == null)) {
+            throw new IllegalArgumentException("preset code and version must be provided together");
+        }
+        if (presetCode != null) {
+            presetCode = requireStableCode(presetCode, "preset code");
+            presetVersion = requireText(presetVersion, "preset version");
+        }
+        executionRules = immutableTexts(executionRules, "execution rule");
+        progressionRules = immutableTexts(progressionRules, "progression rule");
         List<Day> validatedDays = days;
         locks.forEach((path, status) -> {
             new FieldLock(path, status, java.time.Instant.EPOCH);
@@ -119,12 +141,12 @@ public record PlanDraft(
                     updatedExercises.add(exercise);
                 }
             }
-            updatedDays.add(new Day(day.code(), day.name(), updatedExercises));
+            updatedDays.add(day.withExercises(updatedExercises));
         }
         if (!found) {
             throw new IllegalArgumentException("exercise does not exist in plan");
         }
-        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
+        return copyWith(updatedDays, locks);
     }
 
     public PlanDraft preserveLockedValues(PlanDraft base, Map<String, FieldLock.Status> requestedLocks) {
@@ -148,7 +170,7 @@ public record PlanDraft(
             });
         }
 
-        PlanDraft result = new PlanDraft(templateCode, trainingSplit, name, days, mergedLocks);
+        PlanDraft result = copyWith(days, mergedLocks);
         for (Map.Entry<String, FieldLock.Status> entry : base.locks().entrySet()) {
             FieldLock.Status requested = requestedLocks == null ? null : requestedLocks.get(entry.getKey());
             if (requested == FieldLock.Status.UNLOCKED) {
@@ -182,12 +204,12 @@ public record PlanDraft(
                     updatedExercises.add(exercise);
                 }
             }
-            updatedDays.add(new Day(day.code(), day.name(), updatedExercises));
+            updatedDays.add(day.withExercises(updatedExercises));
         }
         if (!found) {
             throw new IllegalArgumentException("locked weight does not exist in candidate plan");
         }
-        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
+        return copyWith(updatedDays, locks);
     }
 
     private PlanDraft withValue(String fieldPath, int value) {
@@ -208,15 +230,35 @@ public record PlanDraft(
                     updatedExercises.add(exercise);
                 }
             }
-            updatedDays.add(new Day(day.code(), day.name(), updatedExercises));
+            updatedDays.add(day.withExercises(updatedExercises));
         }
         if (!found) {
             throw new IllegalArgumentException("locked field does not exist in candidate plan");
         }
-        return new PlanDraft(templateCode, trainingSplit, name, updatedDays, locks);
+        return copyWith(updatedDays, locks);
     }
 
-    public record Day(String code, String name, List<Exercise> exercises) {
+    private PlanDraft copyWith(List<Day> updatedDays, Map<String, FieldLock.Status> updatedLocks) {
+        return new PlanDraft(
+                templateCode, trainingSplit, name, updatedDays, updatedLocks,
+                presetCode, presetVersion, executionRules, progressionRules);
+    }
+
+    public record Day(
+            String code,
+            String name,
+            List<Exercise> exercises,
+            String weekday,
+            String focus,
+            int estimatedMinutesMin,
+            int estimatedMinutesMax,
+            List<WarmupStep> warmup,
+            List<String> notes) {
+
+        public Day(String code, String name, List<Exercise> exercises) {
+            this(code, name, exercises, null, null, 0, 0, List.of(), List.of());
+        }
+
         public Day {
             code = requireStableCode(code, "day code");
             name = requireText(name, "day name");
@@ -224,6 +266,20 @@ public record PlanDraft(
             if (exercises.isEmpty() || exercises.size() > 8) {
                 throw new IllegalArgumentException("day must contain between 1 and 8 exercises");
             }
+            if (weekday != null) weekday = requireStableCode(weekday, "weekday");
+            if (focus != null) focus = requireText(focus, "focus");
+            if (estimatedMinutesMin < 0 || estimatedMinutesMax < 0
+                    || (estimatedMinutesMax > 0 && estimatedMinutesMin > estimatedMinutesMax)) {
+                throw new IllegalArgumentException("estimated minute range is invalid");
+            }
+            warmup = List.copyOf(warmup == null ? List.of() : warmup);
+            notes = immutableTexts(notes, "day note");
+        }
+
+        Day withExercises(List<Exercise> updatedExercises) {
+            return new Day(
+                    code, name, updatedExercises, weekday, focus,
+                    estimatedMinutesMin, estimatedMinutesMax, warmup, notes);
         }
     }
 
@@ -234,7 +290,15 @@ public record PlanDraft(
             int repMax,
             int restSeconds,
             WeightStatus weightStatus,
-            Optional<BigDecimal> targetWeightKg) {
+            Optional<BigDecimal> targetWeightKg,
+            Integer targetRirMin,
+            Integer targetRirMax,
+            Integer eccentricSeconds,
+            boolean perSide,
+            String executionGroup,
+            int executionOrder,
+            OptionalSetRule optionalSetRule,
+            List<String> notes) {
         public Exercise(
                 String exerciseCode,
                 int workSets,
@@ -242,7 +306,20 @@ public record PlanDraft(
                 int repMax,
                 int restSeconds,
                 WeightStatus weightStatus) {
-            this(exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty());
+            this(exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus, Optional.empty(),
+                    null, null, null, false, null, 0, null, List.of());
+        }
+
+        public Exercise(
+                String exerciseCode,
+                int workSets,
+                int repMin,
+                int repMax,
+                int restSeconds,
+                WeightStatus weightStatus,
+                Optional<BigDecimal> targetWeightKg) {
+            this(exerciseCode, workSets, repMin, repMax, restSeconds, weightStatus, targetWeightKg,
+                    null, null, null, false, null, 0, null, List.of());
         }
 
         public Exercise {
@@ -259,6 +336,24 @@ public record PlanDraft(
             if (weightStatus == WeightStatus.BODYWEIGHT && targetWeightKg.isPresent()) {
                 throw new IllegalArgumentException("bodyweight exercise cannot have a target weight");
             }
+            if ((targetRirMin == null) != (targetRirMax == null)
+                    || targetRirMin != null
+                    && (targetRirMin < 0 || targetRirMax < targetRirMin || targetRirMax > 10)) {
+                throw new IllegalArgumentException("target RIR range is invalid");
+            }
+            if (eccentricSeconds != null && (eccentricSeconds < 1 || eccentricSeconds > 10)) {
+                throw new IllegalArgumentException("eccentric seconds must be between 1 and 10");
+            }
+            if ((executionGroup == null) != (executionOrder == 0)) {
+                throw new IllegalArgumentException("execution group and order must be provided together");
+            }
+            if (executionGroup != null) {
+                executionGroup = requireStableCode(executionGroup, "execution group");
+                if (executionOrder < 1 || executionOrder > 8) {
+                    throw new IllegalArgumentException("execution order is invalid");
+                }
+            }
+            notes = immutableTexts(notes, "exercise note");
         }
 
         int value(String field) {
@@ -274,20 +369,47 @@ public record PlanDraft(
         Exercise withValue(String field, int value) {
             return switch (field) {
                 case "workSets" -> new Exercise(
-                        exerciseCode, value, repMin, repMax, restSeconds, weightStatus, targetWeightKg);
+                        exerciseCode, value, repMin, repMax, restSeconds, weightStatus, targetWeightKg,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule, notes);
                 case "repMin" -> new Exercise(
-                        exerciseCode, workSets, value, repMax, restSeconds, weightStatus, targetWeightKg);
+                        exerciseCode, workSets, value, repMax, restSeconds, weightStatus, targetWeightKg,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule, notes);
                 case "repMax" -> new Exercise(
-                        exerciseCode, workSets, repMin, value, restSeconds, weightStatus, targetWeightKg);
+                        exerciseCode, workSets, repMin, value, restSeconds, weightStatus, targetWeightKg,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule, notes);
                 case "restSeconds" -> new Exercise(
-                        exerciseCode, workSets, repMin, repMax, value, weightStatus, targetWeightKg);
+                        exerciseCode, workSets, repMin, repMax, value, weightStatus, targetWeightKg,
+                        targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                        executionGroup, executionOrder, optionalSetRule, notes);
                 default -> throw new IllegalArgumentException("field is not lockable");
             };
         }
 
         Exercise withTargetWeight(BigDecimal value) {
             return new Exercise(
-                    exerciseCode, workSets, repMin, repMax, restSeconds, WeightStatus.KNOWN, Optional.of(value));
+                    exerciseCode, workSets, repMin, repMax, restSeconds, WeightStatus.KNOWN, Optional.of(value),
+                    targetRirMin, targetRirMax, eccentricSeconds, perSide,
+                    executionGroup, executionOrder, optionalSetRule, notes);
+        }
+    }
+
+    public record WarmupStep(String instruction, String prescription, boolean optional) {
+        public WarmupStep {
+            instruction = requireText(instruction, "warmup instruction");
+            if (prescription != null) prescription = requireText(prescription, "warmup prescription");
+        }
+    }
+
+    public record OptionalSetRule(String conditionCode, String exclusiveChoiceGroup, int additionalSets) {
+        public OptionalSetRule {
+            conditionCode = requireStableCode(conditionCode, "optional set condition");
+            exclusiveChoiceGroup = requireStableCode(exclusiveChoiceGroup, "exclusive choice group");
+            if (additionalSets != 1) {
+                throw new IllegalArgumentException("optional set rule must add exactly one set");
+            }
         }
     }
 
@@ -332,5 +454,11 @@ public record PlanDraft(
             throw new IllegalArgumentException(label + " must not contain slash");
         }
         return value;
+    }
+
+    private static List<String> immutableTexts(List<String> values, String label) {
+        List<String> safe = List.copyOf(values == null ? List.of() : values);
+        safe.forEach(value -> requireText(value, label));
+        return safe;
     }
 }

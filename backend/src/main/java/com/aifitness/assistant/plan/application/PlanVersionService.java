@@ -228,12 +228,12 @@ public final class PlanVersionService {
     }
 
     private static PlanDraft preserveAuthoritativePlanIdentity(PlanDraft proposed, PlanDraft base) {
-        if (proposed.templateCode().equals(base.templateCode())
-                && proposed.trainingSplit() == base.trainingSplit()) {
-            return proposed;
-        }
+        boolean fixedPreset = base.presetCode() != null;
         return new PlanDraft(
-                base.templateCode(), base.trainingSplit(), proposed.name(), proposed.days(), proposed.locks());
+                base.templateCode(), base.trainingSplit(), proposed.name(), proposed.days(), proposed.locks(),
+                base.presetCode(), base.presetVersion(),
+                fixedPreset ? base.executionRules() : proposed.executionRules(),
+                fixedPreset ? base.progressionRules() : proposed.progressionRules());
     }
 
     private static String fingerprint(

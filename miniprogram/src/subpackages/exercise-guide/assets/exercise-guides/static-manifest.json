@@ -1890,6 +1890,630 @@
           "sizeBytes": 10475
         }
       ]
+    },
+    {
+      "exerciseCode": "SMITH_FLAT_BENCH_PRESS",
+      "primaryRef": "asset://exercise-guides/smith-flat-bench-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "起始",
+          "description": "肩背和脚部先稳定支撑。",
+          "file": "smith-flat-bench-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/smith-flat-bench-press-sprite-v1.png",
+          "sourceSha256": "bbbcb46c47ddd1f0b6c43c09f234d0e172ae4ee7b01ce4049f3264b933532398",
+          "sha256": "dc1c9bf95870c43839107f14ee5965c92f8a735df5ec010c00584d2a56adb474",
+          "sizeBytes": 7099
+        },
+        {
+          "id": "drive",
+          "label": "推起",
+          "description": "手腕稳定，沿可控路径推起负重。",
+          "file": "smith-flat-bench-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/smith-flat-bench-press-sprite-v1.png",
+          "sourceSha256": "bbbcb46c47ddd1f0b6c43c09f234d0e172ae4ee7b01ce4049f3264b933532398",
+          "sha256": "cefd19ee1214a268d1902ad08792ccaf9cb339b9aac6261d6336067648528d43",
+          "sizeBytes": 6811
+        },
+        {
+          "id": "finish",
+          "label": "完成",
+          "description": "手臂接近伸直，避免锁死关节。",
+          "file": "smith-flat-bench-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/smith-flat-bench-press-sprite-v1.png",
+          "sourceSha256": "bbbcb46c47ddd1f0b6c43c09f234d0e172ae4ee7b01ce4049f3264b933532398",
+          "sha256": "d94229f72691f6dfe5f73f7172b1fb8240b392c3d1e4b5529ef4d24a5624e5f8",
+          "sizeBytes": 7122
+        }
+      ]
+    },
+    {
+      "exerciseCode": "INCLINE_DUMBBELL_BENCH_PRESS_30",
+      "primaryRef": "asset://exercise-guides/incline-dumbbell-bench-press-30-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "起始",
+          "description": "肩背和脚部先稳定支撑。",
+          "file": "incline-dumbbell-bench-press-30-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-bench-press-30-sprite-v1.png",
+          "sourceSha256": "3529fc43ba32a6aa924d466d5ddd1ea76bbf9ad592f875a0b1ee380c153d2d95",
+          "sha256": "4d825c53f4e274104b98ddb99702c3c88f9bd9f2d0d237ce11c8541b38bb1ce7",
+          "sizeBytes": 5462
+        },
+        {
+          "id": "drive",
+          "label": "推起",
+          "description": "手腕稳定，沿可控路径推起负重。",
+          "file": "incline-dumbbell-bench-press-30-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-bench-press-30-sprite-v1.png",
+          "sourceSha256": "3529fc43ba32a6aa924d466d5ddd1ea76bbf9ad592f875a0b1ee380c153d2d95",
+          "sha256": "02f07540754505e44f9fbc10b68c9f9fe75eb74bbb5a2f6984568105b0c7658d",
+          "sizeBytes": 5340
+        },
+        {
+          "id": "finish",
+          "label": "完成",
+          "description": "手臂接近伸直，避免锁死关节。",
+          "file": "incline-dumbbell-bench-press-30-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-bench-press-30-sprite-v1.png",
+          "sourceSha256": "3529fc43ba32a6aa924d466d5ddd1ea76bbf9ad592f875a0b1ee380c153d2d95",
+          "sha256": "40006524a51b9b4d6282a7619d0407cb24e02e1c1c62d8491fb6730317827079",
+          "sizeBytes": 5759
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SEATED_MACHINE_SHOULDER_PRESS",
+      "primaryRef": "asset://exercise-guides/seated-machine-shoulder-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩前",
+          "description": "核心收紧，负重稳定在肩部附近。",
+          "file": "seated-machine-shoulder-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/seated-machine-shoulder-press-sprite-v1.png",
+          "sourceSha256": "e6f4614843581416d7d5d93e9a91915d027d5bd16681710ec7cc7ffee1e5a8c4",
+          "sha256": "96b99b0e47bb163b48984541aa5c474c4fe2285b2e9613463e5b80f0dcca61ea",
+          "sizeBytes": 5838
+        },
+        {
+          "id": "drive",
+          "label": "推举",
+          "description": "沿头部两侧向上推，避免腰部后仰。",
+          "file": "seated-machine-shoulder-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/seated-machine-shoulder-press-sprite-v1.png",
+          "sourceSha256": "e6f4614843581416d7d5d93e9a91915d027d5bd16681710ec7cc7ffee1e5a8c4",
+          "sha256": "ec3f42d216fbf7a56ebc05c84dc01dcc7d288197c2c47125b8a3778a4c0ec225",
+          "sizeBytes": 5717
+        },
+        {
+          "id": "finish",
+          "label": "顶端",
+          "description": "负重位于身体上方，肩颈保持放松。",
+          "file": "seated-machine-shoulder-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/seated-machine-shoulder-press-sprite-v1.png",
+          "sourceSha256": "e6f4614843581416d7d5d93e9a91915d027d5bd16681710ec7cc7ffee1e5a8c4",
+          "sha256": "7539a6909217911e2b71a79bc303a67afce3ca63350e72a32ebe55fc576d6dfa",
+          "sizeBytes": 5886
+        }
+      ]
+    },
+    {
+      "exerciseCode": "LEANING_PEC_DECK_FLY",
+      "primaryRef": "asset://exercise-guides/leaning-pec-deck-fly-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "胸前稳定",
+          "description": "肩背贴稳，手肘保持轻微弯曲。",
+          "file": "leaning-pec-deck-fly-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/leaning-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c1b765f15d6722de2129e773728d3bf02b158280c87fb209bdf2b2323c770c5e",
+          "sha256": "3126c4a2ec57a80727fc00fc8d0840a1fa891caa3eecc25c6060ad30907a1e0d",
+          "sizeBytes": 5158
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "沿弧线受控打开双臂，不让肩部过度后伸。",
+          "file": "leaning-pec-deck-fly-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/leaning-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c1b765f15d6722de2129e773728d3bf02b158280c87fb209bdf2b2323c770c5e",
+          "sha256": "f9f3abad9c741e40c5409cbdd2667853e8c99be39d33f99373783f3ee97f3dbe",
+          "sizeBytes": 4959
+        },
+        {
+          "id": "finish",
+          "label": "拉伸到位",
+          "description": "胸部有拉伸感时停住，再沿原路径夹回。",
+          "file": "leaning-pec-deck-fly-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/leaning-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c1b765f15d6722de2129e773728d3bf02b158280c87fb209bdf2b2323c770c5e",
+          "sha256": "0dd59d90063e6dbaf2fb459e4d5029e975a18e832ac2457bc64dcabce5cde14a",
+          "sizeBytes": 4938
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_SEATED_ROW",
+      "primaryRef": "asset://exercise-guides/machine-seated-row-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸臂",
+          "description": "躯干稳定，肩膀自然下沉。",
+          "file": "machine-seated-row-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/machine-seated-row-sprite-v1.png",
+          "sourceSha256": "2abcd82e22ae523e38c9c4cc6f10a96240400f1f3624160d57076a1813736011",
+          "sha256": "dbfd196dccdd76d13e1e4b2aca9a90d55dae727c04c5cb9905f14069e60d0f26",
+          "sizeBytes": 6528
+        },
+        {
+          "id": "drive",
+          "label": "后拉",
+          "description": "肘部向后，肩胛向中间收拢。",
+          "file": "machine-seated-row-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/machine-seated-row-sprite-v1.png",
+          "sourceSha256": "2abcd82e22ae523e38c9c4cc6f10a96240400f1f3624160d57076a1813736011",
+          "sha256": "bcfaaaf2d8c503c4fe40abba16d1b11fb116568200c6caa19e72c99f0ae1a4fa",
+          "sizeBytes": 6157
+        },
+        {
+          "id": "finish",
+          "label": "收紧",
+          "description": "握把靠近身体，避免大幅后仰。",
+          "file": "machine-seated-row-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/machine-seated-row-sprite-v1.png",
+          "sourceSha256": "2abcd82e22ae523e38c9c4cc6f10a96240400f1f3624160d57076a1813736011",
+          "sha256": "f56af0580ecd08d9879e9e3055559e0efccd950af9999e478ae905c71ce45da6",
+          "sizeBytes": 6137
+        }
+      ]
+    },
+    {
+      "exerciseCode": "REVERSE_PEC_DECK_FLY",
+      "primaryRef": "asset://exercise-guides/reverse-pec-deck-fly-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "肩胛稳定",
+          "description": "站稳或俯身后先保持躯干稳定。",
+          "file": "reverse-pec-deck-fly-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/reverse-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c8075c6fc293b383ef9ef6d7e21a9b6abae823ee7d4c1b87a1fd26e988f3e1b2",
+          "sha256": "d534359ffa3cf488e45c9afabbb3db79097acf89ad58075a6c54708c5f3f4557",
+          "sizeBytes": 6165
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "肘部向外移动，肩部不要耸起。",
+          "file": "reverse-pec-deck-fly-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/reverse-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c8075c6fc293b383ef9ef6d7e21a9b6abae823ee7d4c1b87a1fd26e988f3e1b2",
+          "sha256": "242e4290d2fa48c05ebe88f3738dfbc0fd0b8f048c64971508fcf8fcb4ca5820",
+          "sizeBytes": 6380
+        },
+        {
+          "id": "finish",
+          "label": "上背收紧",
+          "description": "肩部后侧和上背收紧后受控返回。",
+          "file": "reverse-pec-deck-fly-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/reverse-pec-deck-fly-sprite-v1.png",
+          "sourceSha256": "c8075c6fc293b383ef9ef6d7e21a9b6abae823ee7d4c1b87a1fd26e988f3e1b2",
+          "sha256": "e342666962e606ba8e44ea8165beeffa87a7527528678a1bccba30fbae823b86",
+          "sizeBytes": 6540
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SMITH_SQUAT",
+      "primaryRef": "asset://exercise-guides/smith-squat-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "脚掌稳定，负重靠近身体。",
+          "file": "smith-squat-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/smith-squat-sprite-v1.png",
+          "sourceSha256": "b2ae1696fb9dac3af87a67c502d0b385d80bd3a79c851ade3bb3725203a20bc1",
+          "sha256": "b22f83d205f4b4b2080eb8dca8a002cc03f5b8fcd3d33699784326eb714a41b5",
+          "sizeBytes": 7217
+        },
+        {
+          "id": "drive",
+          "label": "下蹲",
+          "description": "屈髋屈膝，膝盖跟随脚尖方向。",
+          "file": "smith-squat-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/smith-squat-sprite-v1.png",
+          "sourceSha256": "b2ae1696fb9dac3af87a67c502d0b385d80bd3a79c851ade3bb3725203a20bc1",
+          "sha256": "2a48081a5b54deb11381f5c9e744dcc66fb7c9073a023e68895714ac76e40be9",
+          "sizeBytes": 6818
+        },
+        {
+          "id": "finish",
+          "label": "到位",
+          "description": "保持躯干稳定，在可控深度停住。",
+          "file": "smith-squat-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/smith-squat-sprite-v1.png",
+          "sourceSha256": "b2ae1696fb9dac3af87a67c502d0b385d80bd3a79c851ade3bb3725203a20bc1",
+          "sha256": "fefd303bf8a7086d4f09fbc9ec11143819bbe1b0315b30530183d3436f7a3f9f",
+          "sizeBytes": 6183
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SEATED_LEG_PRESS",
+      "primaryRef": "asset://exercise-guides/seated-leg-press-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "屈膝准备",
+          "description": "背部和臀部贴稳靠垫，双脚踩实踏板。",
+          "file": "seated-leg-press-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-press-sprite-v1.png",
+          "sourceSha256": "a93d91d2366135c2ced9c5eff39002f6fcd52fecca09f7128dbd66b6e911f1da",
+          "sha256": "0eaae893d7772b8ef8af5bb02d1786a68279b3fc93ab67284f50d0154db95492",
+          "sizeBytes": 5653
+        },
+        {
+          "id": "drive",
+          "label": "推开踏板",
+          "description": "膝盖跟随脚尖方向，脚跟持续发力。",
+          "file": "seated-leg-press-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-press-sprite-v1.png",
+          "sourceSha256": "a93d91d2366135c2ced9c5eff39002f6fcd52fecca09f7128dbd66b6e911f1da",
+          "sha256": "ae1e205e4aa7f045b2ed72537ed59b3ad1e0ddf43d6ea785febeb681616e5fc3",
+          "sizeBytes": 5925
+        },
+        {
+          "id": "finish",
+          "label": "接近伸直",
+          "description": "腿部接近伸直时停住，不锁死膝盖。",
+          "file": "seated-leg-press-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-press-sprite-v1.png",
+          "sourceSha256": "a93d91d2366135c2ced9c5eff39002f6fcd52fecca09f7128dbd66b6e911f1da",
+          "sha256": "72f19559ad1ea80b07c7af271d98f0a6f7547753053de2315cc0ceae89f2725c",
+          "sizeBytes": 5852
+        }
+      ]
+    },
+    {
+      "exerciseCode": "DUMBBELL_REVERSE_LUNGE",
+      "primaryRef": "asset://exercise-guides/dumbbell-reverse-lunge-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "站稳",
+          "description": "躯干直立，双手稳定握住哑铃。",
+          "file": "dumbbell-reverse-lunge-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-reverse-lunge-sprite-v1.png",
+          "sourceSha256": "f9aedc7167d2dc48e899f4c1bf6f26d7f782884520b53f815a4358359987c1be",
+          "sha256": "95bce83f3d2a99570d1d2f15394e2293fb131d4b43b5b01fa45cc38cde014136",
+          "sizeBytes": 5670
+        },
+        {
+          "id": "drive",
+          "label": "向后迈步",
+          "description": "一脚受控后撤，前脚掌和脚跟保持稳定。",
+          "file": "dumbbell-reverse-lunge-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-reverse-lunge-sprite-v1.png",
+          "sourceSha256": "f9aedc7167d2dc48e899f4c1bf6f26d7f782884520b53f815a4358359987c1be",
+          "sha256": "dd946e84ae8dfd344ff3be43d6081c0e5610f58ebd318e816fd34e6c2494c496",
+          "sizeBytes": 5653
+        },
+        {
+          "id": "finish",
+          "label": "下蹲到位",
+          "description": "前膝跟随脚尖，后膝接近地面后停住。",
+          "file": "dumbbell-reverse-lunge-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/dumbbell-reverse-lunge-sprite-v1.png",
+          "sourceSha256": "f9aedc7167d2dc48e899f4c1bf6f26d7f782884520b53f815a4358359987c1be",
+          "sha256": "8cde2f10f240a7cc38c49e6c6af8c901cb9e2a385dca9b2825f3dee65f52bc24",
+          "sizeBytes": 5234
+        }
+      ]
+    },
+    {
+      "exerciseCode": "SEATED_LEG_EXTENSION",
+      "primaryRef": "asset://exercise-guides/seated-leg-extension-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "屈膝坐稳",
+          "description": "膝盖对齐器械转轴，滚垫贴在小腿前侧。",
+          "file": "seated-leg-extension-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-extension-sprite-v1.png",
+          "sourceSha256": "e34d22f75d77a47e96b29390a27a742373e15f5c74f72888cc15d80a3640d454",
+          "sha256": "79b685319521218f7527324b8d1f106c809fafeb0bcfeccae870002f9234d98d",
+          "sizeBytes": 6610
+        },
+        {
+          "id": "drive",
+          "label": "伸直膝盖",
+          "description": "保持臀部贴稳，平稳抬起小腿。",
+          "file": "seated-leg-extension-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-extension-sprite-v1.png",
+          "sourceSha256": "e34d22f75d77a47e96b29390a27a742373e15f5c74f72888cc15d80a3640d454",
+          "sha256": "cd95b754d35606295b753db7ec3a5c2f340eb013a8fcee5464f536195bef2cf1",
+          "sizeBytes": 6697
+        },
+        {
+          "id": "finish",
+          "label": "顶端收紧",
+          "description": "接近伸直时停顿，不用惯性锁死膝盖。",
+          "file": "seated-leg-extension-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/seated-leg-extension-sprite-v1.png",
+          "sourceSha256": "e34d22f75d77a47e96b29390a27a742373e15f5c74f72888cc15d80a3640d454",
+          "sha256": "e41b6ba3b9c4beef43f0781347b9e1827560cd989d9ac87a53636e5b63617e39",
+          "sizeBytes": 6803
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_CRUNCH",
+      "primaryRef": "asset://exercise-guides/machine-crunch-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "坐稳",
+          "description": "髋部和双脚固定，胸廓保持自然。",
+          "file": "machine-crunch-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/machine-crunch-sprite-v1.png",
+          "sourceSha256": "c26d623a4fe5bf7c4b210615d32937e00f1827fe4941823e713630b875a8d3c8",
+          "sha256": "06884806c46d139e00bbe1344c26373d1eeb5e351b7aef8be7d3e09aa6e04411",
+          "sizeBytes": 6760
+        },
+        {
+          "id": "drive",
+          "label": "卷曲躯干",
+          "description": "肋骨向骨盆靠近，用腹部带动器械。",
+          "file": "machine-crunch-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/machine-crunch-sprite-v1.png",
+          "sourceSha256": "c26d623a4fe5bf7c4b210615d32937e00f1827fe4941823e713630b875a8d3c8",
+          "sha256": "e386d76cbf5dcf8f1237a7559ef2561deddd8821e2a65c3fb07137da18a1360a",
+          "sizeBytes": 6523
+        },
+        {
+          "id": "finish",
+          "label": "腹部收紧",
+          "description": "在髋部不抬起的范围内停住，再受控返回。",
+          "file": "machine-crunch-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/machine-crunch-sprite-v1.png",
+          "sourceSha256": "c26d623a4fe5bf7c4b210615d32937e00f1827fe4941823e713630b875a8d3c8",
+          "sha256": "03debc775500bb67d35b9d3158745fd9fa5c3cc9934b457ac43beeb6dcdbab21",
+          "sizeBytes": 6478
+        }
+      ]
+    },
+    {
+      "exerciseCode": "INCLINE_DUMBBELL_FLY",
+      "primaryRef": "asset://exercise-guides/incline-dumbbell-fly-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "胸前稳定",
+          "description": "肩背贴稳，手肘保持轻微弯曲。",
+          "file": "incline-dumbbell-fly-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-fly-sprite-v1.png",
+          "sourceSha256": "96114ca197ab211c66fd94f1c62fc5056b14487cfad4d786b5524dee125e3c3e",
+          "sha256": "32b2969d77dd0b4ba9744c8cd0d1d18a6d87080831798b49f26a6d9e7a07ba00",
+          "sizeBytes": 5335
+        },
+        {
+          "id": "drive",
+          "label": "向外展开",
+          "description": "沿弧线受控打开双臂，不让肩部过度后伸。",
+          "file": "incline-dumbbell-fly-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-fly-sprite-v1.png",
+          "sourceSha256": "96114ca197ab211c66fd94f1c62fc5056b14487cfad4d786b5524dee125e3c3e",
+          "sha256": "964a51bf5b7b9246aa5a4520b57ea8efc4441ba7f5447893f1eb89823ae471b3",
+          "sizeBytes": 5452
+        },
+        {
+          "id": "finish",
+          "label": "拉伸到位",
+          "description": "胸部有拉伸感时停住，再沿原路径夹回。",
+          "file": "incline-dumbbell-fly-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/incline-dumbbell-fly-sprite-v1.png",
+          "sourceSha256": "96114ca197ab211c66fd94f1c62fc5056b14487cfad4d786b5524dee125e3c3e",
+          "sha256": "b87f97ffdceb800c73073da36fa462ce5eb8dd6308502032b286ab2d8d8d9ed6",
+          "sizeBytes": 5384
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_HIP_THRUST",
+      "primaryRef": "asset://exercise-guides/machine-hip-thrust-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "落髋准备",
+          "description": "上背和双脚稳定，髋部受垫带固定。",
+          "file": "machine-hip-thrust-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-thrust-sprite-v1.png",
+          "sourceSha256": "45fd47cc31cdfb235afae77d91e92ba06e3ea20db3a84aa932b54205ea75c404",
+          "sha256": "a55a5369e0581b6ae595e001f7de9532b701b2a1b6fc196910d944ea240fa389",
+          "sizeBytes": 5045
+        },
+        {
+          "id": "drive",
+          "label": "抬起髋部",
+          "description": "脚跟发力，让臀部带动髋部上升。",
+          "file": "machine-hip-thrust-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-thrust-sprite-v1.png",
+          "sourceSha256": "45fd47cc31cdfb235afae77d91e92ba06e3ea20db3a84aa932b54205ea75c404",
+          "sha256": "1c88addb5acdb62c2fb6eb4a7588b768ea2f2f318920c2df734228987d908e8a",
+          "sizeBytes": 5611
+        },
+        {
+          "id": "finish",
+          "label": "顶部收紧",
+          "description": "臀部夹紧并停顿，肋骨下沉不过度挺腰。",
+          "file": "machine-hip-thrust-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-thrust-sprite-v1.png",
+          "sourceSha256": "45fd47cc31cdfb235afae77d91e92ba06e3ea20db3a84aa932b54205ea75c404",
+          "sha256": "84ee9da4e3e7160e0b358dd2102cf2cbd8a9bc7713e32fe5b8cb7b09394a74fb",
+          "sizeBytes": 5828
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_LEG_CURL",
+      "primaryRef": "asset://exercise-guides/machine-leg-curl-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "伸腿准备",
+          "description": "俯卧贴稳，膝盖对齐转轴，滚垫位于脚跟上方。",
+          "file": "machine-leg-curl-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/machine-leg-curl-sprite-v1.png",
+          "sourceSha256": "f4ed8f81e5121219ec86715b8a9e3dc9c9e07e4f84a88cf9859ccf3f5d7f1fdc",
+          "sha256": "4e029be03eaf71223ff5b07989650d419bc0783c48fd4662a9f1b5f0d066d57f",
+          "sizeBytes": 5674
+        },
+        {
+          "id": "drive",
+          "label": "屈膝弯腿",
+          "description": "保持髋部贴垫，让脚跟平稳靠近臀部。",
+          "file": "machine-leg-curl-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/machine-leg-curl-sprite-v1.png",
+          "sourceSha256": "f4ed8f81e5121219ec86715b8a9e3dc9c9e07e4f84a88cf9859ccf3f5d7f1fdc",
+          "sha256": "cd3d2a403f3844cc3cb70bbfc2651f3549e7877b5e4f2d8012abf39dfaee619a",
+          "sizeBytes": 5821
+        },
+        {
+          "id": "finish",
+          "label": "收缩到位",
+          "description": "大腿后侧收紧后停顿，再缓慢放回。",
+          "file": "machine-leg-curl-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/machine-leg-curl-sprite-v1.png",
+          "sourceSha256": "f4ed8f81e5121219ec86715b8a9e3dc9c9e07e4f84a88cf9859ccf3f5d7f1fdc",
+          "sha256": "6caba35839675cc23bb1cae6142ca8920bde7c684e1f19d0d9fad7d5b28cff5c",
+          "sizeBytes": 5767
+        }
+      ]
+    },
+    {
+      "exerciseCode": "MACHINE_HIP_ABDUCTION",
+      "primaryRef": "asset://exercise-guides/machine-hip-abduction-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "并腿坐稳",
+          "description": "背部贴稳，器械垫贴住大腿外侧。",
+          "file": "machine-hip-abduction-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-abduction-sprite-v1.png",
+          "sourceSha256": "0ffb7acc3890cacc287842344271f235ae0641a36632ceff002929d0d2c514a1",
+          "sha256": "b28063636cceae2952ead142eb5e0f756ff3e2702c3814f8d7a7c9d3a6359333",
+          "sizeBytes": 6413
+        },
+        {
+          "id": "drive",
+          "label": "向外打开",
+          "description": "从髋部推动双膝向外，躯干保持稳定。",
+          "file": "machine-hip-abduction-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-abduction-sprite-v1.png",
+          "sourceSha256": "0ffb7acc3890cacc287842344271f235ae0641a36632ceff002929d0d2c514a1",
+          "sha256": "7764ec59598ffe71a4f6ef12666307721b26ff35a64dc89ef6dd74b724830c6a",
+          "sizeBytes": 6483
+        },
+        {
+          "id": "finish",
+          "label": "外侧收紧",
+          "description": "在可控幅度停顿，再缓慢合回。",
+          "file": "machine-hip-abduction-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/machine-hip-abduction-sprite-v1.png",
+          "sourceSha256": "0ffb7acc3890cacc287842344271f235ae0641a36632ceff002929d0d2c514a1",
+          "sha256": "fe1ff23262dbd79bac10c466e9741af03a4df4af6e53048c803b10bd011f0495",
+          "sizeBytes": 6404
+        }
+      ]
+    },
+    {
+      "exerciseCode": "STANDING_CALF_RAISE",
+      "primaryRef": "asset://exercise-guides/standing-calf-raise-01-setup.jpg",
+      "stages": [
+        {
+          "id": "setup",
+          "label": "脚跟落地",
+          "description": "双手轻扶墙面，双脚平行站稳。",
+          "file": "standing-calf-raise-01-setup.jpg",
+          "phase": 0.0,
+          "sourceFile": "assets-source/exercise-guides/standing-calf-raise-sprite-v1.png",
+          "sourceSha256": "b6978676391c7b5b9d4224535dc58420464779a311e02d69a34b86ec6c07d2bc",
+          "sha256": "6c2c9b0255bbfae3f1d6a9b75750fbe1073abf3905f89107076380f648fbf0e2",
+          "sizeBytes": 7219
+        },
+        {
+          "id": "drive",
+          "label": "提起脚跟",
+          "description": "缓慢抬起脚跟，把重心保持在前脚掌。",
+          "file": "standing-calf-raise-02-drive.jpg",
+          "phase": 0.5,
+          "sourceFile": "assets-source/exercise-guides/standing-calf-raise-sprite-v1.png",
+          "sourceSha256": "b6978676391c7b5b9d4224535dc58420464779a311e02d69a34b86ec6c07d2bc",
+          "sha256": "1804d07a446839c3f5211a4664097a4d42c222da33703a0b5aedf937635d8699",
+          "sizeBytes": 7147
+        },
+        {
+          "id": "finish",
+          "label": "稳定顶端",
+          "description": "身体保持直立，再缓慢放下脚跟。",
+          "file": "standing-calf-raise-03-finish.jpg",
+          "phase": 1.0,
+          "sourceFile": "assets-source/exercise-guides/standing-calf-raise-sprite-v1.png",
+          "sourceSha256": "b6978676391c7b5b9d4224535dc58420464779a311e02d69a34b86ec6c07d2bc",
+          "sha256": "7bb63165e4a1d94b104cd5dad936afe77664548ef47db8725e0e62a4e1ed6247",
+          "sizeBytes": 7117
+        }
+      ]
     }
   ]
 }

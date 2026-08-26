@@ -7,6 +7,7 @@ import type {
   PlanExerciseOption,
   PlanExerciseReplacementOption,
   PlanDayOption,
+  PlanPresetSummary,
 } from './models'
 import {
   addPlanDay as addDay,
@@ -46,6 +47,8 @@ export interface FitnessApplication {
   completeOnboarding(draft: OnboardingDraft): Promise<CandidateViewModel>
   resumeOnboarding(route?: OnboardingAdjustmentRoute): OnboardingState
   getCandidate(): CandidateViewModel | null
+  listPlanPresets(): Promise<readonly PlanPresetSummary[]>
+  selectPlanPreset(presetCode: string): Promise<CandidateViewModel>
   activateCandidate(): Promise<ActivePlanData>
   openCandidateEditor(): PlanEditorState
   loadActivePlan(): Promise<ActivePlanData | null>
@@ -105,7 +108,16 @@ export function createFitnessApplication(
   function validationDraft(state: PlanEditorState): PlanValidationDraft {
     return {
       templateCode: state.workingCopy.templateCode,
+      trainingSplit: state.workingCopy.trainingSplit,
       name: state.workingCopy.name,
+      presetCode: state.workingCopy.presetCode,
+      presetVersion: state.workingCopy.presetVersion,
+      executionRules: state.workingCopy.executionRules
+        ? [...state.workingCopy.executionRules]
+        : undefined,
+      progressionRules: state.workingCopy.progressionRules
+        ? [...state.workingCopy.progressionRules]
+        : undefined,
       days: state.workingCopy.days.map((day) => ({
         ...day,
         exercises: day.exercises.map((exercise) => ({ ...exercise })),
@@ -222,6 +234,29 @@ export function createFitnessApplication(
 
     getCandidate() {
       return candidateData ? buildCandidateViewModel(candidateData) : null
+    },
+
+    listPlanPresets() {
+      return onboardingPort.listPlanPresets()
+    },
+
+    async selectPlanPreset(presetCode) {
+      const profileVersion = await onboardingPort.getProfileVersion()
+      if (profileVersion === null) {
+        throw new ApplicationError('RESOURCE_NOT_FOUND', '请先完成训练档案，再选择系统预设')
+      }
+      const generated = await onboardingPort.generateCandidate({
+        profileVersion,
+        presetCode,
+        lockedFields: {},
+        fallbackAllowed: false,
+      })
+      candidateData = generated
+      activatedCandidateId = null
+      editor = null
+      editorSessionId += 1
+      editorCandidateId = null
+      return buildCandidateViewModel(generated)
     },
 
     activateCandidate: activateCurrentCandidate,

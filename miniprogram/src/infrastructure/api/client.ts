@@ -9,6 +9,7 @@ import type {
   PlanExerciseOption,
   PlanExerciseReplacementOption,
   PlanDayOption,
+  PlanPresetSummary,
   PlanVersionResultData,
   RuleReference,
   UpdateEquipmentRequest,
@@ -89,6 +90,7 @@ type UserProfileResponse = components['schemas']['UserProfileResponse']
 type EquipmentProfileResponse = components['schemas']['EquipmentProfileResponse']
 type PreferenceProfileResponse = components['schemas']['PreferenceProfileResponse']
 type CandidateResponse = components['schemas']['PlanCandidateGenerationResponse']
+type PlanPresetListResponse = components['schemas']['PlanPresetListResponse']
 type ValidationResponse = components['schemas']['PlanValidationResponse']
 type ActivePlanResponse = components['schemas']['ActivePlanResponse']
 type VersionResultResponse = components['schemas']['PlanVersionResultResponse']
@@ -228,6 +230,11 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       request,
     )
     return requireData(response.data)
+  }
+
+  async listPlanPresets(): Promise<readonly PlanPresetSummary[]> {
+    const response = await this.request<PlanPresetListResponse>('/api/v1/plans/presets', 'GET')
+    return requireData(response.data).items
   }
 
   async getPlanGenerationContext(

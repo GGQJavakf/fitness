@@ -93,6 +93,7 @@ function port(): OnboardingPersistencePort {
     saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
     savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
     getPlanGenerationContext: vi.fn().mockResolvedValue(context),
+    listPlanPresets: vi.fn().mockResolvedValue([]),
     generateCandidate: vi.fn().mockResolvedValue(fallbackCandidate),
   }
 }

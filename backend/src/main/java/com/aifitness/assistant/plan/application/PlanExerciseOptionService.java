@@ -58,7 +58,7 @@ public final class PlanExerciseOptionService {
                 .map(PlanDraft.Exercise::exerciseCode)
                 .collect(Collectors.toUnmodifiableSet());
 
-        PlanTemplateCatalog.Template template = matchingTemplate(user, draft);
+        PlanTemplateCatalog.Template template = matchingTemplate(draft);
         if (template == null) return List.of();
 
         Set<UUID> excluded = profiles.excludedExerciseIds(user);
@@ -222,7 +222,7 @@ public final class PlanExerciseOptionService {
         TrainingPlan active = plans.getActive(user);
         if (!active.id().equals(planId)) throw new PlanVersionService.PlanNotFoundException();
         PlanDraft draft = active.activeVersion().plan();
-        PlanTemplateCatalog.Template template = matchingTemplate(user, draft);
+        PlanTemplateCatalog.Template template = matchingTemplate(draft);
         if (template == null) return List.of();
 
         Set<UUID> excluded = profiles.excludedExerciseIds(user);
@@ -240,17 +240,21 @@ public final class PlanExerciseOptionService {
                 .toList();
     }
 
-    private PlanTemplateCatalog.Template matchingTemplate(AuthenticatedUserId user, PlanDraft draft) {
-        List<PlanTemplateCatalog.Template> available = templates.list(user, Optional.empty());
+    private PlanTemplateCatalog.Template matchingTemplate(PlanDraft draft) {
+        // Templates provide split/prescription defaults; user eligibility is applied per returned exercise.
+        List<PlanTemplateCatalog.Template> available = templates.listForGeneration(Optional.empty());
         Optional<PlanTemplateCatalog.Template> exact = available.stream()
                 .filter(value -> value.code().equals(draft.templateCode()))
                 .findFirst();
-        if (exact.isPresent() || draft.trainingSplit() == null) return exact.orElse(null);
+        if (draft.trainingSplit() == null) return exact.orElse(null);
         String prefix = switch (draft.trainingSplit()) {
             case UPPER_LOWER -> "UPPER_LOWER_";
             case PUSH_PULL_LEGS -> "PUSH_PULL_LEGS_";
             case BODY_PART_FIVE_DAY -> "BODY_PART_";
         };
+        if (exact.filter(value -> value.code().startsWith(prefix)).isPresent()) {
+            return exact.orElseThrow();
+        }
         return available.stream()
                 .filter(value -> value.sessionsPerWeek() == draft.days().size())
                 .filter(value -> value.code().startsWith(prefix))

@@ -405,6 +405,22 @@ components:
         weightStatus: {$ref: './plan.yaml#/components/schemas/WeightStatus'}
         targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
         unit: {$ref: './common.yaml#/components/schemas/WeightUnit'}
+        targetRirMin: {type: integer, minimum: 0, maximum: 10}
+        targetRirMax: {type: integer, minimum: 0, maximum: 10}
+        eccentricSeconds: {type: integer, minimum: 1, maximum: 10}
+        perSide: {type: boolean}
+        executionGroup: {type: string, pattern: '^[A-Z0-9_]+$'}
+        executionOrder: {type: integer, minimum: 1, maximum: 8}
+        optionalSetRule: {$ref: '#/components/schemas/WorkoutOptionalSetRule'}
+    WorkoutOptionalSetRule:
+      type: object
+      additionalProperties: false
+      required: [conditionCode, exclusiveChoiceGroup, additionalSets]
+      properties:
+        conditionCode: {type: string, pattern: '^[A-Z0-9_]+$'}
+        exclusiveChoiceGroup: {type: string, pattern: '^[A-Z0-9_]+$'}
+        additionalSets: {type: integer, enum: [1]}
+        description: {type: string, minLength: 1}
     WorkoutExerciseSnapshot:
       type: object
       additionalProperties: false
@@ -440,6 +456,14 @@ components:
           const: 1
           description: 通用热身在同一训练日会话中只执行一次。
         durationSeconds: {type: integer, minimum: 1}
+    WorkoutWarmupInstruction:
+      type: object
+      additionalProperties: false
+      required: [instruction, optional]
+      properties:
+        instruction: {type: string, minLength: 1}
+        prescription: {type: string, minLength: 1}
+        optional: {type: boolean}
     WorkoutRampWarmupPrescription:
       type: object
       additionalProperties: false
@@ -467,6 +491,9 @@ components:
         ruleVersion: {type: string, minLength: 1}
         generalWarmup: {$ref: '#/components/schemas/WorkoutGeneralWarmupPrescription'}
         rampWarmup: {$ref: '#/components/schemas/WorkoutRampWarmupPrescription'}
+        instructions:
+          type: array
+          items: {$ref: '#/components/schemas/WorkoutWarmupInstruction'}
         countsTowardTrainingVolume:
           type: boolean
           const: false

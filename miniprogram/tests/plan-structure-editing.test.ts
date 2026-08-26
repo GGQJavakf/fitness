@@ -244,7 +244,8 @@ describe('plan structure editing', () => {
   it('filters template day options against the unsaved working copy', async () => {
     const application = createFitnessApplication({
       getProfileVersion: vi.fn(), getEquipmentVersion: vi.fn(), getPreferencesVersion: vi.fn(),
-      saveProfile: vi.fn(), saveEquipment: vi.fn(), savePreferences: vi.fn(), generateCandidate: vi.fn(),
+      saveProfile: vi.fn(), saveEquipment: vi.fn(), savePreferences: vi.fn(),
+      listPlanPresets: vi.fn().mockResolvedValue([]), generateCandidate: vi.fn(),
     }, {
       validatePlan: vi.fn(), createInitialPlan: vi.fn(), createPlanVersion: vi.fn(), previewRebalance: vi.fn(),
       getActivePlan: vi.fn().mockResolvedValue({

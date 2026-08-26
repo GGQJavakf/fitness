@@ -3,8 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 
 import { ApplicationError } from '../../../application/errors'
 import {
+  areRequiredWorkSetsComplete,
   completedRampSets,
+  isOptionalSetInProgress,
   isWorkoutPrescriptionFinished,
+  pendingOptionalSetChoice,
   remainingRampWarmupSets,
   type WorkoutFlowState,
   type WorkoutRir,
@@ -69,6 +72,36 @@ function replacementFailureMessage(
     : '暂时无法替换动作，请稍后重试。'
 }
 
+function recordedSetMessage(input: {
+  safetyFlag?: WorkoutSafetyFlag
+  prescriptionFinished: boolean
+  requiredWorkComplete: boolean
+  status: 'COMPLETED' | 'FAILED' | 'SKIPPED'
+  resting: boolean
+}): string {
+  if (input.safetyFlag) return '安全信号已保存。请立即停止训练并按上方提示处理。'
+  if (input.prescriptionFinished) return '本次训练已保存，正在整理训练总结。'
+  if (input.requiredWorkComplete) return '固定训练已完成，请确认是否增加一个可选补充组。'
+  if (input.status !== 'COMPLETED') return '本组实际完成情况已保存在本地。'
+  return input.resting
+    ? '本组已保存在本地，休息计时已开始。'
+    : '本组已保存在本地，继续完成超级组的下一个动作。'
+}
+
+function optionalSetCue(conditionCode: string, active: boolean): string {
+  if (active) return '这是本次已选择的唯一补充组；完成后直接结束训练。'
+  if (conditionCode === 'TUESDAY_UNDER_42_GOOD_STATE') {
+    return '若当前用时不超过 42 分钟且状态良好，本动作可作为二选一补充组；不要与另一项同时增加。'
+  }
+  return '满足当天条件时，本动作可增加 1 个补充组。'
+}
+
+function repetitionTargetLabel(targetRepMin: number, targetRepMax: number): string {
+  return targetRepMin === targetRepMax
+    ? String(targetRepMax)
+    : `${targetRepMin}～${targetRepMax}`
+}
+
 export default function WorkoutSessionPage() {
   const [state, setState] = useState<WorkoutFlowState | null>(null)
   const [weight, setWeight] = useState('')
@@ -125,6 +158,10 @@ export default function WorkoutSessionPage() {
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
       setWarmupRemaining(resumed.warmupRemainingSeconds)
+      if (resumed.state.safetyNotice) {
+        setMessage('安全信号已保存在本地。请立即停止训练并按上方提示处理。')
+        return
+      }
       if (isWorkoutPrescriptionFinished(resumed.state)) {
         setMessage('本次训练已完成，正在整理训练总结。')
         await application.navigation.replace('WORKOUT_SUMMARY')
@@ -197,7 +234,7 @@ export default function WorkoutSessionPage() {
 
   useEffect(() => {
     const current = state?.exercises[state.currentExerciseIndex]
-    setReps(current ? String(current.targetReps) : '')
+    setReps(current ? String(current.targetRepMax) : '')
     setRir('UNKNOWN')
     setShowEffort(false)
     setInputError(null)
@@ -206,7 +243,7 @@ export default function WorkoutSessionPage() {
     state?.currentExerciseIndex,
     state?.currentSetIndex,
     state?.exercises[state?.currentExerciseIndex ?? 0]?.exerciseCode,
-    state?.exercises[state?.currentExerciseIndex ?? 0]?.targetReps,
+    state?.exercises[state?.currentExerciseIndex ?? 0]?.targetRepMax,
     state?.warmup.phase,
   ])
 
@@ -377,6 +414,7 @@ export default function WorkoutSessionPage() {
     try {
       const exerciseIndex = state.currentExerciseIndex
       const exercise = state.exercises[exerciseIndex]
+      const optionalSet = isOptionalSetInProgress(state)
       const isBodyweight = exercise.weightStatus === 'BODYWEIGHT'
       const safetyEvent = safetyFlag !== undefined
       if (status !== 'SKIPPED' && !safetyEvent && !isBodyweight && exercise.sessionWeightKg === undefined) {
@@ -398,11 +436,13 @@ export default function WorkoutSessionPage() {
         })
         return
       }
-      const clientSetKey = `${state.clientSessionKey}-${exerciseIndex}-${state.currentSetIndex}`
+      const clientSetKey = optionalSet
+        ? `${state.clientSessionKey}-extra-${exercise.optionalSetRule!.exclusiveChoiceGroup}`
+        : `${state.clientSessionKey}-${exerciseIndex}-${state.currentSetIndex}`
       const updated = await application.workouts.recordSet(state, {
         clientSetKey,
         exerciseIndex,
-        setType: 'WORK',
+        setType: optionalSet ? 'EXTRA' : 'WORK',
         status,
         actualWeightKg: status === 'SKIPPED' ? undefined : parsedWeight,
         actualReps: status === 'SKIPPED' ? undefined : parsedReps,
@@ -417,13 +457,13 @@ export default function WorkoutSessionPage() {
       application.telemetry.track('workout_set_completed', { status: status.toLowerCase() as 'completed' | 'failed' | 'skipped' })
       if (status === 'SKIPPED') application.telemetry.track('exercise_skipped', { reason: 'user' })
       const prescriptionFinished = isWorkoutPrescriptionFinished(updated)
-      setMessage(safetyFlag
-        ? '安全信号已保存。请立即停止训练并按上方提示处理。'
-        : prescriptionFinished
-        ? '本次训练已保存，正在整理训练总结。'
-        : status === 'COMPLETED'
-          ? '本组已保存在本地，休息计时已开始。'
-          : '本组实际完成情况已保存在本地。')
+      setMessage(recordedSetMessage({
+        safetyFlag,
+        prescriptionFinished,
+        requiredWorkComplete: areRequiredWorkSetsComplete(updated),
+        status,
+        resting: Boolean(updated.restTimer),
+      }))
       void syncRecordedSet(updated)
       if (prescriptionFinished && !safetyFlag) await application.navigation.replace('WORKOUT_SUMMARY')
     } catch (error) {
@@ -562,6 +602,29 @@ export default function WorkoutSessionPage() {
     }
   }
 
+  async function selectOptionalSet(choiceGroup: string, exerciseIndex: number | null): Promise<void> {
+    if (!state || recordingRef.current) return
+    recordingRef.current = true
+    setRecording(true)
+    setInputError(null)
+    try {
+      const updated = await application.workouts.chooseOptionalSet(state, choiceGroup, exerciseIndex)
+      setState(updated)
+      if (isWorkoutPrescriptionFinished(updated)) {
+        setMessage('正式训练已完成，正在整理训练总结。')
+        await application.navigation.replace('WORKOUT_SUMMARY')
+      } else {
+        const selected = updated.exercises[updated.currentExerciseIndex]
+        setMessage(`已选择 ${selected.name} 补充 1 组；另一项不会再增加。`)
+      }
+    } catch {
+      setInputError({ field: 'action', message: '补充组选择暂时无法保存，请重试。' })
+    } finally {
+      recordingRef.current = false
+      setRecording(false)
+    }
+  }
+
   async function showReplacements(): Promise<void> {
     if (!state || recordingRef.current) return
     recordingRef.current = true
@@ -633,6 +696,9 @@ export default function WorkoutSessionPage() {
     : state?.exercises[rampExerciseIndex]
   const isBodyweight = exercise?.weightStatus === 'BODYWEIGHT'
   const safetyStopped = Boolean(state?.safetyNotice)
+  const optionalChoice = state
+    ? pendingOptionalSetChoice(state, new Date().toISOString())
+    : null
   if (recoveryRequired) return (
     <View className='screen workout-session-page'>
       <View className='page-hero session-hero'>
@@ -655,6 +721,23 @@ export default function WorkoutSessionPage() {
     </View>
   )
 
+  if (state?.safetyNotice) return (
+    <View className='screen workout-session-page workout-session-page--focus'>
+      <View className='page-hero session-hero session-hero--work'>
+        <Text className='page-hero__eyebrow'>SAFETY STOP</Text>
+        <Text className='page-hero__title'>本次训练已停止</Text>
+        <Text className='page-hero__description'>安全信号优先于剩余组数和补充组，请不要继续训练。</Text>
+      </View>
+      <View className='error-box session-alert'>
+        <Text>{state.safetyNotice}</Text>
+        <Button
+          className='primary-action'
+          onClick={() => void application.navigation.open('WORKOUT_SUMMARY')}
+        >停止训练并查看总结</Button>
+      </View>
+    </View>
+  )
+
   if (state?.warmup.phase === 'GENERAL') return (
     <View className='screen workout-session-page workout-session-page--focus'>
       <View className='page-hero session-hero session-hero--warmup'>
@@ -671,18 +754,29 @@ export default function WorkoutSessionPage() {
         </View>
       </View>
       <View className='surface-card session-guide'>
-        <View className='session-guide__step'>
-          <Text className='session-guide__index data-number'>01</Text>
-          <Text>进行轻松的全身活动</Text>
-        </View>
-        <View className='session-guide__step'>
-          <Text className='session-guide__index data-number'>02</Text>
-          <Text>练习主要动作的运动轨迹</Text>
-        </View>
-        <View className='session-guide__step'>
-          <Text className='session-guide__index data-number'>03</Text>
-          <Text>无疼痛、呼吸平稳后继续</Text>
-        </View>
+        {state.warmup.instructions.length > 0
+          ? state.warmup.instructions.map((step, index) => (
+              <View className='session-guide__step' key={`warmup-${index}`}>
+                <Text className='session-guide__index data-number'>{String(index + 1).padStart(2, '0')}</Text>
+                <Text>{step.instruction}{step.prescription ? ` · ${step.prescription}` : ''}{step.optional ? '（可选）' : ''}</Text>
+              </View>
+            ))
+          : (
+            <>
+              <View className='session-guide__step'>
+                <Text className='session-guide__index data-number'>01</Text>
+                <Text>进行轻松的全身活动</Text>
+              </View>
+              <View className='session-guide__step'>
+                <Text className='session-guide__index data-number'>02</Text>
+                <Text>练习主要动作的运动轨迹</Text>
+              </View>
+              <View className='session-guide__step'>
+                <Text className='session-guide__index data-number'>03</Text>
+                <Text>无疼痛、呼吸平稳后继续</Text>
+              </View>
+            </>
+          )}
       </View>
       <Text className='session-passive-note'>切到后台也会继续计时</Text>
       <View className='action-row action-row--sticky session-focus-action'>
@@ -827,7 +921,11 @@ export default function WorkoutSessionPage() {
       </View>
       <View className='surface-card rest-controls'>
         <Text className='rest-controls__next'>接下来 · {exercise?.name ?? '继续训练'}</Text>
-        <Text className='subtitle'>{exercise ? `第 ${state.currentSetIndex + 1} 组，目标 ${exercise.targetReps} 次` : message}</Text>
+        <Text className='subtitle'>
+          {exercise
+            ? `第 ${state.currentSetIndex + 1} 组，目标 ${repetitionTargetLabel(exercise.targetRepMin, exercise.targetRepMax)} 次`
+            : message}
+        </Text>
         <View className='rest-controls__adjust'>
           <Button className='secondary-action' disabled={recording} onClick={() => void adjust(-15)}>− 15 秒</Button>
           <Button className='secondary-action' disabled={recording} onClick={() => void adjust(15)}>＋ 15 秒</Button>
@@ -837,19 +935,68 @@ export default function WorkoutSessionPage() {
     </View>
   )
 
-  const setProgress = exercise && state
-    ? Math.min(100, ((state.currentSetIndex + 1) / exercise.targetWorkSets) * 100)
-    : 0
+  if (state && optionalChoice) return (
+    <View className='screen workout-session-page'>
+      <View className='page-hero session-hero session-hero--optional'>
+        <Text className='page-hero__eyebrow'>OPTIONAL SET</Text>
+        <Text className='page-hero__title'>固定训练已完成</Text>
+        <Text className='page-hero__description'>
+          {optionalChoice.eligible
+            ? '若当前状态良好，可在下面两项中只选一项增加 1 组；不需要为了凑时长勉强完成。'
+            : '本次训练用时已超过 42 分钟，不再增加补充组。'}
+        </Text>
+      </View>
+      <View className='surface-card session-optional-choice'>
+        {optionalChoice.eligible && optionalChoice.candidateExerciseIndices.map((exerciseIndex) => (
+          <Button
+            key={state.exercises[exerciseIndex].snapshotExerciseKey}
+            className='secondary-action session-optional-choice__action'
+            loading={recording}
+            disabled={recording}
+            onClick={() => void selectOptionalSet(optionalChoice.choiceGroup, exerciseIndex)}
+          >
+            状态良好，{state.exercises[exerciseIndex].name}＋1组
+          </Button>
+        ))}
+        <Button
+          className='primary-action'
+          loading={recording}
+          disabled={recording}
+          onClick={() => void selectOptionalSet(optionalChoice.choiceGroup, null)}
+        >
+          {optionalChoice.eligible ? '本次不增加，完成训练' : '完成训练'}
+        </Button>
+        {inputError?.field === 'action' && <View className='session-action-error'>{inputError.message}</View>}
+      </View>
+    </View>
+  )
+
+  let setProgress = 0
+  let setEyebrow = 'TRAINING'
+  if (exercise && state) {
+    const optionalSet = isOptionalSetInProgress(state)
+    setProgress = optionalSet
+      ? 100
+      : Math.min(100, ((state.currentSetIndex + 1) / exercise.targetWorkSets) * 100)
+    const groupLabel = exercise.executionGroup
+      ? `SUPERSET ${exercise.executionGroup.replace(/^SUPERSET_/, '')} · `
+      : ''
+    setEyebrow = optionalSet
+      ? 'OPTIONAL SET · 1 OF 1'
+      : `${groupLabel}SET ${state.currentSetIndex + 1} OF ${exercise.targetWorkSets}`
+  }
 
   return (
     <View className='screen workout-session-page'>
       <View className='page-hero session-hero session-hero--work'>
         <Text className='page-hero__eyebrow'>
-          {exercise && state ? `SET ${state.currentSetIndex + 1} OF ${exercise.targetWorkSets}` : 'TRAINING'}
+          {setEyebrow}
         </Text>
         <Text className='page-hero__title'>{exercise?.name ?? '恢复训练'}</Text>
         <Text className='page-hero__description'>
-          {exercise ? `本组目标 ${exercise.targetReps} 次，按真实完成情况记录。` : message}
+          {exercise
+            ? `本组目标 ${repetitionTargetLabel(exercise.targetRepMin, exercise.targetRepMax)} 次${exercise.perSide ? '／侧' : ''}，按真实完成情况记录。`
+            : message}
         </Text>
         {exercise && (
           <>
@@ -861,16 +1008,26 @@ export default function WorkoutSessionPage() {
         )}
       </View>
 
-      {state?.safetyNotice && (
-        <View className='error-box session-alert'>
-          <Text>{state.safetyNotice}</Text>
-          <Button
-            className='primary-action'
-            onClick={() => void application.navigation.open('WORKOUT_SUMMARY')}
-          >停止训练并查看总结</Button>
+      <View className='session-inline-message'>{message}</View>
+      {exercise && (exercise.targetRirMin !== undefined || exercise.eccentricSeconds || exercise.executionGroup || exercise.optionalSetRule) && (
+        <View className='session-prescription-cues'>
+          {exercise.targetRirMin !== undefined && exercise.targetRirMax !== undefined && (
+            <Text>目标 RIR {exercise.targetRirMin}～{exercise.targetRirMax}</Text>
+          )}
+          {exercise.eccentricSeconds && <Text>下放约 {exercise.eccentricSeconds} 秒</Text>}
+          {exercise.executionGroup && (
+            <Text>与同组动作连续完成，两个动作都完成后再休息</Text>
+          )}
+          {exercise.optionalSetRule && (
+            <Text>
+              {optionalSetCue(
+                exercise.optionalSetRule.conditionCode,
+                Boolean(state && isOptionalSetInProgress(state)),
+              )}
+            </Text>
+          )}
         </View>
       )}
-      <View className='session-inline-message'>{message}</View>
       {sessionLoadFailed && !state && (
         <Button className='secondary-action' onClick={() => void loadSession()}>重新读取训练记录</Button>
       )}
@@ -950,7 +1107,9 @@ export default function WorkoutSessionPage() {
               <View className='field-group session-reps-field'>
                 <View className='session-field-heading'>
                   <Text className='field-label'>实际次数</Text>
-                  <Text className='field-helper'>目标 {exercise.targetReps} 次</Text>
+                  <Text className='field-helper'>
+                    目标 {repetitionTargetLabel(exercise.targetRepMin, exercise.targetRepMax)} 次
+                  </Text>
                 </View>
                 <View className='metric-input-wrap'>
                   <Input className='metric-input' type='number' value={reps} onInput={(event) => updateReps(event.detail.value)} />

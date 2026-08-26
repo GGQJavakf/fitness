@@ -43,8 +43,8 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("equipmentType", "dumbbell"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"))
-                .andExpect(jsonPath("$.data.items.length()").value(18))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"))
+                .andExpect(jsonPath("$.data.items.length()").value(21))
                 .andExpect(jsonPath("$.data.items[*].code", containsInAnyOrder(
                         "DUMBBELL_BENCH_PRESS",
                         "DUMBBELL_BICEPS_CURL",
@@ -57,9 +57,12 @@ class ContentEndpointIntegrationTest {
                         "DUMBBELL_OVERHEAD_PRESS",
                         "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION",
                         "DUMBBELL_REVERSE_FLY",
+                        "DUMBBELL_REVERSE_LUNGE",
                         "DUMBBELL_ROMANIAN_DEADLIFT",
                         "DUMBBELL_SHRUG",
                         "GOBLET_SQUAT",
+                        "INCLINE_DUMBBELL_BENCH_PRESS_30",
+                        "INCLINE_DUMBBELL_FLY",
                         "ONE_ARM_DUMBBELL_ROW",
                         "SEATED_DUMBBELL_PRESS",
                         "SINGLE_ARM_DUMBBELL_LATERAL_RAISE",
@@ -80,7 +83,7 @@ class ContentEndpointIntegrationTest {
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
                 .andExpect(jsonPath("$.data.image.fallbackRef")
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"));
+                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"));
 
         mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT/replacements")
                         .header("Authorization", "Bearer " + token))
@@ -106,7 +109,7 @@ class ContentEndpointIntegrationTest {
                         .queryParam("weeklyFrequency", "3"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.templateVersion").value("1.8.0"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.7.1"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"))
                 .andExpect(jsonPath("$.data.items.length()").value(3))
                 .andExpect(jsonPath("$.data.items[*].code")
                         .value(containsInAnyOrder(

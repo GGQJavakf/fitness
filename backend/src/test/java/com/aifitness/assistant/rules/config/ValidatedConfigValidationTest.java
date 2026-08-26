@@ -30,7 +30,13 @@ class ValidatedConfigValidationTest {
     private static final Set<String> REVIEW_REQUIRED_REPLACEMENT_SEMANTICS = Set.of(
             "LAT_PULLDOWN", "CABLE_STRAIGHT_ARM_PULLDOWN", "NEUTRAL_GRIP_PULLDOWN",
             "PRONE_W_RAISE", "PRONE_Y_RAISE", "GLUTE_BRIDGE_EXERCISE",
-            "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE");
+            "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE",
+            "SMITH_FLAT_BENCH_PRESS", "INCLINE_DUMBBELL_BENCH_PRESS_30",
+            "SEATED_MACHINE_SHOULDER_PRESS", "LEANING_PEC_DECK_FLY", "MACHINE_SEATED_ROW",
+            "REVERSE_PEC_DECK_FLY", "SMITH_SQUAT", "SEATED_LEG_PRESS",
+            "DUMBBELL_REVERSE_LUNGE", "SEATED_LEG_EXTENSION", "MACHINE_CRUNCH",
+            "INCLINE_DUMBBELL_FLY", "MACHINE_HIP_THRUST", "MACHINE_LEG_CURL",
+            "MACHINE_HIP_ABDUCTION", "STANDING_CALF_RAISE");
     private static final Map<String, Set<String>> REVIEW_REQUIRED_ENVIRONMENT_GAPS = Map.of(
             "HOME", Set.of(
                     "BODYWEIGHT_SQUAT", "BODYWEIGHT_HIP_HINGE", "PRISONER_SQUAT",
@@ -39,12 +45,19 @@ class ValidatedConfigValidationTest {
             "GYM", Set.of(
                     "LAT_PULLDOWN", "CABLE_STRAIGHT_ARM_PULLDOWN", "NEUTRAL_GRIP_PULLDOWN",
                     "PRONE_W_RAISE", "PRONE_Y_RAISE", "GLUTE_BRIDGE_EXERCISE",
-                    "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE"));
+                    "FLOOR_PRONE_COBRA", "CONTRALATERAL_LIMB_RAISE", "STANDING_WALL_CALF_RAISE",
+                    "SMITH_FLAT_BENCH_PRESS", "INCLINE_DUMBBELL_BENCH_PRESS_30",
+                    "SEATED_MACHINE_SHOULDER_PRESS", "LEANING_PEC_DECK_FLY", "MACHINE_SEATED_ROW",
+                    "REVERSE_PEC_DECK_FLY", "SMITH_SQUAT", "SEATED_LEG_PRESS",
+                    "DUMBBELL_REVERSE_LUNGE", "SEATED_LEG_EXTENSION", "MACHINE_CRUNCH",
+                    "INCLINE_DUMBBELL_FLY", "MACHINE_HIP_THRUST", "MACHINE_LEG_CURL",
+                    "MACHINE_HIP_ABDUCTION", "STANDING_CALF_RAISE"));
 
     @Test
     void validatedCandidatesConformToTheirSchemas() throws IOException {
         assertValid("rule-config.schema.json", "rule-config-v1.json");
         assertValid("plan-template.schema.json", "plan-templates-v1.json");
+        assertValid("plan-preset.schema.json", "plan-presets-v1.json");
         assertValid("exercise-content.schema.json", "exercises-v1.json");
     }
 
@@ -84,6 +97,7 @@ class ValidatedConfigValidationTest {
     void everyConfigKindSupportsTheSameSafeLifecycleStates() throws IOException {
         assertSafeDraft("rule-config.schema.json", "rule-config-v1.json");
         assertSafeDraft("plan-template.schema.json", "plan-templates-v1.json");
+        assertSafeDraft("plan-preset.schema.json", "plan-presets-v1.json");
         assertSafeDraft("exercise-content.schema.json", "exercises-v1.json");
     }
 
@@ -91,7 +105,30 @@ class ValidatedConfigValidationTest {
     void publicApprovalRequiresExplicitPublicEnvironmentForEveryConfigKind() throws IOException {
         assertPublicActivationGuard("rule-config.schema.json", "rule-config-v1.json");
         assertPublicActivationGuard("plan-template.schema.json", "plan-templates-v1.json");
+        assertPublicActivationGuard("plan-preset.schema.json", "plan-presets-v1.json");
         assertPublicActivationGuard("exercise-content.schema.json", "exercises-v1.json");
+    }
+
+    @Test
+    void personalFiveDayPresetKeepsWarmupTargetAndIsolationFailureBoundary() throws IOException {
+        JsonNode preset = readValidated("plan-presets-v1.json").path("presets").get(0);
+        List<List<String>> notesByDay = StreamSupport.stream(preset.path("days").spliterator(), false)
+                .map(day -> StreamSupport.stream(day.path("notes").spliterator(), false)
+                        .map(JsonNode::asText)
+                        .toList())
+                .toList();
+        List<String> executionRules = StreamSupport.stream(
+                        preset.path("executionRules").spliterator(), false)
+                .map(JsonNode::asText)
+                .toList();
+
+        assertThat(preset.path("code").asText()).isEqualTo("PERSONAL_5_DAY_HYPERTROPHY_V1");
+        assertThat(notesByDay).hasSize(5)
+                .allSatisfy(notes -> assertThat(notes).contains("热身目标 4～6 分钟"));
+        assertThat(executionRules)
+                .contains("复合动作保留约 2 次余力；孤立动作前面正式组保留约 2 次余力，仅最后一组可保留 1 次余力并接近力竭");
+        assertThat(String.join("，", executionRules))
+                .doesNotContain("孤立动作保留 1～2 次余力");
     }
 
     @Test
@@ -102,7 +139,7 @@ class ValidatedConfigValidationTest {
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
         assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.6.0");
-        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.7.1");
+        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.8.0");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());
             template.path("days").forEach(day -> day.path("exercises").forEach(slot ->
@@ -117,7 +154,7 @@ class ValidatedConfigValidationTest {
         exerciseNodes.forEach(exercise -> patterns.put(
                 exercise.path("code").asText(), exercise.path("movementPattern").asText()));
 
-        assertThat(patterns).hasSize(47).containsKeys(
+        assertThat(patterns).hasSize(63).containsKeys(
                 "DUMBBELL_BICEPS_CURL", "DUMBBELL_HAMMER_CURL", "CABLE_BICEPS_CURL",
                 "CABLE_TRICEPS_PUSHDOWN", "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION",
                 "DUMBBELL_LYING_TRICEPS_EXTENSION", "DUMBBELL_LATERAL_RAISE",

@@ -104,6 +104,8 @@ class WorkoutSessionServiceTest {
     void storesVersionedWarmupPrescriptionAgainstTheSelectedSnapshotExercise() {
         PlanWorkoutSnapshotQuery plans = (userId, planId, versionNo, dayCode) -> new PlanWorkoutSnapshotQuery.PlanDaySource(
                 PLAN_ID, VERSION_ID, 1, DAY_ID, "DAY_1",
+                List.of(new PlanWorkoutSnapshotQuery.WarmupStepSource(
+                        "跑步机快走或慢跑", Optional.of("1 分钟"), false)),
                 List.of(
                         new PlanWorkoutSnapshotQuery.ExerciseSource(
                                 UUID.fromString("00000000-0000-0000-0000-000000000205"),
@@ -112,7 +114,11 @@ class WorkoutSessionServiceTest {
                         new PlanWorkoutSnapshotQuery.ExerciseSource(
                                 UUID.fromString("00000000-0000-0000-0000-000000000206"),
                                 2, "DB_SQUAT", "哑铃深蹲", "content-v1", java.util.Set.of("DUMBBELL"),
-                                3, 8, 12, 90, "KNOWN", Optional.of(new BigDecimal("20")), "KG")));
+                                3, 8, 12, 90, "KNOWN", Optional.of(new BigDecimal("20")), "KG",
+                                Optional.of(2), Optional.of(2), Optional.of(2), true,
+                                Optional.of("LEG_FINISHER"), Optional.of(1),
+                                Optional.of(new PlanWorkoutSnapshotQuery.OptionalSetRuleSource(
+                                        "UNDER_42_GOOD_STATE", "TUESDAY_BONUS", 1, Optional.empty())))));
         WorkoutWarmupPrescriptionService warmups = mock(WorkoutWarmupPrescriptionService.class);
         when(warmups.prescribe(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList()))
                 .thenReturn(new com.aifitness.assistant.rules.domain.WorkoutWarmupPrescriptionEngine.Prescription(
@@ -141,6 +147,10 @@ class WorkoutSessionServiceTest {
         assertThat(created.warmupPrescription()).get().satisfies(prescription -> {
             assertThat(prescription.schemaVersion()).isEqualTo("workout-warmup-prescription-v1");
             assertThat(prescription.generalWarmup().occurrences()).isEqualTo(1);
+            assertThat(prescription.instructions()).singleElement().satisfies(step -> {
+                assertThat(step.instruction()).isEqualTo("跑步机快走或慢跑");
+                assertThat(step.prescription()).contains("1 分钟");
+            });
             assertThat(prescription.rampWarmup()).get().satisfies(ramp -> {
                 assertThat(ramp.exerciseOrder()).isEqualTo(2);
                 assertThat(ramp.exerciseId()).isEqualTo(created.exercises().get(1).id());
@@ -148,6 +158,14 @@ class WorkoutSessionServiceTest {
             });
             assertThat(prescription.countsTowardTrainingVolume()).isFalse();
             assertThat(prescription.countsTowardProgression()).isFalse();
+        });
+        assertThat(created.exercises().get(1).prescription()).satisfies(prescription -> {
+            assertThat(prescription.targetRirMin()).contains(2);
+            assertThat(prescription.eccentricSeconds()).contains(2);
+            assertThat(prescription.perSide()).isTrue();
+            assertThat(prescription.executionGroup()).contains("LEG_FINISHER");
+            assertThat(prescription.executionOrder()).contains(1);
+            assertThat(prescription.optionalSetRule()).isPresent();
         });
     }
 

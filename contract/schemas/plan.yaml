@@ -11,7 +11,7 @@ components:
       enum: [CANDIDATE_READY, NO_CANDIDATE]
     PlanGenerationSource:
       type: string
-      enum: [AI_PERSONALIZED, FALLBACK_RULE_PLAN]
+      enum: [AI_PERSONALIZED, FALLBACK_RULE_PLAN, SYSTEM_PRESET]
     TrainingSplit:
       type: string
       enum: [UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY]
@@ -71,6 +71,14 @@ components:
           type: object
           additionalProperties:
             $ref: '#/components/schemas/LockStatus'
+        presetCode: {type: string, pattern: '^[A-Z0-9_]+$'}
+        presetVersion: {type: string, minLength: 1}
+        executionRules:
+          type: array
+          items: {type: string, minLength: 1}
+        progressionRules:
+          type: array
+          items: {type: string, minLength: 1}
     PlanDay:
       type: object
       additionalProperties: false
@@ -78,6 +86,16 @@ components:
       properties:
         code: {type: string, minLength: 1}
         name: {type: string, minLength: 1}
+        weekday: {type: string, enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]}
+        focus: {type: string, minLength: 1}
+        estimatedMinutesMin: {type: integer, minimum: 1}
+        estimatedMinutesMax: {type: integer, minimum: 1}
+        warmup:
+          type: array
+          items: {$ref: '#/components/schemas/PlanWarmupStep'}
+        notes:
+          type: array
+          items: {type: string, minLength: 1}
         exercises:
           type: array
           minItems: 1
@@ -95,6 +113,32 @@ components:
         restSeconds: {type: integer, minimum: 0}
         weightStatus: {$ref: '#/components/schemas/WeightStatus'}
         targetWeightKg: {type: number, minimum: 0, multipleOf: 0.01}
+        targetRirMin: {type: integer, minimum: 0, maximum: 10}
+        targetRirMax: {type: integer, minimum: 0, maximum: 10}
+        eccentricSeconds: {type: integer, minimum: 1, maximum: 10}
+        perSide: {type: boolean}
+        executionGroup: {type: string, pattern: '^[A-Z0-9_]+$'}
+        executionOrder: {type: integer, minimum: 1, maximum: 8}
+        optionalSetRule: {$ref: '#/components/schemas/OptionalSetRule'}
+        notes:
+          type: array
+          items: {type: string, minLength: 1}
+    PlanWarmupStep:
+      type: object
+      additionalProperties: false
+      required: [instruction, optional]
+      properties:
+        instruction: {type: string, minLength: 1}
+        prescription: {type: string, minLength: 1}
+        optional: {type: boolean}
+    OptionalSetRule:
+      type: object
+      additionalProperties: false
+      required: [conditionCode, exclusiveChoiceGroup, additionalSets]
+      properties:
+        conditionCode: {type: string, pattern: '^[A-Z0-9_]+$'}
+        exclusiveChoiceGroup: {type: string, pattern: '^[A-Z0-9_]+$'}
+        additionalSets: {type: integer, enum: [1]}
     PlanExerciseOption:
       type: object
       additionalProperties: false
@@ -223,6 +267,11 @@ components:
         fallbackAllowed:
           type: boolean
           default: true
+        presetCode:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Z0-9_]+$'
         lockedFields:
           type: object
           maxProperties: 100
@@ -235,6 +284,49 @@ components:
             type: integer
             minimum: 0
             maximum: 3600
+    PlanPresetDaySummary:
+      type: object
+      additionalProperties: false
+      required: [weekday, name, focus, estimatedMinutesMin, estimatedMinutesMax, exerciseCount]
+      properties:
+        weekday:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        name: {type: string}
+        focus: {type: string}
+        estimatedMinutesMin: {type: integer, minimum: 1}
+        estimatedMinutesMax: {type: integer, minimum: 1}
+        exerciseCount: {type: integer, minimum: 1, maximum: 8}
+    PlanPresetSummary:
+      type: object
+      additionalProperties: false
+      required: [code, version, name, goal, weeklyFrequency, sessionMinutes, location, days]
+      properties:
+        code: {type: string, pattern: '^[A-Z0-9_]+$'}
+        version: {type: string}
+        name: {type: string}
+        goal: {$ref: './profile.yaml#/components/schemas/FitnessGoal'}
+        weeklyFrequency: {type: integer, minimum: 2, maximum: 6}
+        sessionMinutes: {type: integer, minimum: 1}
+        location: {$ref: './profile.yaml#/components/schemas/TrainingLocation'}
+        days:
+          type: array
+          items: {$ref: '#/components/schemas/PlanPresetDaySummary'}
+    PlanPresetListData:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/PlanPresetSummary'}
+    PlanPresetListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data: {$ref: '#/components/schemas/PlanPresetListData'}
+        meta: {$ref: './common.yaml#/components/schemas/ResponseMeta'}
     PlanCandidate:
       type: object
       additionalProperties: false
@@ -372,6 +464,14 @@ components:
         templateCode: {type: string, minLength: 1}
         trainingSplit: {$ref: '#/components/schemas/TrainingSplit'}
         name: {type: string, minLength: 1}
+        presetCode: {type: string, pattern: '^[A-Z0-9_]+$'}
+        presetVersion: {type: string, minLength: 1}
+        executionRules:
+          type: array
+          items: {type: string, minLength: 1}
+        progressionRules:
+          type: array
+          items: {type: string, minLength: 1}
         days:
           type: array
           minItems: 1

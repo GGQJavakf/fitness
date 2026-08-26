@@ -199,6 +199,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description 返回当前环境可选择的版本化系统计划预设摘要；选择预设仍需生成候选并显式激活。 */
+        get: operations["listSystemPlanPresets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans/generation-context": {
         parameters: {
             query?: never;
@@ -1009,6 +1026,7 @@ export interface components {
             aiProposal?: components["schemas"]["AiPlanProposal"];
             /** @default true */
             fallbackAllowed: boolean;
+            presetCode?: string;
             lockedFields?: {
                 [key: string]: number;
             };
@@ -1016,7 +1034,18 @@ export interface components {
         /** @enum {string} */
         PlanGenerationStatus: "CANDIDATE_READY" | "NO_CANDIDATE";
         /** @enum {string} */
-        PlanGenerationSource: "AI_PERSONALIZED" | "FALLBACK_RULE_PLAN";
+        PlanGenerationSource: "AI_PERSONALIZED" | "FALLBACK_RULE_PLAN" | "SYSTEM_PRESET";
+        PlanWarmupStep: {
+            instruction: string;
+            prescription?: string;
+            optional: boolean;
+        };
+        OptionalSetRule: {
+            conditionCode: string;
+            exclusiveChoiceGroup: string;
+            /** @enum {integer} */
+            additionalSets: 1;
+        };
         PlanExercise: {
             exerciseCode: string;
             workSets: number;
@@ -1025,10 +1054,25 @@ export interface components {
             restSeconds: number;
             weightStatus: components["schemas"]["WeightStatus"];
             targetWeightKg?: number;
+            targetRirMin?: number;
+            targetRirMax?: number;
+            eccentricSeconds?: number;
+            perSide?: boolean;
+            executionGroup?: string;
+            executionOrder?: number;
+            optionalSetRule?: components["schemas"]["OptionalSetRule"];
+            notes?: string[];
         };
         PlanDay: {
             code: string;
             name: string;
+            /** @enum {string} */
+            weekday?: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+            focus?: string;
+            estimatedMinutesMin?: number;
+            estimatedMinutesMax?: number;
+            warmup?: components["schemas"]["PlanWarmupStep"][];
+            notes?: string[];
             exercises: components["schemas"]["PlanExercise"][];
         };
         PlanDraft: {
@@ -1039,6 +1083,10 @@ export interface components {
             locks: {
                 [key: string]: components["schemas"]["LockStatus"];
             };
+            presetCode?: string;
+            presetVersion?: string;
+            executionRules?: string[];
+            progressionRules?: string[];
         };
         ValidationIssue: {
             severity: components["schemas"]["ValidationSeverity"];
@@ -1072,6 +1120,32 @@ export interface components {
         };
         PlanCandidateGenerationResponse: {
             data: components["schemas"]["PlanCandidateGenerationData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        PlanPresetDaySummary: {
+            /** @enum {string} */
+            weekday: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+            name: string;
+            focus: string;
+            estimatedMinutesMin: number;
+            estimatedMinutesMax: number;
+            exerciseCount: number;
+        };
+        PlanPresetSummary: {
+            code: string;
+            version: string;
+            name: string;
+            goal: components["schemas"]["FitnessGoal"];
+            weeklyFrequency: number;
+            sessionMinutes: number;
+            location: components["schemas"]["TrainingLocation"];
+            days: components["schemas"]["PlanPresetDaySummary"][];
+        };
+        PlanPresetListData: {
+            items: components["schemas"]["PlanPresetSummary"][];
+        };
+        PlanPresetListResponse: {
+            data: components["schemas"]["PlanPresetListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
         PlanGenerationContextProfile: {
@@ -1177,6 +1251,10 @@ export interface components {
             templateCode: string;
             trainingSplit?: components["schemas"]["TrainingSplit"];
             name: string;
+            presetCode?: string;
+            presetVersion?: string;
+            executionRules?: string[];
+            progressionRules?: string[];
             days: components["schemas"]["PlanDay"][];
         };
         ValidatePlanRequest: {
@@ -1307,6 +1385,13 @@ export interface components {
             /** @description 仅在服务端返回 RECOVERY_CONFIRMATION_REQUIRED 后由用户明确确认继续时原样回传。 */
             recoveryConfirmationToken?: string;
         };
+        WorkoutOptionalSetRule: {
+            conditionCode: string;
+            exclusiveChoiceGroup: string;
+            /** @enum {integer} */
+            additionalSets: 1;
+            description?: string;
+        };
         WorkoutPrescriptionSnapshot: {
             workSets: number;
             repMin: number;
@@ -1315,6 +1400,13 @@ export interface components {
             weightStatus: components["schemas"]["WeightStatus"];
             targetWeightKg?: number;
             unit: components["schemas"]["WeightUnit"];
+            targetRirMin?: number;
+            targetRirMax?: number;
+            eccentricSeconds?: number;
+            perSide?: boolean;
+            executionGroup?: string;
+            executionOrder?: number;
+            optionalSetRule?: components["schemas"]["WorkoutOptionalSetRule"];
         };
         WorkoutExerciseSnapshot: {
             /** Format: uuid */
@@ -1351,12 +1443,18 @@ export interface components {
             calibrationCode?: string;
             calibrationMessage?: string;
         };
+        WorkoutWarmupInstruction: {
+            instruction: string;
+            prescription?: string;
+            optional: boolean;
+        };
         WorkoutWarmupPrescription: {
             /** @constant */
             schemaVersion: "workout-warmup-prescription-v1";
             ruleVersion: string;
             generalWarmup: components["schemas"]["WorkoutGeneralWarmupPrescription"];
             rampWarmup?: components["schemas"]["WorkoutRampWarmupPrescription"];
+            instructions?: components["schemas"]["WorkoutWarmupInstruction"][];
             /** @constant */
             countsTowardTrainingVolume: false;
             /** @constant */
@@ -2401,6 +2499,28 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["VersionConflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    listSystemPlanPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 系统计划预设摘要 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanPresetListResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             default: components["responses"]["DefaultError"];
         };
     };

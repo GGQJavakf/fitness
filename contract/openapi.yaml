@@ -214,6 +214,19 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/presets:
+    get:
+      tags: [Plans]
+      operationId: listSystemPlanPresets
+      description: 返回当前环境可选择的版本化系统计划预设摘要；选择预设仍需生成候选并显式激活。
+      responses:
+        '200':
+          description: 系统计划预设摘要
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanPresetListResponse'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/generation-context:
     get:
       tags: [Plans]

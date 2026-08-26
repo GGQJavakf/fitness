@@ -150,6 +150,7 @@ describe('P0 onboarding flow', () => {
         calls.push(['preferences', request])
         return { version: 1 }
       }),
+      listPlanPresets: vi.fn().mockResolvedValue([]),
       generateCandidate: vi.fn(async (request) => {
         calls.push(['candidate', request])
         return {
@@ -279,6 +280,7 @@ describe('P0 onboarding flow', () => {
       saveProfile: vi.fn().mockResolvedValue({ version: 1 }),
       saveEquipment: vi.fn().mockResolvedValue({ version: 1 }),
       savePreferences: vi.fn().mockResolvedValue({ version: 1 }),
+      listPlanPresets: vi.fn().mockResolvedValue([]),
       generateCandidate: vi.fn().mockResolvedValue({
         status: 'NO_CANDIDATE',
         validationIssues: [{

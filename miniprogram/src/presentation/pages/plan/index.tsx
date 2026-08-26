@@ -5,11 +5,27 @@ import type { ActivePlanData, TrainingSplit } from '../../../application/models'
 import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
 import { resolveActivePlanLoadFailure } from '../../activePlanLoadFailure'
 import MainNavigation from '../../components/main-navigation'
-import { exerciseDisplayName, weightStatusDisplayName } from '../../copy'
+import { exerciseDisplayName, weekdayDisplayName, weightStatusDisplayName } from '../../copy'
 
 import './index.scss'
 
 const application = getWeappApplication()
+
+function planSourceEyebrow(aiPersonalized: boolean, systemPreset: boolean): string {
+  if (aiPersonalized) return 'AI 个性化计划 · 规则已校验'
+  if (systemPreset) return '系统个人预设 · 来源可追溯'
+  return '规则生成计划 · 已通过安全校验'
+}
+
+function planSourceDescription(aiPersonalized: boolean, systemPreset: boolean): string {
+  if (aiPersonalized) {
+    return '已结合你的档案与训练偏好生成；训练后的真实反馈会帮助下一次调整更准确。'
+  }
+  if (systemPreset) {
+    return '已按你确认的个人预设启用；热身、正式组、超级组、休息与进阶规则均随计划保存。'
+  }
+  return '已按你的档案、训练目标和可用器械由确定性规则引擎生成；训练后的真实反馈会帮助下一次调整更准确。'
+}
 
 function trainingSplitLabel(split: TrainingSplit | undefined): string {
   if (split === 'UPPER_LOWER') return '上下肢'
@@ -87,6 +103,9 @@ export default function PlanPage() {
           >
             {actionLabel}
           </Button>
+          {!loading && !error && (
+            <Button className='secondary-action' onClick={() => void application.navigation.open('PLAN_PRESETS')}>选择系统预设</Button>
+          )}
         </View>
         <MainNavigation current='PLAN' onNavigate={(destination) => void application.navigation.replace(destination)} />
       </View>
@@ -95,6 +114,7 @@ export default function PlanPage() {
 
   const activeVersion = plan.activeVersion
   const aiPersonalized = activeVersion.plan.templateCode === 'AI_PERSONALIZED'
+  const systemPreset = Boolean(activeVersion.plan.presetCode)
   const exerciseCount = activeVersion.plan.days.reduce(
     (total, day) => total + day.exercises.length,
     0,
@@ -105,21 +125,29 @@ export default function PlanPage() {
     await application.navigation.open('PLAN_EDITOR')
   }
 
+  function executionGroupLabel(group: string): string {
+    return `超级组 ${group.replace(/^SUPERSET_/, '')}`
+  }
+
+  function optionalSetRuleLabel(conditionCode: string): string {
+    return conditionCode === 'TUESDAY_UNDER_42_GOOD_STATE'
+      ? '当天用时在 42 分钟以内且状态良好，可在坐姿划船或哑铃弯举中任选一项增加 1 组；不要两项都加。'
+      : '满足当天条件时可增加 1 个补充组。'
+  }
+
   return (
     <View className='plan-page screen screen--with-nav'>
       <View className='plan-overview'>
         <View className='plan-overview__brand'>
           <View className='plan-overview__status-dot' />
           <Text className='plan-overview__eyebrow'>
-            {aiPersonalized ? 'AI 个性化计划 · 规则已校验' : '规则生成计划 · 已通过安全校验'}
+            {planSourceEyebrow(aiPersonalized, systemPreset)}
             {' · 第 '}{activeVersion.versionNumber} 版
           </Text>
         </View>
         <Text className='plan-overview__title'>{activeVersion.plan.name}</Text>
         <Text className='plan-overview__subtitle'>
-          {aiPersonalized
-            ? '已结合你的档案与训练偏好生成；训练后的真实反馈会帮助下一次调整更准确。'
-            : '已按你的档案、训练目标和可用器械由确定性规则引擎生成；训练后的真实反馈会帮助下一次调整更准确。'}
+          {planSourceDescription(aiPersonalized, systemPreset)}
         </Text>
         <View className='plan-overview__metrics'>
           <View className='plan-overview__metric'>
@@ -139,7 +167,20 @@ export default function PlanPage() {
         </View>
         <Button className='plan-overview__start' onClick={() => void application.navigation.open('WORKOUT_PREPARE')}>开始今日训练</Button>
         <Button className='plan-overview__edit' onClick={() => void editPlan()}>修改训练计划</Button>
+        <Button className='plan-overview__preset' onClick={() => void application.navigation.open('PLAN_PRESETS')}>选择系统预设</Button>
       </View>
+
+      {Boolean(activeVersion.plan.executionRules?.length || activeVersion.plan.progressionRules?.length) && (
+        <View className='plan-rules'>
+          <Text className='plan-rules__title'>执行与加重规则</Text>
+          {activeVersion.plan.executionRules?.map((rule, index) => (
+            <Text className='plan-rules__item' key={`execution-${index}`}>• {rule}</Text>
+          ))}
+          {activeVersion.plan.progressionRules?.map((rule, index) => (
+            <Text className='plan-rules__item' key={`progression-${index}`}>• {rule}</Text>
+          ))}
+        </View>
+      )}
 
       <View className='plan-feedback'>
         <View className='plan-feedback__mark'>
@@ -165,9 +206,31 @@ export default function PlanPage() {
             <Text className='plan-day__index'>{String(dayIndex + 1).padStart(2, '0')}</Text>
             <View>
               <Text className='plan-day__title'>{day.name}</Text>
-              <Text className='plan-day__count'>{day.exercises.length} 个动作 · 按顺序完成</Text>
+              <Text className='plan-day__count'>
+                {[weekdayDisplayName(day.weekday), day.focus, day.estimatedMinutesMin && day.estimatedMinutesMax
+                  ? `${day.estimatedMinutesMin}～${day.estimatedMinutesMax} 分钟`
+                  : undefined].filter(Boolean).join(' · ') || `${day.exercises.length} 个动作 · 按顺序完成`}
+              </Text>
             </View>
           </View>
+          {day.warmup?.length ? (
+            <View className='plan-warmup'>
+              <Text className='plan-warmup__title'>热身</Text>
+              {day.warmup.map((step, index) => (
+                <Text className='plan-warmup__step' key={`${day.code}-warmup-${index}`}>
+                  {index + 1}. {step.instruction}{step.prescription ? ` · ${step.prescription}` : ''}{step.optional ? '（可选）' : ''}
+                </Text>
+              ))}
+            </View>
+          ) : null}
+          {day.notes?.length ? (
+            <View className='plan-notes'>
+              <Text className='plan-notes__title'>训练提示</Text>
+              {day.notes.map((note, index) => (
+                <Text className='plan-notes__item' key={`${day.code}-note-${index}`}>• {note}</Text>
+              ))}
+            </View>
+          ) : null}
           {day.exercises.map((exercise) => (
             <View key={exercise.exerciseCode} className='plan-exercise'>
               <View className='plan-exercise__topline'>
@@ -177,7 +240,30 @@ export default function PlanPage() {
               <View className='plan-exercise__meta'>
                 <Text className='plan-exercise__tag'>休息 {exercise.restSeconds} 秒</Text>
                 <Text className='plan-exercise__tag'>{weightStatusDisplayName(exercise.weightStatus)}</Text>
+                {exercise.targetRirMin !== undefined && exercise.targetRirMax !== undefined && (
+                  <Text className='plan-exercise__tag'>RIR {exercise.targetRirMin}～{exercise.targetRirMax}</Text>
+                )}
+                {exercise.eccentricSeconds && <Text className='plan-exercise__tag'>下放约 {exercise.eccentricSeconds} 秒</Text>}
+                {exercise.perSide && <Text className='plan-exercise__tag'>每侧完成</Text>}
+                {exercise.executionGroup && (
+                  <Text className='plan-exercise__tag plan-exercise__tag--group'>
+                    {executionGroupLabel(exercise.executionGroup)} · 第 {exercise.executionOrder} 个动作
+                  </Text>
+                )}
               </View>
+              {exercise.optionalSetRule && (
+                <Text className='plan-exercise__optional'>
+                  {exercise.optionalSetRule.description ?? optionalSetRuleLabel(exercise.optionalSetRule.conditionCode)}
+                </Text>
+              )}
+              {exercise.notes?.length ? (
+                <View className='plan-exercise__notes'>
+                  <Text className='plan-exercise__notes-title'>动作提示</Text>
+                  {exercise.notes.map((note, index) => (
+                    <Text className='plan-exercise__note' key={`${exercise.exerciseCode}-note-${index}`}>• {note}</Text>
+                  ))}
+                </View>
+              ) : null}
               <Button
                 className='plan-exercise__guide'
                 onClick={() => void application.navigation.open('EXERCISE_DETAIL', {

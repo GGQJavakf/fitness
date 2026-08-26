@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExerciseContent } from '../src/application/content'
 import { ApplicationError } from '../src/application/errors'
 import {
+  chooseOptionalSet,
   completeGeneralWarmup,
   createWorkoutFlow,
   recordWorkoutSet,
@@ -31,6 +32,7 @@ const application = vi.hoisted(() => ({
     loadStatus: vi.fn(),
     resume: vi.fn(),
     recordSet: vi.fn(),
+    chooseOptionalSet: vi.fn(),
     setExerciseWeight: vi.fn(),
     replacementCandidates: vi.fn(),
     replaceCurrentExercise: vi.fn(),
@@ -73,7 +75,8 @@ function createReadyWorkout(): WorkoutFlowState {
       exerciseCode: 'BODYWEIGHT_SQUAT',
       name: '自重深蹲',
       targetWorkSets: 2,
-      targetReps: 12,
+      targetRepMin: 8,
+      targetRepMax: 12,
       restSeconds: 90,
       weightStatus: 'BODYWEIGHT',
     }],
@@ -105,6 +108,42 @@ function createTwoExerciseWorkout(): WorkoutFlowState {
       },
     ],
   }))
+}
+
+function createCompletedTuesdayOptionalWorkout(safetyFlag?: 'PAIN' | 'DIZZINESS'): WorkoutFlowState {
+  let state = completeGeneralWarmup(createWorkoutFlow({
+    clientSessionKey: 'session-tuesday-optional',
+    planVersionId: 'plan-tuesday',
+    startedAtUtc: '2099-08-21T00:00:00.000Z',
+    exercises: [
+      {
+        snapshotExerciseKey: 'machine-row', exerciseCode: 'MACHINE_SEATED_ROW', name: '器械坐姿划船',
+        targetWorkSets: 1, targetReps: 12, restSeconds: 90, weightStatus: 'BODYWEIGHT',
+        optionalSetRule: {
+          conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+          exclusiveChoiceGroup: 'TUESDAY_BONUS',
+          additionalSets: 1,
+        },
+      },
+      {
+        snapshotExerciseKey: 'dumbbell-curl', exerciseCode: 'DUMBBELL_CURL', name: '哑铃弯举',
+        targetWorkSets: 1, targetReps: 12, restSeconds: 60, weightStatus: 'BODYWEIGHT',
+        optionalSetRule: {
+          conditionCode: 'TUESDAY_UNDER_42_GOOD_STATE',
+          exclusiveChoiceGroup: 'TUESDAY_BONUS',
+          additionalSets: 1,
+        },
+      },
+    ],
+  }))
+  state = recordWorkoutSet(state, {
+    clientSetKey: 'row-work', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+    actualWeightKg: 0, actualReps: 12,
+  })
+  return recordWorkoutSet(state, {
+    clientSetKey: 'curl-work', exerciseIndex: 1, setType: 'WORK', status: 'COMPLETED',
+    actualWeightKg: 0, actualReps: 12, safetyFlag,
+  })
 }
 
 function deferred<T>() {
@@ -142,6 +181,153 @@ describe('live workout page behavior', () => {
       async (state: WorkoutFlowState, exerciseIndex: number, weightKg: number) =>
         setWorkoutExerciseWeight(state, exerciseIndex, weightKg),
     )
+  })
+
+  it('lets the user choose and record exactly one Tuesday optional set', async () => {
+    const initial = createCompletedTuesdayOptionalWorkout()
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state: initial })
+    application.workouts.resume.mockResolvedValue({
+      state: initial,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.workouts.chooseOptionalSet.mockImplementation(
+      async (state: WorkoutFlowState, group: string, exerciseIndex: number | null) =>
+        chooseOptionalSet(state, group, exerciseIndex, new Date().toISOString()),
+    )
+    application.workouts.recordSet.mockImplementation(
+      async (state: WorkoutFlowState, input: RecordWorkoutSetInput) => recordWorkoutSet(state, input),
+    )
+    application.workouts.flush.mockImplementation(async (state: WorkoutFlowState) => state)
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+    })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
+    const pageRenderer = renderer
+
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+    expect(JSON.stringify(pageRenderer.toJSON())).toContain('固定训练已完成')
+
+    const chooseRow = pageRenderer.root.find(
+      (node) => node.type === 'button'
+        && JSON.stringify(node.props.children).includes('器械坐姿划船'),
+    )
+    await act(async () => {
+      chooseRow.props.onClick()
+      await flushPage()
+    })
+    expect(JSON.stringify(pageRenderer.toJSON())).toContain('OPTIONAL SET · 1 OF 1')
+    expect(JSON.stringify(pageRenderer.toJSON())).toContain('这是本次已选择的唯一补充组')
+
+    await act(async () => {
+      completeButton(pageRenderer).props.onClick()
+      await flushPage()
+    })
+    expect(application.workouts.recordSet).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ exerciseIndex: 0, setType: 'EXTRA' }),
+    )
+    expect(application.navigation.replace).toHaveBeenCalledWith('WORKOUT_SUMMARY')
+  })
+
+  it('shows the preserved repetition range and defaults the input to its upper bound', async () => {
+    const initial = createReadyWorkout()
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state: initial })
+    application.workouts.resume.mockResolvedValue({
+      state: initial,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+    })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('目标 8～12 次')
+    expect(repsInput(renderer).props.value).toBe('12')
+  })
+
+  it('renders an equal repetition target as one value instead of a duplicated range', async () => {
+    const ready = createReadyWorkout()
+    const initial: WorkoutFlowState = {
+      ...ready,
+      exercises: ready.exercises.map((exercise) => ({
+        ...exercise,
+        targetRepMin: 12,
+        targetRepMax: 12,
+      })),
+    }
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state: initial })
+    application.workouts.resume.mockResolvedValue({
+      state: initial,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+    })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('目标 12 次')
+    expect(rendered).not.toContain('目标 12～12 次')
+  })
+
+  it('renders the safety stop instead of an optional-set choice after the final fixed set', async () => {
+    const stopped = createCompletedTuesdayOptionalWorkout('DIZZINESS')
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state: stopped })
+    application.workouts.resume.mockResolvedValue({
+      state: stopped,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+    })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+
+    const rendered = JSON.stringify(renderer.toJSON())
+    expect(rendered).toContain('请立即停止训练并寻求身边帮助')
+    expect(rendered).toContain('停止训练并查看总结')
+    expect(rendered).not.toContain('固定训练已完成')
+    expect(rendered).not.toContain('＋1组')
+    expect(application.workouts.chooseOptionalSet).not.toHaveBeenCalled()
   })
 
   it('resets actual reps for the next set, preserves an empty edit, and keeps local guidance offline', async () => {
@@ -449,7 +635,9 @@ describe('live workout page behavior', () => {
     expect(rendered).toContain('当地急救服务')
     expect(rendered).toContain('本提示不作诊断')
     expect(rendered).toContain('停止训练并查看总结')
-    expect(completeButton(renderer).props.disabled).toBe(true)
+    expect(renderer.root.findAll(
+      (node) => node.type === 'button' && node.props.children === '完成本组',
+    )).toHaveLength(0)
   })
 
   it('keeps a failed draft read retryable and coalesces rapid retry clicks', async () => {

@@ -8,6 +8,7 @@ import com.aifitness.assistant.content.domain.PlanTemplateCatalog;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.domain.FieldLock;
 import com.aifitness.assistant.plan.domain.PlanDraft;
+import com.aifitness.assistant.plan.domain.SystemPlanPresetCatalog;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.profile.domain.UserProfile;
 import com.aifitness.assistant.rules.domain.PlanGenerationEngine;
@@ -32,6 +33,12 @@ public final class PlanCandidateService {
 
     private static final Pattern DAY_CODE = Pattern.compile("DAY_[1-6]");
     private static final int DEFAULT_MAXIMUM_CACHED_CANDIDATES = 512;
+    private static final int PRESET_MINIMUM_WORK_SETS = 1;
+    private static final int PRESET_MAXIMUM_WORK_SETS = 6;
+    private static final int PRESET_MINIMUM_REPS = 1;
+    private static final int PRESET_MAXIMUM_REPS = 30;
+    private static final int PRESET_MINIMUM_REST_SECONDS = 0;
+    private static final int PRESET_MAXIMUM_REST_SECONDS = 300;
 
     private final ProfileService profiles;
     private final TemplateQueryService templates;
@@ -39,6 +46,7 @@ public final class PlanCandidateService {
     private final PlanGenerationEngine generator;
     private final PlanValidationEngine validator;
     private final PlanRulePolicy policy;
+    private final SystemPlanPresetCatalog presets;
     private final Clock clock;
     private final PlanCandidateCache generatedCandidates;
 
@@ -63,12 +71,27 @@ public final class PlanCandidateService {
             PlanRulePolicy policy,
             Clock clock,
             int maximumCachedCandidates) {
+        this(profiles, templates, exercises, generator, validator, policy,
+                SystemPlanPresetCatalog.empty(), clock, maximumCachedCandidates);
+    }
+
+    public PlanCandidateService(
+            ProfileService profiles,
+            TemplateQueryService templates,
+            ExerciseQueryService exercises,
+            PlanGenerationEngine generator,
+            PlanValidationEngine validator,
+            PlanRulePolicy policy,
+            SystemPlanPresetCatalog presets,
+            Clock clock,
+            int maximumCachedCandidates) {
         this.profiles = Objects.requireNonNull(profiles, "profiles must not be null");
         this.templates = Objects.requireNonNull(templates, "templates must not be null");
         this.exercises = Objects.requireNonNull(exercises, "exercises must not be null");
         this.generator = Objects.requireNonNull(generator, "generator must not be null");
         this.validator = Objects.requireNonNull(validator, "validator must not be null");
         this.policy = Objects.requireNonNull(policy, "policy must not be null");
+        this.presets = Objects.requireNonNull(presets, "presets must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.generatedCandidates = new PlanCandidateCache(clock, maximumCachedCandidates);
     }
@@ -144,8 +167,24 @@ public final class PlanCandidateService {
             AiPlanProposal aiProposal,
             boolean fallbackAllowed,
             TrainingSplit requestedSplit) {
+        return generate(user, profileVersion, lockedNumbers, additionalRequirements,
+                aiProposal, fallbackAllowed, requestedSplit, null);
+    }
+
+    public GeneratedCandidates generate(
+            AuthenticatedUserId user,
+            long profileVersion,
+            Map<String, Integer> lockedNumbers,
+            String additionalRequirements,
+            AiPlanProposal aiProposal,
+            boolean fallbackAllowed,
+            TrainingSplit requestedSplit,
+            String presetCode) {
         Objects.requireNonNull(user, "authenticated user must not be null");
         UserProfile profile = currentProfile(user, profileVersion);
+        if (presetCode != null && !presetCode.isBlank()) {
+            return generatePreset(user, profile, presetCode, lockedNumbers);
+        }
         TrainingSplit trainingSplit = requestedSplit;
         if (trainingSplit != null && !trainingSplit.supports(profile.details().weeklyFrequency())) {
             return noCandidate(
@@ -187,11 +226,14 @@ public final class PlanCandidateService {
         Objects.requireNonNull(reference, "rule reference must not be null");
         RuleReference activeReference = currentReference();
         UserProfile profile = profiles.getProfile(user);
-        List<PlanVersionService.ValidationIssue> issues = new ArrayList<>(validator.validate(
+        List<PlanVersionService.ValidationIssue> issues = candidate.presetCode() == null
+                ? new ArrayList<>(validator.validate(
                         toRules(candidate, activeReference),
                         profile.details().sessionMinutes(),
                         eligibleExercises(user, profile.details().experience()))
-                .stream().map(PlanCandidateService::toApplication).toList());
+                .stream().map(PlanCandidateService::toApplication).toList())
+                : new ArrayList<>(validatePresetPlan(
+                        candidate, profile, eligibleExercises(user, profile.details().experience())));
         if (candidate.trainingSplit() != null) {
             TrainingSplit split = TrainingSplit.valueOf(candidate.trainingSplit().name());
             if (!split.supports(candidate.days().size())
@@ -210,6 +252,16 @@ public final class PlanCandidateService {
 
     public RuleReference currentReference() {
         return new RuleReference(policy.version(), templates.version(), exercises.version());
+    }
+
+    public List<PresetSummary> listPresets() {
+        return presets.presets().stream().map(preset -> new PresetSummary(
+                preset.code(), preset.version(), preset.name(), preset.goal(), preset.weeklyFrequency(),
+                preset.sessionMinutes(), preset.location(), preset.plan().days().stream()
+                .map(day -> new PresetDaySummary(
+                        day.weekday(), day.name(), day.focus(),
+                        day.estimatedMinutesMin(), day.estimatedMinutesMax(), day.exercises().size()))
+                .toList())).toList();
     }
 
     public CandidateEnvelope candidate(AuthenticatedUserId user, String candidateId) {
@@ -245,6 +297,83 @@ public final class PlanCandidateService {
                         policy,
                         locks));
         return fromResult(user, profile, result, GenerationSource.FALLBACK_RULE_PLAN, trainingSplit);
+    }
+
+    private GeneratedCandidates generatePreset(
+            AuthenticatedUserId user,
+            UserProfile profile,
+            String presetCode,
+            Map<String, Integer> lockedNumbers) {
+        if (lockedNumbers != null && !lockedNumbers.isEmpty()) {
+            return noCandidate(List.of(issue("PRESET_LOCKS_NOT_SUPPORTED", "/lockedFields")), lockedNumbers);
+        }
+        Optional<SystemPlanPresetCatalog.Preset> selected = presets.find(presetCode);
+        if (selected.isEmpty()) {
+            return noCandidate(List.of(issue("PRESET_NOT_FOUND", "/presetCode")), Map.of());
+        }
+        SystemPlanPresetCatalog.Preset preset = selected.get();
+        if (!preset.goal().equals(profile.details().goal().name())
+                || preset.weeklyFrequency() != profile.details().weeklyFrequency()
+                || preset.sessionMinutes() != profile.details().sessionMinutes()
+                || !preset.location().equals(profile.details().location().name())) {
+            return noCandidate(List.of(issue("PRESET_PROFILE_MISMATCH", "/presetCode")), Map.of());
+        }
+        List<PlanVersionService.ValidationIssue> issues = validatePresetPlan(
+                preset.plan(), profile, eligibleExercises(user, profile.details().experience()));
+        if (issues.stream().anyMatch(value -> value.severity() == PlanVersionService.Severity.ERROR)) {
+            return noCandidate(issues, Map.of());
+        }
+        CandidateEnvelope candidate = presetEnvelope(user, profile, preset.plan());
+        generatedCandidates.put(candidateKey(user, candidate.candidateId()), candidate);
+        return new GeneratedCandidates(
+                GenerationStatus.CANDIDATE_READY, Optional.of(candidate), issues, Map.of());
+    }
+
+    private static List<PlanVersionService.ValidationIssue> validatePresetPlan(
+            PlanDraft plan,
+            UserProfile profile,
+            Map<String, PlanValidationEngine.ExerciseFacts> eligibleExercises) {
+        List<PlanVersionService.ValidationIssue> issues = new ArrayList<>();
+        if (plan.days().size() != profile.details().weeklyFrequency()) {
+            issues.add(issue("SESSION_FREQUENCY_MISMATCH", "/days"));
+        }
+        for (int dayIndex = 0; dayIndex < plan.days().size(); dayIndex++) {
+            PlanDraft.Day day = plan.days().get(dayIndex);
+            for (int exerciseIndex = 0; exerciseIndex < day.exercises().size(); exerciseIndex++) {
+                PlanDraft.Exercise exercise = day.exercises().get(exerciseIndex);
+                String exercisePath = "/days/" + dayIndex + "/exercises/" + exerciseIndex;
+                if (!eligibleExercises.containsKey(exercise.exerciseCode())) {
+                    issues.add(issue(
+                            "PRESET_EXERCISE_NOT_ELIGIBLE",
+                            exercisePath + "/exerciseCode"));
+                }
+                if (exercise.workSets() < PRESET_MINIMUM_WORK_SETS
+                        || exercise.workSets() > PRESET_MAXIMUM_WORK_SETS) {
+                    issues.add(issue("WORK_SETS_OUT_OF_RANGE", exercisePath + "/workSets"));
+                }
+                if (exercise.repMin() < PRESET_MINIMUM_REPS
+                        || exercise.repMax() > PRESET_MAXIMUM_REPS
+                        || exercise.repMin() > exercise.repMax()) {
+                    issues.add(issue("REP_RANGE_OUT_OF_RANGE", exercisePath + "/repRange"));
+                }
+                if (exercise.restSeconds() < PRESET_MINIMUM_REST_SECONDS
+                        || exercise.restSeconds() > PRESET_MAXIMUM_REST_SECONDS) {
+                    issues.add(issue("REST_OUT_OF_RANGE", exercisePath + "/restSeconds"));
+                }
+            }
+        }
+        return List.copyOf(issues);
+    }
+
+    private CandidateEnvelope presetEnvelope(
+            AuthenticatedUserId user, UserProfile profile, PlanDraft plan) {
+        String identity = user.value() + "|" + profile.version() + "|SYSTEM_PRESET|" + plan;
+        String candidateId = UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8)).toString();
+        return new CandidateEnvelope(
+                candidateId, GenerationSource.SYSTEM_PRESET, plan, currentReference(),
+                ExplanationStatus.DEGRADED,
+                "已按你选择的系统预设保留完整处方；动作、组次、休息、超级组和热身不会被通用规则改写。",
+                clock.instant().plus(15, ChronoUnit.MINUTES));
     }
 
     private static PlanGenerationEngine.FitnessGoal ruleGoal(UserProfile.FitnessGoal goal) {
@@ -669,7 +798,27 @@ public final class PlanCandidateService {
 
     public enum ExplanationStatus { PENDING, DEGRADED }
     public enum GenerationStatus { CANDIDATE_READY, NO_CANDIDATE }
-    public enum GenerationSource { AI_PERSONALIZED, FALLBACK_RULE_PLAN }
+    public enum GenerationSource { AI_PERSONALIZED, FALLBACK_RULE_PLAN, SYSTEM_PRESET }
+
+    public record PresetSummary(
+            String code,
+            String version,
+            String name,
+            String goal,
+            int weeklyFrequency,
+            int sessionMinutes,
+            String location,
+            List<PresetDaySummary> days) {
+        public PresetSummary { days = List.copyOf(days); }
+    }
+
+    public record PresetDaySummary(
+            String weekday,
+            String name,
+            String focus,
+            int estimatedMinutesMin,
+            int estimatedMinutesMax,
+            int exerciseCount) {}
 
     public enum TrainingSplit {
         UPPER_LOWER(Set.of(2, 4), Set.of("UPPER_LOWER_2_DAY_V1", "UPPER_LOWER_4_DAY_V1")),

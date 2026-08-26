@@ -1,0 +1,138 @@
+{
+  "metadata": {
+    "schemaVersion": "1.0.0",
+    "kind": "SYSTEM_PLAN_PRESET",
+    "version": "1.0.0",
+    "status": "AI_VALIDATED",
+    "sourceReferences": ["USER_PROVIDED_PERSONAL_PLAN_2026_08_21"],
+    "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] }
+  },
+  "presets": [
+    {
+      "code": "PERSONAL_5_DAY_HYPERTROPHY_V1",
+      "version": "1.0.0",
+      "templateCode": "PERSONAL_5_DAY_HYPERTROPHY_V1",
+      "name": "一周完整增肌训练",
+      "goal": "HYPERTROPHY",
+      "weeklyFrequency": 5,
+      "sessionMinutes": 45,
+      "location": "GYM",
+      "trainingSplit": "BODY_PART_FIVE_DAY",
+      "executionRules": [
+        "复合动作保留约 2 次余力；孤立动作前面正式组保留约 2 次余力，仅最后一组可保留 1 次余力并接近力竭",
+        "复合动作下放约 2 秒并稳定控制，向上正常发力",
+        "超级组两个动作连续完成后再休息",
+        "推类训练可以佩戴护腕",
+        "使用手机计时，器械切换尽量控制在 30～60 秒"
+      ],
+      "progressionRules": [
+        "使用双进阶法：全部正式组达到次数上限且最后一组仍有 1～2 次余力后再增加最小重量",
+        "上肢复合动作通常增加 1.25～2.5 公斤，下肢复合动作通常增加 2.5～5 公斤",
+        "第一组低于次数下限时当天降低 5%～10% 重量；仅最后一组少 1 次时保持原重量",
+        "连续 3 周无进步时检查睡眠和体重、主要动作多休息 20～30 秒并删除 1～2 个辅助组",
+        "必要时减量一周：正式组减少约三分之一，重量减少 5%～10%"
+      ],
+      "days": [
+        {
+          "code": "MONDAY_PUSH", "weekday": "MONDAY", "name": "周一｜推", "focus": "胸＋肩＋三头",
+          "estimatedMinutes": { "min": 44, "max": 46 },
+          "warmup": [
+            { "instruction": "跑步机快走或慢跑", "prescription": "1 分钟" },
+            { "instruction": "肩、肘、腕环绕", "prescription": "每方向 10 次" },
+            { "instruction": "空手推胸或轻重量推胸", "prescription": "12 次" },
+            { "instruction": "史密斯卧推递增预热", "prescription": "工作重量约 50%×8，休息 30～45 秒" },
+            { "instruction": "史密斯卧推递增预热", "prescription": "工作重量约 70%×4，休息 60 秒" }
+          ],
+          "notes": ["热身目标 4～6 分钟", "预热组只唤醒动作，不做到吃力", "推类训练可以佩戴护腕"],
+          "exercises": [
+            { "exerciseCode": "SMITH_FLAT_BENCH_PRESS", "workSets": 4, "repRange": { "min": 6, "max": 10 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2 },
+            { "exerciseCode": "INCLINE_DUMBBELL_BENCH_PRESS_30", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2 },
+            { "exerciseCode": "SEATED_MACHINE_SHOULDER_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2 },
+            { "exerciseCode": "LEANING_PEC_DECK_FLY", "workSets": 2, "repRange": { "min": 12, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "notes": ["夹紧时停顿约 1 秒，不要为拉伸感过度打开肩关节"] },
+            { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "workSets": 3, "repRange": { "min": 12, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "MONDAY_ARMS", "executionOrder": 1 },
+            { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "MONDAY_ARMS", "executionOrder": 2 }
+          ]
+        },
+        {
+          "code": "TUESDAY_PULL", "weekday": "TUESDAY", "name": "周二｜拉", "focus": "背＋肩后束＋二头",
+          "estimatedMinutes": { "min": 43, "max": 46 },
+          "warmup": [
+            { "instruction": "跑步机摆臂快走", "prescription": "1 分钟" },
+            { "instruction": "肩关节环绕及肩胛后缩", "prescription": "各 10 次" },
+            { "instruction": "高位下拉轻重量", "prescription": "10 次" },
+            { "instruction": "高位下拉中等重量", "prescription": "5 次" },
+            { "instruction": "进入正式组前休息", "prescription": "约 60 秒" }
+          ],
+          "notes": ["热身目标 4～6 分钟", "时间在 42 分钟以内且状态良好时，划船或弯举只能二选一增加 1 组"],
+          "exercises": [
+            { "exerciseCode": "LAT_PULLDOWN", "workSets": 4, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "notes": ["不要过度后仰，拉至锁骨或上胸附近"] },
+            { "exerciseCode": "MACHINE_SEATED_ROW", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "optionalSetRule": { "conditionCode": "TUESDAY_UNDER_42_GOOD_STATE", "exclusiveChoiceGroup": "TUESDAY_BONUS", "additionalSets": 1 } },
+            { "exerciseCode": "ONE_ARM_DUMBBELL_ROW", "workSets": 2, "repRange": { "min": 10, "max": 12 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "perSide": true, "notes": ["完成两侧后休息，躯干保持稳定"] },
+            { "exerciseCode": "REVERSE_PEC_DECK_FLY", "workSets": 3, "repRange": { "min": 12, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "TUESDAY_ARMS", "executionOrder": 1 },
+            { "exerciseCode": "DUMBBELL_BICEPS_CURL", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "TUESDAY_ARMS", "executionOrder": 2, "optionalSetRule": { "conditionCode": "TUESDAY_UNDER_42_GOOD_STATE", "exclusiveChoiceGroup": "TUESDAY_BONUS", "additionalSets": 1 } }
+          ]
+        },
+        {
+          "code": "WEDNESDAY_QUADS", "weekday": "WEDNESDAY", "name": "周三｜股四头主导", "focus": "股四头＋单腿稳定＋核心",
+          "estimatedMinutes": { "min": 44, "max": 46 },
+          "warmup": [
+            { "instruction": "跑步机快走", "prescription": "1 分钟" },
+            { "instruction": "髋、膝、踝活动", "prescription": "约 1 分钟" },
+            { "instruction": "自重深蹲", "prescription": "10 次" },
+            { "instruction": "反向箭步蹲", "prescription": "每侧 5 次" },
+            { "instruction": "史密斯深蹲递增预热", "prescription": "工作重量约 50%×8，休息 30～45 秒" },
+            { "instruction": "史密斯深蹲递增预热", "prescription": "工作重量约 70%×4，休息 60～75 秒" },
+            { "instruction": "身体僵硬或正式组较重时增加预热", "prescription": "75%×2～3，随后休息 60～90 秒并删减 1 个辅助组", "optional": true }
+          ],
+          "notes": ["热身目标 4～6 分钟", "当天不安排腿弯举、臀桥和罗马尼亚硬拉"],
+          "exercises": [
+            { "exerciseCode": "SMITH_SQUAT", "workSets": 4, "repRange": { "min": 6, "max": 10 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2 },
+            { "exerciseCode": "SEATED_LEG_PRESS", "workSets": 3, "repRange": { "min": 10, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2 },
+            { "exerciseCode": "DUMBBELL_REVERSE_LUNGE", "workSets": 2, "repRange": { "min": 8, "max": 10 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "perSide": true },
+            { "exerciseCode": "SEATED_LEG_EXTENSION", "workSets": 3, "repRange": { "min": 12, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "WEDNESDAY_CORE", "executionOrder": 1 },
+            { "exerciseCode": "MACHINE_CRUNCH", "workSets": 3, "repRange": { "min": 12, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "WEDNESDAY_CORE", "executionOrder": 2 }
+          ]
+        },
+        {
+          "code": "THURSDAY_UPPER", "weekday": "THURSDAY", "name": "周四｜上肢补充", "focus": "上胸＋背部＋肩中后束＋手臂",
+          "estimatedMinutes": { "min": 32, "max": 38 },
+          "warmup": [
+            { "instruction": "快走或开合跳", "prescription": "1 分钟" },
+            { "instruction": "肩关节环绕", "prescription": "每方向 10 次" },
+            { "instruction": "轻重量侧平举", "prescription": "10 次" },
+            { "instruction": "超级组 A 轻重量预热", "prescription": "1 轮，不计正式组" }
+          ],
+          "notes": ["热身目标 4～6 分钟", "重量比周一、周二轻一些，保持约 2 次余力", "正常约 35 分钟，不为凑满 46 分钟增加动作"],
+          "exercises": [
+            { "exerciseCode": "INCLINE_DUMBBELL_FLY", "workSets": 3, "repRange": { "min": 12, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "THURSDAY_A", "executionOrder": 1 },
+            { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "workSets": 3, "repRange": { "min": 10, "max": 12 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "executionGroup": "THURSDAY_A", "executionOrder": 2 },
+            { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "THURSDAY_B", "executionOrder": 1 },
+            { "exerciseCode": "REVERSE_PEC_DECK_FLY", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "THURSDAY_B", "executionOrder": 2 },
+            { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "THURSDAY_C", "executionOrder": 1 },
+            { "exerciseCode": "DUMBBELL_HAMMER_CURL", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "THURSDAY_C", "executionOrder": 2 }
+          ]
+        },
+        {
+          "code": "FRIDAY_POSTERIOR", "weekday": "FRIDAY", "name": "周五｜后链主导", "focus": "腘绳肌＋臀大肌＋臀中肌＋小腿",
+          "estimatedMinutes": { "min": 43, "max": 46 },
+          "warmup": [
+            { "instruction": "跑步机快走", "prescription": "1 分钟" },
+            { "instruction": "徒手髋铰链", "prescription": "10 次" },
+            { "instruction": "自重臀桥", "prescription": "12 次" },
+            { "instruction": "髋关节环绕", "prescription": "每方向 8 次" },
+            { "instruction": "哑铃罗马尼亚硬拉递增预热", "prescription": "工作重量约 50%×8，休息 30～45 秒" },
+            { "instruction": "哑铃罗马尼亚硬拉递增预热", "prescription": "工作重量约 70%×4，休息 60 秒" }
+          ],
+          "notes": ["热身目标 4～6 分钟", "与周三互补，不做深蹲、腿举、腿屈伸和普通箭步蹲"],
+          "exercises": [
+            { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "workSets": 4, "repRange": { "min": 8, "max": 10 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "notes": ["臀部向后移动，膝盖轻微弯曲，哑铃贴近腿部，腰背自然稳定"] },
+            { "exerciseCode": "MACHINE_HIP_THRUST", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 2, "eccentricSeconds": 2, "notes": ["顶部收紧臀部并停顿约 1 秒，不要过度挺腰"] },
+            { "exerciseCode": "MACHINE_LEG_CURL", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "notes": ["收缩位置停顿约 1 秒，回程保持控制"] },
+            { "exerciseCode": "MACHINE_HIP_ABDUCTION", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "FRIDAY_CALVES", "executionOrder": 1 },
+            { "exerciseCode": "STANDING_CALF_RAISE", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "FRIDAY_CALVES", "executionOrder": 2, "notes": ["底部充分下降，顶部停顿约 1 秒，不快速弹动"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

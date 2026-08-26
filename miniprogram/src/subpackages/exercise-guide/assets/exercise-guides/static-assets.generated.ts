@@ -137,6 +137,54 @@ import birdDog03Control from './bird-dog-03-control.jpg'
 import birdDog04Finish from './bird-dog-04-finish.jpg'
 import plank01Setup from './plank-01-setup.jpg'
 import plank02Hold from './plank-02-hold.jpg'
+import smithFlatBenchPress01Setup from './smith-flat-bench-press-01-setup.jpg'
+import smithFlatBenchPress02Drive from './smith-flat-bench-press-02-drive.jpg'
+import smithFlatBenchPress03Finish from './smith-flat-bench-press-03-finish.jpg'
+import inclineDumbbellBenchPress3001Setup from './incline-dumbbell-bench-press-30-01-setup.jpg'
+import inclineDumbbellBenchPress3002Drive from './incline-dumbbell-bench-press-30-02-drive.jpg'
+import inclineDumbbellBenchPress3003Finish from './incline-dumbbell-bench-press-30-03-finish.jpg'
+import seatedMachineShoulderPress01Setup from './seated-machine-shoulder-press-01-setup.jpg'
+import seatedMachineShoulderPress02Drive from './seated-machine-shoulder-press-02-drive.jpg'
+import seatedMachineShoulderPress03Finish from './seated-machine-shoulder-press-03-finish.jpg'
+import leaningPecDeckFly01Setup from './leaning-pec-deck-fly-01-setup.jpg'
+import leaningPecDeckFly02Drive from './leaning-pec-deck-fly-02-drive.jpg'
+import leaningPecDeckFly03Finish from './leaning-pec-deck-fly-03-finish.jpg'
+import machineSeatedRow01Setup from './machine-seated-row-01-setup.jpg'
+import machineSeatedRow02Drive from './machine-seated-row-02-drive.jpg'
+import machineSeatedRow03Finish from './machine-seated-row-03-finish.jpg'
+import reversePecDeckFly01Setup from './reverse-pec-deck-fly-01-setup.jpg'
+import reversePecDeckFly02Drive from './reverse-pec-deck-fly-02-drive.jpg'
+import reversePecDeckFly03Finish from './reverse-pec-deck-fly-03-finish.jpg'
+import smithSquat01Setup from './smith-squat-01-setup.jpg'
+import smithSquat02Drive from './smith-squat-02-drive.jpg'
+import smithSquat03Finish from './smith-squat-03-finish.jpg'
+import seatedLegPress01Setup from './seated-leg-press-01-setup.jpg'
+import seatedLegPress02Drive from './seated-leg-press-02-drive.jpg'
+import seatedLegPress03Finish from './seated-leg-press-03-finish.jpg'
+import dumbbellReverseLunge01Setup from './dumbbell-reverse-lunge-01-setup.jpg'
+import dumbbellReverseLunge02Drive from './dumbbell-reverse-lunge-02-drive.jpg'
+import dumbbellReverseLunge03Finish from './dumbbell-reverse-lunge-03-finish.jpg'
+import seatedLegExtension01Setup from './seated-leg-extension-01-setup.jpg'
+import seatedLegExtension02Drive from './seated-leg-extension-02-drive.jpg'
+import seatedLegExtension03Finish from './seated-leg-extension-03-finish.jpg'
+import machineCrunch01Setup from './machine-crunch-01-setup.jpg'
+import machineCrunch02Drive from './machine-crunch-02-drive.jpg'
+import machineCrunch03Finish from './machine-crunch-03-finish.jpg'
+import inclineDumbbellFly01Setup from './incline-dumbbell-fly-01-setup.jpg'
+import inclineDumbbellFly02Drive from './incline-dumbbell-fly-02-drive.jpg'
+import inclineDumbbellFly03Finish from './incline-dumbbell-fly-03-finish.jpg'
+import machineHipThrust01Setup from './machine-hip-thrust-01-setup.jpg'
+import machineHipThrust02Drive from './machine-hip-thrust-02-drive.jpg'
+import machineHipThrust03Finish from './machine-hip-thrust-03-finish.jpg'
+import machineLegCurl01Setup from './machine-leg-curl-01-setup.jpg'
+import machineLegCurl02Drive from './machine-leg-curl-02-drive.jpg'
+import machineLegCurl03Finish from './machine-leg-curl-03-finish.jpg'
+import machineHipAbduction01Setup from './machine-hip-abduction-01-setup.jpg'
+import machineHipAbduction02Drive from './machine-hip-abduction-02-drive.jpg'
+import machineHipAbduction03Finish from './machine-hip-abduction-03-finish.jpg'
+import standingCalfRaise01Setup from './standing-calf-raise-01-setup.jpg'
+import standingCalfRaise02Drive from './standing-calf-raise-02-drive.jpg'
+import standingCalfRaise03Finish from './standing-calf-raise-03-finish.jpg'
 
 export const staticGuidesByExerciseCode = {
   GOBLET_SQUAT: {
@@ -1202,6 +1250,374 @@ export const staticGuidesByExerciseCode = {
       },
     ],
   },
+  SMITH_FLAT_BENCH_PRESS: {
+    primaryRef: "asset://exercise-guides/smith-flat-bench-press-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "起始",
+        description: "肩背和脚部先稳定支撑。",
+        source: smithFlatBenchPress01Setup,
+      },
+      {
+        id: "drive",
+        label: "推起",
+        description: "手腕稳定，沿可控路径推起负重。",
+        source: smithFlatBenchPress02Drive,
+      },
+      {
+        id: "finish",
+        label: "完成",
+        description: "手臂接近伸直，避免锁死关节。",
+        source: smithFlatBenchPress03Finish,
+      },
+    ],
+  },
+  INCLINE_DUMBBELL_BENCH_PRESS_30: {
+    primaryRef: "asset://exercise-guides/incline-dumbbell-bench-press-30-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "起始",
+        description: "肩背和脚部先稳定支撑。",
+        source: inclineDumbbellBenchPress3001Setup,
+      },
+      {
+        id: "drive",
+        label: "推起",
+        description: "手腕稳定，沿可控路径推起负重。",
+        source: inclineDumbbellBenchPress3002Drive,
+      },
+      {
+        id: "finish",
+        label: "完成",
+        description: "手臂接近伸直，避免锁死关节。",
+        source: inclineDumbbellBenchPress3003Finish,
+      },
+    ],
+  },
+  SEATED_MACHINE_SHOULDER_PRESS: {
+    primaryRef: "asset://exercise-guides/seated-machine-shoulder-press-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩前",
+        description: "核心收紧，负重稳定在肩部附近。",
+        source: seatedMachineShoulderPress01Setup,
+      },
+      {
+        id: "drive",
+        label: "推举",
+        description: "沿头部两侧向上推，避免腰部后仰。",
+        source: seatedMachineShoulderPress02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端",
+        description: "负重位于身体上方，肩颈保持放松。",
+        source: seatedMachineShoulderPress03Finish,
+      },
+    ],
+  },
+  LEANING_PEC_DECK_FLY: {
+    primaryRef: "asset://exercise-guides/leaning-pec-deck-fly-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "胸前稳定",
+        description: "肩背贴稳，手肘保持轻微弯曲。",
+        source: leaningPecDeckFly01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "沿弧线受控打开双臂，不让肩部过度后伸。",
+        source: leaningPecDeckFly02Drive,
+      },
+      {
+        id: "finish",
+        label: "拉伸到位",
+        description: "胸部有拉伸感时停住，再沿原路径夹回。",
+        source: leaningPecDeckFly03Finish,
+      },
+    ],
+  },
+  MACHINE_SEATED_ROW: {
+    primaryRef: "asset://exercise-guides/machine-seated-row-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "伸臂",
+        description: "躯干稳定，肩膀自然下沉。",
+        source: machineSeatedRow01Setup,
+      },
+      {
+        id: "drive",
+        label: "后拉",
+        description: "肘部向后，肩胛向中间收拢。",
+        source: machineSeatedRow02Drive,
+      },
+      {
+        id: "finish",
+        label: "收紧",
+        description: "握把靠近身体，避免大幅后仰。",
+        source: machineSeatedRow03Finish,
+      },
+    ],
+  },
+  REVERSE_PEC_DECK_FLY: {
+    primaryRef: "asset://exercise-guides/reverse-pec-deck-fly-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "肩胛稳定",
+        description: "站稳或俯身后先保持躯干稳定。",
+        source: reversePecDeckFly01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "肘部向外移动，肩部不要耸起。",
+        source: reversePecDeckFly02Drive,
+      },
+      {
+        id: "finish",
+        label: "上背收紧",
+        description: "肩部后侧和上背收紧后受控返回。",
+        source: reversePecDeckFly03Finish,
+      },
+    ],
+  },
+  SMITH_SQUAT: {
+    primaryRef: "asset://exercise-guides/smith-squat-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "站稳",
+        description: "脚掌稳定，负重靠近身体。",
+        source: smithSquat01Setup,
+      },
+      {
+        id: "drive",
+        label: "下蹲",
+        description: "屈髋屈膝，膝盖跟随脚尖方向。",
+        source: smithSquat02Drive,
+      },
+      {
+        id: "finish",
+        label: "到位",
+        description: "保持躯干稳定，在可控深度停住。",
+        source: smithSquat03Finish,
+      },
+    ],
+  },
+  SEATED_LEG_PRESS: {
+    primaryRef: "asset://exercise-guides/seated-leg-press-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "屈膝准备",
+        description: "背部和臀部贴稳靠垫，双脚踩实踏板。",
+        source: seatedLegPress01Setup,
+      },
+      {
+        id: "drive",
+        label: "推开踏板",
+        description: "膝盖跟随脚尖方向，脚跟持续发力。",
+        source: seatedLegPress02Drive,
+      },
+      {
+        id: "finish",
+        label: "接近伸直",
+        description: "腿部接近伸直时停住，不锁死膝盖。",
+        source: seatedLegPress03Finish,
+      },
+    ],
+  },
+  DUMBBELL_REVERSE_LUNGE: {
+    primaryRef: "asset://exercise-guides/dumbbell-reverse-lunge-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "站稳",
+        description: "躯干直立，双手稳定握住哑铃。",
+        source: dumbbellReverseLunge01Setup,
+      },
+      {
+        id: "drive",
+        label: "向后迈步",
+        description: "一脚受控后撤，前脚掌和脚跟保持稳定。",
+        source: dumbbellReverseLunge02Drive,
+      },
+      {
+        id: "finish",
+        label: "下蹲到位",
+        description: "前膝跟随脚尖，后膝接近地面后停住。",
+        source: dumbbellReverseLunge03Finish,
+      },
+    ],
+  },
+  SEATED_LEG_EXTENSION: {
+    primaryRef: "asset://exercise-guides/seated-leg-extension-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "屈膝坐稳",
+        description: "膝盖对齐器械转轴，滚垫贴在小腿前侧。",
+        source: seatedLegExtension01Setup,
+      },
+      {
+        id: "drive",
+        label: "伸直膝盖",
+        description: "保持臀部贴稳，平稳抬起小腿。",
+        source: seatedLegExtension02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶端收紧",
+        description: "接近伸直时停顿，不用惯性锁死膝盖。",
+        source: seatedLegExtension03Finish,
+      },
+    ],
+  },
+  MACHINE_CRUNCH: {
+    primaryRef: "asset://exercise-guides/machine-crunch-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "坐稳",
+        description: "髋部和双脚固定，胸廓保持自然。",
+        source: machineCrunch01Setup,
+      },
+      {
+        id: "drive",
+        label: "卷曲躯干",
+        description: "肋骨向骨盆靠近，用腹部带动器械。",
+        source: machineCrunch02Drive,
+      },
+      {
+        id: "finish",
+        label: "腹部收紧",
+        description: "在髋部不抬起的范围内停住，再受控返回。",
+        source: machineCrunch03Finish,
+      },
+    ],
+  },
+  INCLINE_DUMBBELL_FLY: {
+    primaryRef: "asset://exercise-guides/incline-dumbbell-fly-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "胸前稳定",
+        description: "肩背贴稳，手肘保持轻微弯曲。",
+        source: inclineDumbbellFly01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外展开",
+        description: "沿弧线受控打开双臂，不让肩部过度后伸。",
+        source: inclineDumbbellFly02Drive,
+      },
+      {
+        id: "finish",
+        label: "拉伸到位",
+        description: "胸部有拉伸感时停住，再沿原路径夹回。",
+        source: inclineDumbbellFly03Finish,
+      },
+    ],
+  },
+  MACHINE_HIP_THRUST: {
+    primaryRef: "asset://exercise-guides/machine-hip-thrust-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "落髋准备",
+        description: "上背和双脚稳定，髋部受垫带固定。",
+        source: machineHipThrust01Setup,
+      },
+      {
+        id: "drive",
+        label: "抬起髋部",
+        description: "脚跟发力，让臀部带动髋部上升。",
+        source: machineHipThrust02Drive,
+      },
+      {
+        id: "finish",
+        label: "顶部收紧",
+        description: "臀部夹紧并停顿，肋骨下沉不过度挺腰。",
+        source: machineHipThrust03Finish,
+      },
+    ],
+  },
+  MACHINE_LEG_CURL: {
+    primaryRef: "asset://exercise-guides/machine-leg-curl-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "伸腿准备",
+        description: "俯卧贴稳，膝盖对齐转轴，滚垫位于脚跟上方。",
+        source: machineLegCurl01Setup,
+      },
+      {
+        id: "drive",
+        label: "屈膝弯腿",
+        description: "保持髋部贴垫，让脚跟平稳靠近臀部。",
+        source: machineLegCurl02Drive,
+      },
+      {
+        id: "finish",
+        label: "收缩到位",
+        description: "大腿后侧收紧后停顿，再缓慢放回。",
+        source: machineLegCurl03Finish,
+      },
+    ],
+  },
+  MACHINE_HIP_ABDUCTION: {
+    primaryRef: "asset://exercise-guides/machine-hip-abduction-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "并腿坐稳",
+        description: "背部贴稳，器械垫贴住大腿外侧。",
+        source: machineHipAbduction01Setup,
+      },
+      {
+        id: "drive",
+        label: "向外打开",
+        description: "从髋部推动双膝向外，躯干保持稳定。",
+        source: machineHipAbduction02Drive,
+      },
+      {
+        id: "finish",
+        label: "外侧收紧",
+        description: "在可控幅度停顿，再缓慢合回。",
+        source: machineHipAbduction03Finish,
+      },
+    ],
+  },
+  STANDING_CALF_RAISE: {
+    primaryRef: "asset://exercise-guides/standing-calf-raise-01-setup.jpg",
+    stages: [
+      {
+        id: "setup",
+        label: "脚跟落地",
+        description: "双手轻扶墙面，双脚平行站稳。",
+        source: standingCalfRaise01Setup,
+      },
+      {
+        id: "drive",
+        label: "提起脚跟",
+        description: "缓慢抬起脚跟，把重心保持在前脚掌。",
+        source: standingCalfRaise02Drive,
+      },
+      {
+        id: "finish",
+        label: "稳定顶端",
+        description: "身体保持直立，再缓慢放下脚跟。",
+        source: standingCalfRaise03Finish,
+      },
+    ],
+  },
 } as const
 
 export const staticSourcesByAssetRef = {
@@ -1343,4 +1759,52 @@ export const staticSourcesByAssetRef = {
   "asset://exercise-guides/bird-dog-04-finish.jpg": birdDog04Finish,
   "asset://exercise-guides/plank-01-setup.jpg": plank01Setup,
   "asset://exercise-guides/plank-02-hold.jpg": plank02Hold,
+  "asset://exercise-guides/smith-flat-bench-press-01-setup.jpg": smithFlatBenchPress01Setup,
+  "asset://exercise-guides/smith-flat-bench-press-02-drive.jpg": smithFlatBenchPress02Drive,
+  "asset://exercise-guides/smith-flat-bench-press-03-finish.jpg": smithFlatBenchPress03Finish,
+  "asset://exercise-guides/incline-dumbbell-bench-press-30-01-setup.jpg": inclineDumbbellBenchPress3001Setup,
+  "asset://exercise-guides/incline-dumbbell-bench-press-30-02-drive.jpg": inclineDumbbellBenchPress3002Drive,
+  "asset://exercise-guides/incline-dumbbell-bench-press-30-03-finish.jpg": inclineDumbbellBenchPress3003Finish,
+  "asset://exercise-guides/seated-machine-shoulder-press-01-setup.jpg": seatedMachineShoulderPress01Setup,
+  "asset://exercise-guides/seated-machine-shoulder-press-02-drive.jpg": seatedMachineShoulderPress02Drive,
+  "asset://exercise-guides/seated-machine-shoulder-press-03-finish.jpg": seatedMachineShoulderPress03Finish,
+  "asset://exercise-guides/leaning-pec-deck-fly-01-setup.jpg": leaningPecDeckFly01Setup,
+  "asset://exercise-guides/leaning-pec-deck-fly-02-drive.jpg": leaningPecDeckFly02Drive,
+  "asset://exercise-guides/leaning-pec-deck-fly-03-finish.jpg": leaningPecDeckFly03Finish,
+  "asset://exercise-guides/machine-seated-row-01-setup.jpg": machineSeatedRow01Setup,
+  "asset://exercise-guides/machine-seated-row-02-drive.jpg": machineSeatedRow02Drive,
+  "asset://exercise-guides/machine-seated-row-03-finish.jpg": machineSeatedRow03Finish,
+  "asset://exercise-guides/reverse-pec-deck-fly-01-setup.jpg": reversePecDeckFly01Setup,
+  "asset://exercise-guides/reverse-pec-deck-fly-02-drive.jpg": reversePecDeckFly02Drive,
+  "asset://exercise-guides/reverse-pec-deck-fly-03-finish.jpg": reversePecDeckFly03Finish,
+  "asset://exercise-guides/smith-squat-01-setup.jpg": smithSquat01Setup,
+  "asset://exercise-guides/smith-squat-02-drive.jpg": smithSquat02Drive,
+  "asset://exercise-guides/smith-squat-03-finish.jpg": smithSquat03Finish,
+  "asset://exercise-guides/seated-leg-press-01-setup.jpg": seatedLegPress01Setup,
+  "asset://exercise-guides/seated-leg-press-02-drive.jpg": seatedLegPress02Drive,
+  "asset://exercise-guides/seated-leg-press-03-finish.jpg": seatedLegPress03Finish,
+  "asset://exercise-guides/dumbbell-reverse-lunge-01-setup.jpg": dumbbellReverseLunge01Setup,
+  "asset://exercise-guides/dumbbell-reverse-lunge-02-drive.jpg": dumbbellReverseLunge02Drive,
+  "asset://exercise-guides/dumbbell-reverse-lunge-03-finish.jpg": dumbbellReverseLunge03Finish,
+  "asset://exercise-guides/seated-leg-extension-01-setup.jpg": seatedLegExtension01Setup,
+  "asset://exercise-guides/seated-leg-extension-02-drive.jpg": seatedLegExtension02Drive,
+  "asset://exercise-guides/seated-leg-extension-03-finish.jpg": seatedLegExtension03Finish,
+  "asset://exercise-guides/machine-crunch-01-setup.jpg": machineCrunch01Setup,
+  "asset://exercise-guides/machine-crunch-02-drive.jpg": machineCrunch02Drive,
+  "asset://exercise-guides/machine-crunch-03-finish.jpg": machineCrunch03Finish,
+  "asset://exercise-guides/incline-dumbbell-fly-01-setup.jpg": inclineDumbbellFly01Setup,
+  "asset://exercise-guides/incline-dumbbell-fly-02-drive.jpg": inclineDumbbellFly02Drive,
+  "asset://exercise-guides/incline-dumbbell-fly-03-finish.jpg": inclineDumbbellFly03Finish,
+  "asset://exercise-guides/machine-hip-thrust-01-setup.jpg": machineHipThrust01Setup,
+  "asset://exercise-guides/machine-hip-thrust-02-drive.jpg": machineHipThrust02Drive,
+  "asset://exercise-guides/machine-hip-thrust-03-finish.jpg": machineHipThrust03Finish,
+  "asset://exercise-guides/machine-leg-curl-01-setup.jpg": machineLegCurl01Setup,
+  "asset://exercise-guides/machine-leg-curl-02-drive.jpg": machineLegCurl02Drive,
+  "asset://exercise-guides/machine-leg-curl-03-finish.jpg": machineLegCurl03Finish,
+  "asset://exercise-guides/machine-hip-abduction-01-setup.jpg": machineHipAbduction01Setup,
+  "asset://exercise-guides/machine-hip-abduction-02-drive.jpg": machineHipAbduction02Drive,
+  "asset://exercise-guides/machine-hip-abduction-03-finish.jpg": machineHipAbduction03Finish,
+  "asset://exercise-guides/standing-calf-raise-01-setup.jpg": standingCalfRaise01Setup,
+  "asset://exercise-guides/standing-calf-raise-02-drive.jpg": standingCalfRaise02Drive,
+  "asset://exercise-guides/standing-calf-raise-03-finish.jpg": standingCalfRaise03Finish,
 } as const

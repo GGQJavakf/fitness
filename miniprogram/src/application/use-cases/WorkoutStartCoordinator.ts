@@ -23,7 +23,7 @@ export type CoordinatedWorkoutStartResult = StartOrResumeWorkoutResult
   }
   | { kind: 'TERMINAL_REPLAY' }
 
-type WorkoutStartRuntime = Pick<WorkoutFlowService, 'loadStatus' | 'startOrResume'>
+export type WorkoutStartRuntime = Pick<WorkoutFlowService, 'loadStatus' | 'startOrResume'>
 type WorkoutStartSourceInput = Pick<
   CoordinatedWorkoutStartInput,
   'clientSessionKey' | 'planId' | 'planVersionNo' | 'planDayId'

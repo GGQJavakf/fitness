@@ -22,6 +22,18 @@ export interface ReplacedWorkoutSession {
       readonly weightStatus: 'KNOWN' | 'NEEDS_CALIBRATION' | 'BODYWEIGHT'
       readonly targetWeightKg?: number
       readonly unit: 'KG'
+      readonly targetRirMin?: number
+      readonly targetRirMax?: number
+      readonly eccentricSeconds?: number
+      readonly perSide?: boolean
+      readonly executionGroup?: string
+      readonly executionOrder?: number
+      readonly optionalSetRule?: {
+        readonly conditionCode: string
+        readonly exclusiveChoiceGroup: string
+        readonly additionalSets: 1
+        readonly description?: string
+      }
     }
   }[]
 }

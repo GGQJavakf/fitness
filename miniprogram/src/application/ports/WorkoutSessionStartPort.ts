@@ -13,6 +13,7 @@ export interface StartedWorkoutSession {
   id: string
   planVersionId: string
   version: number
+  startedAt?: string
   warmupPrescription?: WorkoutWarmupPrescriptionSnapshot
   exercises: readonly {
     id: string
@@ -20,10 +21,23 @@ export interface StartedWorkoutSession {
     exerciseName: string
     prescription: {
       workSets: number
+      repMin: number
       repMax: number
       restSeconds: number
       weightStatus: WeightStatus
       targetWeightKg?: number
+      targetRirMin?: number
+      targetRirMax?: number
+      eccentricSeconds?: number
+      perSide?: boolean
+      executionGroup?: string
+      executionOrder?: number
+      optionalSetRule?: {
+        conditionCode: string
+        exclusiveChoiceGroup: string
+        additionalSets: 1
+        description?: string
+      }
     }
   }[]
 }

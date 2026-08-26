@@ -3,12 +3,13 @@ export type TrainingSplit = 'UPPER_LOWER' | 'PUSH_PULL_LEGS' | 'BODY_PART_FIVE_D
 export type FitnessGoal = 'STRENGTH' | 'HYPERTROPHY' | 'FAT_LOSS' | 'GENERAL_FITNESS'
 export type TrainingLocation = 'HOME' | 'GYM' | 'OTHER'
 export type SessionMinutes = 30 | 45 | 60 | 75 | 90
+export type TrainingWeekday = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY'
 export type WeightUnit = 'KG'
 export type WeightStatus = 'KNOWN' | 'NEEDS_CALIBRATION' | 'BODYWEIGHT'
 export type LockStatus = 'USER_LOCKED' | 'RULE_LOCKED' | 'UNLOCKED'
 export type LockCommandStatus = 'USER_LOCKED' | 'UNLOCKED'
 export type AiExplanationStatus = 'READY' | 'PENDING' | 'DEGRADED'
-export type PlanGenerationSource = 'AI_PERSONALIZED' | 'FALLBACK_RULE_PLAN'
+export type PlanGenerationSource = 'AI_PERSONALIZED' | 'FALLBACK_RULE_PLAN' | 'SYSTEM_PRESET'
 export type ValidationSeverity = 'INFO' | 'WARNING' | 'ERROR'
 
 export interface EquipmentWeightInput {
@@ -55,6 +56,27 @@ export interface PlanExercise {
   restSeconds: number
   weightStatus: WeightStatus
   targetWeightKg?: number
+  targetRirMin?: number
+  targetRirMax?: number
+  eccentricSeconds?: number
+  perSide?: boolean
+  executionGroup?: string
+  executionOrder?: number
+  optionalSetRule?: PlanOptionalSetRule
+  notes?: string[]
+}
+
+export interface PlanOptionalSetRule {
+  conditionCode: string
+  exclusiveChoiceGroup: string
+  additionalSets: 1
+  description?: string
+}
+
+export interface PlanWarmupStep {
+  instruction: string
+  prescription?: string
+  optional: boolean
 }
 
 export interface PlanExerciseOption extends PlanExercise {
@@ -80,6 +102,12 @@ export interface PlanDayOption {
 export interface PlanDay {
   code: string
   name: string
+  weekday?: TrainingWeekday
+  focus?: string
+  estimatedMinutesMin?: number
+  estimatedMinutesMax?: number
+  warmup?: PlanWarmupStep[]
+  notes?: string[]
   exercises: PlanExercise[]
 }
 
@@ -87,6 +115,10 @@ export interface PlanDraft {
   templateCode: string
   trainingSplit?: TrainingSplit
   name: string
+  presetCode?: string
+  presetVersion?: string
+  executionRules?: string[]
+  progressionRules?: string[]
   days: PlanDay[]
   locks: Record<string, LockStatus>
 }
@@ -95,7 +127,31 @@ export interface PlanValidationDraft {
   templateCode: string
   trainingSplit?: TrainingSplit
   name: string
+  presetCode?: string
+  presetVersion?: string
+  executionRules?: string[]
+  progressionRules?: string[]
   days: PlanDay[]
+}
+
+export interface PlanPresetDaySummary {
+  weekday: TrainingWeekday
+  name: string
+  focus: string
+  estimatedMinutesMin: number
+  estimatedMinutesMax: number
+  exerciseCount: number
+}
+
+export interface PlanPresetSummary {
+  code: string
+  version: string
+  name: string
+  goal: FitnessGoal
+  weeklyFrequency: number
+  sessionMinutes: number
+  location: TrainingLocation
+  days: PlanPresetDaySummary[]
 }
 
 export interface ValidationIssue {

@@ -305,6 +305,20 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
         facts.put("weightStatus", prescription.weightStatus());
         prescription.targetWeightKg().ifPresent(weight -> facts.put("targetWeightKg", weight));
         facts.put("unit", prescription.unit());
+        prescription.targetRirMin().ifPresent(value -> facts.put("targetRirMin", value));
+        prescription.targetRirMax().ifPresent(value -> facts.put("targetRirMax", value));
+        prescription.eccentricSeconds().ifPresent(value -> facts.put("eccentricSeconds", value));
+        facts.put("perSide", prescription.perSide());
+        prescription.executionGroup().ifPresent(value -> facts.put("executionGroup", value));
+        prescription.executionOrder().ifPresent(value -> facts.put("executionOrder", value));
+        prescription.optionalSetRule().ifPresent(rule -> {
+            Map<String, Object> optional = new LinkedHashMap<>();
+            optional.put("conditionCode", rule.conditionCode());
+            optional.put("exclusiveChoiceGroup", rule.exclusiveChoiceGroup());
+            optional.put("additionalSets", rule.additionalSets());
+            rule.description().ifPresent(value -> optional.put("description", value));
+            facts.put("optionalSetRule", optional);
+        });
         return facts;
     }
 
@@ -313,7 +327,10 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
                 number(facts, "workSets"), number(facts, "repMin"),
                 number(facts, "repMax"), number(facts, "restSeconds"),
                 text(facts, "weightStatus"), decimal(facts, "targetWeightKg"),
-                text(facts, "unit"));
+                text(facts, "unit"), optionalNumber(facts, "targetRirMin"),
+                optionalNumber(facts, "targetRirMax"), optionalNumber(facts, "eccentricSeconds"),
+                Boolean.TRUE.equals(facts.get("perSide")), optionalText(facts, "executionGroup"),
+                optionalNumber(facts, "executionOrder"), optionalSetRule(facts.get("optionalSetRule")));
     }
 
     private static Set<String> equipment(Map<String, Object> facts) {
@@ -360,6 +377,13 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
             ramp.calibrationMessage().ifPresent(message -> rampFacts.put("calibrationMessage", message));
             facts.put("rampWarmup", rampFacts);
         });
+        facts.put("instructions", value.instructions().stream().map(step -> {
+            Map<String, Object> instruction = new LinkedHashMap<>();
+            instruction.put("instruction", step.instruction());
+            step.prescription().ifPresent(item -> instruction.put("prescription", item));
+            instruction.put("optional", step.optional());
+            return instruction;
+        }).toList());
         facts.put("countsTowardTrainingVolume", value.countsTowardTrainingVolume());
         facts.put("countsTowardProgression", value.countsTowardProgression());
         return facts;
@@ -399,8 +423,32 @@ public final class JdbcWorkoutSessionRepository implements WorkoutSessionReposit
                 new WorkoutWarmupPrescription.GeneralWarmup(
                         number(general, "occurrences"), number(general, "durationSeconds")),
                 ramp,
+                warmupInstructions(warmup.get("instructions")),
                 booleanValue(warmup, "countsTowardTrainingVolume"),
                 booleanValue(warmup, "countsTowardProgression")));
+    }
+
+    private static Optional<Integer> optionalNumber(Map<String, Object> values, String field) {
+        Object value = values.get(field);
+        return value instanceof Number number ? Optional.of(number.intValue()) : Optional.empty();
+    }
+
+    private static Optional<WorkoutExerciseSnapshot.Prescription.OptionalSetRule> optionalSetRule(Object raw) {
+        if (!(raw instanceof Map<?, ?> values)) return Optional.empty();
+        Map<String, Object> item = new LinkedHashMap<>();
+        values.forEach((key, value) -> item.put(String.valueOf(key), value));
+        return Optional.of(new WorkoutExerciseSnapshot.Prescription.OptionalSetRule(
+                text(item, "conditionCode"), text(item, "exclusiveChoiceGroup"),
+                number(item, "additionalSets"), optionalText(item, "description")));
+    }
+
+    private static List<WorkoutWarmupPrescription.Instruction> warmupInstructions(Object raw) {
+        if (!(raw instanceof List<?> values)) return List.of();
+        return values.stream().map(item -> objectMap(item, "warmupInstruction"))
+                .map(item -> new WorkoutWarmupPrescription.Instruction(
+                        text(item, "instruction"), optionalText(item, "prescription"),
+                        Boolean.TRUE.equals(item.get("optional"))))
+                .toList();
     }
 
     private static Map<String, Object> objectMap(Object value, String field) {

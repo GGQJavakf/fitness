@@ -154,6 +154,12 @@ public final class JdbcPlanRepository implements PlanRepository {
         summary.put("contentVersion", version.ruleReference().contentVersion());
         summary.put("confirmedWarnings", version.confirmedWarningCodes());
         summary.put("templateCode", plan.templateCode());
+        if (plan.presetCode() != null) {
+            summary.put("presetCode", plan.presetCode());
+            summary.put("presetVersion", plan.presetVersion());
+        }
+        summary.put("executionRules", plan.executionRules());
+        summary.put("progressionRules", plan.progressionRules());
         jdbc.update("""
                 INSERT INTO training_plan_version
                     (id, plan_id, version_no, source_type, split_type, frequency,
@@ -184,6 +190,20 @@ public final class JdbcPlanRepository implements PlanRepository {
                 prescription.put("repMin", exercise.repMin());
                 prescription.put("repMax", exercise.repMax());
                 prescription.put("restSeconds", exercise.restSeconds());
+                putNullable(prescription, "targetRirMin", exercise.targetRirMin());
+                putNullable(prescription, "targetRirMax", exercise.targetRirMax());
+                putNullable(prescription, "eccentricSeconds", exercise.eccentricSeconds());
+                prescription.put("perSide", exercise.perSide());
+                putNullable(prescription, "executionGroup", exercise.executionGroup());
+                if (exercise.executionOrder() > 0) prescription.put("executionOrder", exercise.executionOrder());
+                putNullable(prescription, "optionalSetRule", exercise.optionalSetRule());
+                prescription.put("notes", exercise.notes());
+                putNullable(prescription, "weekday", day.weekday());
+                putNullable(prescription, "focus", day.focus());
+                prescription.put("estimatedMinutesMin", day.estimatedMinutesMin());
+                prescription.put("estimatedMinutesMax", day.estimatedMinutesMax());
+                prescription.put("warmup", day.warmup());
+                prescription.put("dayNotes", day.notes());
                 exercise.targetWeightKg().ifPresent(weight -> prescription.put("targetWeightKg", weight));
                 jdbc.update("""
                         INSERT INTO plan_exercise
@@ -235,7 +255,9 @@ public final class JdbcPlanRepository implements PlanRepository {
                 : persistedSplit;
         PlanDraft plan = new PlanDraft(
                 templateCode, parseSplit(persistedSplit, templateCode),
-                String.valueOf(summary.get("name")), days, locks);
+                String.valueOf(summary.get("name")), days, locks,
+                text(summary, "presetCode"), text(summary, "presetVersion"),
+                strings(summary.get("executionRules")), strings(summary.get("progressionRules")));
         Object warnings = summary.get("confirmedWarnings");
         Set<String> confirmed = warnings instanceof List<?> values
                 ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet())
@@ -264,10 +286,22 @@ public final class JdbcPlanRepository implements PlanRepository {
             exercises.add(new PlanDraft.Exercise(
                     String.valueOf(value.get("exerciseCode")), number(value, "workSets"),
                     number(value, "repMin"), number(value, "repMax"), number(value, "restSeconds"),
-                    PlanDraft.WeightStatus.valueOf(item.weightStatus()), decimal(value, "targetWeightKg")));
+                    PlanDraft.WeightStatus.valueOf(item.weightStatus()), decimal(value, "targetWeightKg"),
+                    nullableNumber(value, "targetRirMin"), nullableNumber(value, "targetRirMax"),
+                    nullableNumber(value, "eccentricSeconds"), Boolean.TRUE.equals(value.get("perSide")),
+                    text(value, "executionGroup"), numberOrZero(value, "executionOrder"),
+                    convert(value.get("optionalSetRule"), PlanDraft.OptionalSetRule.class),
+                    strings(value.get("notes"))));
         }
         String dayCode = stored.isEmpty() ? null : String.valueOf(stored.getFirst().values().get("dayCode"));
-        return new PlanDraft.Day(dayCode, dayRow.getString("name"), exercises);
+        Map<String, Object> dayValues = stored.isEmpty() ? Map.of() : stored.getFirst().values();
+        return new PlanDraft.Day(
+                dayCode, dayRow.getString("name"), exercises,
+                text(dayValues, "weekday"), text(dayValues, "focus"),
+                numberOrZero(dayValues, "estimatedMinutesMin"),
+                numberOrZero(dayValues, "estimatedMinutesMax"),
+                convertList(dayValues.get("warmup"), PlanDraft.WarmupStep.class),
+                strings(dayValues.get("dayNotes")));
     }
 
     private static String persistedSplit(PlanDraft plan) {
@@ -305,6 +339,39 @@ public final class JdbcPlanRepository implements PlanRepository {
     private static Optional<java.math.BigDecimal> decimal(Map<String, Object> value, String field) {
         Object number = value.get(field);
         return number == null ? Optional.empty() : Optional.of(new java.math.BigDecimal(String.valueOf(number)));
+    }
+
+    private <T> T convert(Object value, Class<T> type) {
+        return value == null ? null : json.convertValue(value, type);
+    }
+
+    private <T> List<T> convertList(Object value, Class<T> type) {
+        if (!(value instanceof List<?> values)) return List.of();
+        return values.stream().map(item -> json.convertValue(item, type)).toList();
+    }
+
+    private static void putNullable(Map<String, Object> target, String key, Object value) {
+        if (value != null) target.put(key, value);
+    }
+
+    private static String text(Map<String, Object> values, String key) {
+        Object value = values.get(key);
+        return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
+    private static Integer nullableNumber(Map<String, Object> values, String key) {
+        Object value = values.get(key);
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private static int numberOrZero(Map<String, Object> values, String key) {
+        Integer value = nullableNumber(values, key);
+        return value == null ? 0 : value;
+    }
+
+    private static List<String> strings(Object value) {
+        if (!(value instanceof List<?> values)) return List.of();
+        return values.stream().map(String::valueOf).toList();
     }
 
     private static byte[] bytes(UUID value) {

@@ -103,6 +103,7 @@
                     <include>rule-config-v1.json</include>
                     <include>exercises-v1.json</include>
                     <include>plan-templates-v1.json</include>
+                    <include>plan-presets-v1.json</include>
                     <include>archive/exercises-v1.6.0.json</include>
                 </includes>
             </resource>

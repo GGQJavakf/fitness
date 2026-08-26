@@ -35,6 +35,7 @@ const pageRoutes: Record<PageDestination, string> = {
   HOME: '/presentation/pages/home/index',
   ONBOARDING: '/presentation/pages/onboarding/index',
   PLAN_CANDIDATES: '/presentation/pages/plan-candidates/index',
+  PLAN_PRESETS: '/presentation/pages/plan-presets/index',
   PLAN: '/presentation/pages/plan/index',
   PLAN_EDITOR: '/presentation/pages/plan-editor/index',
   MY: '/presentation/pages/my/index',

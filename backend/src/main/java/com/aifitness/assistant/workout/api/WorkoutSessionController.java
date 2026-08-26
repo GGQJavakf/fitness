@@ -234,6 +234,7 @@ public final class WorkoutSessionController {
             String ruleVersion,
             GeneralWarmupData generalWarmup,
             Optional<RampWarmupData> rampWarmup,
+            List<WarmupInstructionData> instructions,
             boolean countsTowardTrainingVolume,
             boolean countsTowardProgression) {
         static WarmupPrescriptionData from(WorkoutWarmupPrescription value) {
@@ -243,12 +244,20 @@ public final class WorkoutSessionController {
                     new GeneralWarmupData(
                             value.generalWarmup().occurrences(), value.generalWarmup().durationSeconds()),
                     value.rampWarmup().map(RampWarmupData::from),
+                    value.instructions().stream().map(WarmupInstructionData::from).toList(),
                     value.countsTowardTrainingVolume(),
                     value.countsTowardProgression());
         }
     }
 
     public record GeneralWarmupData(int occurrences, int durationSeconds) {}
+
+    public record WarmupInstructionData(
+            String instruction, Optional<String> prescription, boolean optional) {
+        static WarmupInstructionData from(WorkoutWarmupPrescription.Instruction value) {
+            return new WarmupInstructionData(value.instruction(), value.prescription(), value.optional());
+        }
+    }
 
     public record RampWarmupData(
             UUID exerciseId,
@@ -296,11 +305,29 @@ public final class WorkoutSessionController {
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     public record PrescriptionData(
             int workSets, int repMin, int repMax, int restSeconds, String weightStatus,
-            Optional<BigDecimal> targetWeightKg, String unit) {
+            Optional<BigDecimal> targetWeightKg, String unit,
+            Optional<Integer> targetRirMin, Optional<Integer> targetRirMax,
+            Optional<Integer> eccentricSeconds, boolean perSide,
+            Optional<String> executionGroup, Optional<Integer> executionOrder,
+            Optional<OptionalSetRuleData> optionalSetRule) {
         static PrescriptionData from(WorkoutExerciseSnapshot.Prescription value) {
             return new PrescriptionData(
                     value.workSets(), value.repMin(), value.repMax(), value.restSeconds(),
-                    value.weightStatus(), value.targetWeightKg(), value.unit());
+                    value.weightStatus(), value.targetWeightKg(), value.unit(),
+                    value.targetRirMin(), value.targetRirMax(), value.eccentricSeconds(), value.perSide(),
+                    value.executionGroup(), value.executionOrder(),
+                    value.optionalSetRule().map(OptionalSetRuleData::from));
+        }
+    }
+
+    @JsonInclude(JsonInclude.Include.NON_ABSENT)
+    public record OptionalSetRuleData(
+            String conditionCode, String exclusiveChoiceGroup, int additionalSets,
+            Optional<String> description) {
+        static OptionalSetRuleData from(WorkoutExerciseSnapshot.Prescription.OptionalSetRule value) {
+            return new OptionalSetRuleData(
+                    value.conditionCode(), value.exclusiveChoiceGroup(), value.additionalSets(),
+                    value.description());
         }
     }
 }

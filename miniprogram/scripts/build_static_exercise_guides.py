@@ -30,8 +30,11 @@ MODEL_SHEET = SOURCE_ROOT / "golden-cat-coach-turnaround-v3.png"
 RIG_PART_SHEET = SOURCE_ROOT / "golden-cat-coach-rig-parts-v4.png"
 IMAGE_SIZE = 256
 MAX_IMAGE_BYTES = 40 * 1024
+DEFAULT_JPEG_QUALITY = 86
+PERSONAL_PRESET_JPEG_QUALITY = 62
 GRID_COLUMNS = 4
 GRID_ROWS = 3
+BACKGROUND_RGB = (250, 248, 241)
 
 BENCH_PRESS_SOURCE_FRAMES = (
     SOURCE_ROOT / "bench-press-v8-v7based/frame-00-bottom.png",
@@ -51,7 +54,46 @@ CURATED_TRIPTYCH_SOURCES: dict[str, Path] = {
     / "dumbbell-lying-triceps-extension-sprite-v4.png",
     "cable-reverse-fly": SOURCE_ROOT / "cable-reverse-fly-sprite-v4.png",
     "machine-shrug": SOURCE_ROOT / "machine-shrug-sprite-v4.png",
+    "smith-flat-bench-press": SOURCE_ROOT / "smith-flat-bench-press-sprite-v1.png",
+    "incline-dumbbell-bench-press-30": SOURCE_ROOT
+    / "incline-dumbbell-bench-press-30-sprite-v1.png",
+    "seated-machine-shoulder-press": SOURCE_ROOT
+    / "seated-machine-shoulder-press-sprite-v1.png",
+    "leaning-pec-deck-fly": SOURCE_ROOT / "leaning-pec-deck-fly-sprite-v1.png",
+    "machine-seated-row": SOURCE_ROOT / "machine-seated-row-sprite-v1.png",
+    "reverse-pec-deck-fly": SOURCE_ROOT / "reverse-pec-deck-fly-sprite-v1.png",
+    "smith-squat": SOURCE_ROOT / "smith-squat-sprite-v1.png",
+    "seated-leg-press": SOURCE_ROOT / "seated-leg-press-sprite-v1.png",
+    "dumbbell-reverse-lunge": SOURCE_ROOT / "dumbbell-reverse-lunge-sprite-v1.png",
+    "seated-leg-extension": SOURCE_ROOT / "seated-leg-extension-sprite-v1.png",
+    "machine-crunch": SOURCE_ROOT / "machine-crunch-sprite-v1.png",
+    "incline-dumbbell-fly": SOURCE_ROOT / "incline-dumbbell-fly-sprite-v1.png",
+    "machine-hip-thrust": SOURCE_ROOT / "machine-hip-thrust-sprite-v1.png",
+    "machine-leg-curl": SOURCE_ROOT / "machine-leg-curl-sprite-v1.png",
+    "machine-hip-abduction": SOURCE_ROOT / "machine-hip-abduction-sprite-v1.png",
+    "standing-calf-raise": SOURCE_ROOT / "standing-calf-raise-sprite-v1.png",
 }
+
+PERSONAL_PRESET_EXERCISE_SLUGS = frozenset(
+    {
+        "smith-flat-bench-press",
+        "incline-dumbbell-bench-press-30",
+        "seated-machine-shoulder-press",
+        "leaning-pec-deck-fly",
+        "machine-seated-row",
+        "reverse-pec-deck-fly",
+        "smith-squat",
+        "seated-leg-press",
+        "dumbbell-reverse-lunge",
+        "seated-leg-extension",
+        "machine-crunch",
+        "incline-dumbbell-fly",
+        "machine-hip-thrust",
+        "machine-leg-curl",
+        "machine-hip-abduction",
+        "standing-calf-raise",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -142,6 +184,30 @@ EXERCISES: tuple[ExerciseSpec, ...] = (
     ExerciseSpec("DEAD_BUG", "dead-bug", "dead-bug"),
     ExerciseSpec("BIRD_DOG", "bird-dog", "bird-dog"),
     ExerciseSpec("PLANK", "plank", "plank"),
+    ExerciseSpec("SMITH_FLAT_BENCH_PRESS", "smith-flat-bench-press", "horizontal-press"),
+    ExerciseSpec(
+        "INCLINE_DUMBBELL_BENCH_PRESS_30",
+        "incline-dumbbell-bench-press-30",
+        "horizontal-press",
+    ),
+    ExerciseSpec(
+        "SEATED_MACHINE_SHOULDER_PRESS",
+        "seated-machine-shoulder-press",
+        "overhead-press",
+    ),
+    ExerciseSpec("LEANING_PEC_DECK_FLY", "leaning-pec-deck-fly", "chest-fly"),
+    ExerciseSpec("MACHINE_SEATED_ROW", "machine-seated-row", "row"),
+    ExerciseSpec("REVERSE_PEC_DECK_FLY", "reverse-pec-deck-fly", "rear-delt"),
+    ExerciseSpec("SMITH_SQUAT", "smith-squat", "squat"),
+    ExerciseSpec("SEATED_LEG_PRESS", "seated-leg-press", "leg-press"),
+    ExerciseSpec("DUMBBELL_REVERSE_LUNGE", "dumbbell-reverse-lunge", "reverse-lunge"),
+    ExerciseSpec("SEATED_LEG_EXTENSION", "seated-leg-extension", "leg-extension"),
+    ExerciseSpec("MACHINE_CRUNCH", "machine-crunch", "machine-crunch"),
+    ExerciseSpec("INCLINE_DUMBBELL_FLY", "incline-dumbbell-fly", "chest-fly"),
+    ExerciseSpec("MACHINE_HIP_THRUST", "machine-hip-thrust", "hip-thrust"),
+    ExerciseSpec("MACHINE_LEG_CURL", "machine-leg-curl", "leg-curl"),
+    ExerciseSpec("MACHINE_HIP_ABDUCTION", "machine-hip-abduction", "hip-abduction"),
+    ExerciseSpec("STANDING_CALF_RAISE", "standing-calf-raise", "calf-raise"),
 )
 
 
@@ -246,6 +312,46 @@ THREE_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
         StageSpec("drive", "垂直耸肩", "保持手肘伸展，将肩部垂直抬高。", 0.5),
         StageSpec("finish", "顶端停稳", "肩部抬高后短暂停稳，不转动肩膀。", 1.0),
     ),
+    "chest-fly": (
+        StageSpec("setup", "胸前稳定", "肩背贴稳，手肘保持轻微弯曲。", 0.0),
+        StageSpec("drive", "向外展开", "沿弧线受控打开双臂，不让肩部过度后伸。", 0.5),
+        StageSpec("finish", "拉伸到位", "胸部有拉伸感时停住，再沿原路径夹回。", 1.0),
+    ),
+    "leg-press": (
+        StageSpec("setup", "屈膝准备", "背部和臀部贴稳靠垫，双脚踩实踏板。", 0.0),
+        StageSpec("drive", "推开踏板", "膝盖跟随脚尖方向，脚跟持续发力。", 0.5),
+        StageSpec("finish", "接近伸直", "腿部接近伸直时停住，不锁死膝盖。", 1.0),
+    ),
+    "reverse-lunge": (
+        StageSpec("setup", "站稳", "躯干直立，双手稳定握住哑铃。", 0.0),
+        StageSpec("drive", "向后迈步", "一脚受控后撤，前脚掌和脚跟保持稳定。", 0.5),
+        StageSpec("finish", "下蹲到位", "前膝跟随脚尖，后膝接近地面后停住。", 1.0),
+    ),
+    "leg-extension": (
+        StageSpec("setup", "屈膝坐稳", "膝盖对齐器械转轴，滚垫贴在小腿前侧。", 0.0),
+        StageSpec("drive", "伸直膝盖", "保持臀部贴稳，平稳抬起小腿。", 0.5),
+        StageSpec("finish", "顶端收紧", "接近伸直时停顿，不用惯性锁死膝盖。", 1.0),
+    ),
+    "machine-crunch": (
+        StageSpec("setup", "坐稳", "髋部和双脚固定，胸廓保持自然。", 0.0),
+        StageSpec("drive", "卷曲躯干", "肋骨向骨盆靠近，用腹部带动器械。", 0.5),
+        StageSpec("finish", "腹部收紧", "在髋部不抬起的范围内停住，再受控返回。", 1.0),
+    ),
+    "hip-thrust": (
+        StageSpec("setup", "落髋准备", "上背和双脚稳定，髋部受垫带固定。", 0.0),
+        StageSpec("drive", "抬起髋部", "脚跟发力，让臀部带动髋部上升。", 0.5),
+        StageSpec("finish", "顶部收紧", "臀部夹紧并停顿，肋骨下沉不过度挺腰。", 1.0),
+    ),
+    "leg-curl": (
+        StageSpec("setup", "伸腿准备", "俯卧贴稳，膝盖对齐转轴，滚垫位于脚跟上方。", 0.0),
+        StageSpec("drive", "屈膝弯腿", "保持髋部贴垫，让脚跟平稳靠近臀部。", 0.5),
+        StageSpec("finish", "收缩到位", "大腿后侧收紧后停顿，再缓慢放回。", 1.0),
+    ),
+    "hip-abduction": (
+        StageSpec("setup", "并腿坐稳", "背部贴稳，器械垫贴住大腿外侧。", 0.0),
+        StageSpec("drive", "向外打开", "从髋部推动双膝向外，躯干保持稳定。", 0.5),
+        StageSpec("finish", "外侧收紧", "在可控幅度停顿，再缓慢合回。", 1.0),
+    ),
 }
 
 FOUR_STAGE_SPECS: dict[str, tuple[StageSpec, ...]] = {
@@ -327,6 +433,15 @@ def source_indices(exercise_slug: str, renderer: str) -> tuple[int, ...]:
     return (0, 2, 5)
 
 
+def flatten_transparency(image: Image.Image) -> Image.Image:
+    """Composite transparent sources before RGB conversion so dark viewers cannot bleed through."""
+    if "A" not in image.getbands() and "transparency" not in image.info:
+        return image.convert("RGB")
+    source = image.convert("RGBA")
+    background = Image.new("RGBA", source.size, (*BACKGROUND_RGB, 255))
+    return Image.alpha_composite(background, source).convert("RGB")
+
+
 def source_image(
     exercise_slug: str,
     renderer: str,
@@ -336,7 +451,7 @@ def source_image(
     triptych_path = CURATED_TRIPTYCH_SOURCES.get(exercise_slug)
     if triptych_path is not None:
         with Image.open(triptych_path) as opened:
-            triptych = opened.convert("RGB")
+            triptych = flatten_transparency(opened)
         left = round(stage_index * triptych.width / 3)
         right = round((stage_index + 1) * triptych.width / 3)
         inset_ratio = 0.03 if exercise_slug == "cable-triceps-pushdown" else 0.01
@@ -355,7 +470,7 @@ def source_image(
     if exercise_slug == "dumbbell-bench-press":
         path = BENCH_PRESS_SOURCE_FRAMES[stage_index]
         with Image.open(path) as opened:
-            return opened.convert("RGB"), path, None
+            return flatten_transparency(opened), path, None
 
     if renderer in {
         "glute-bridge",
@@ -365,14 +480,14 @@ def source_image(
     }:
         path = SOURCE_ROOT / f"{exercise_slug}-keyframe-{stage_index + 1:02d}.png"
         with Image.open(path) as opened:
-            return opened.convert("RGB"), path, None
+            return flatten_transparency(opened), path, None
 
     version = "v4" if exercise_slug == "standing-wall-calf-raise" else "v3"
     path = SOURCE_ROOT / f"{exercise_slug}-sprite-{version}.png"
     source_index = source_indices(exercise_slug, renderer)[stage_index]
     row, column = divmod(source_index, GRID_COLUMNS)
     with Image.open(path) as opened:
-        sheet = opened.convert("RGB")
+        sheet = flatten_transparency(opened)
     left = round(column * sheet.width / GRID_COLUMNS)
     top = round(row * sheet.height / GRID_ROWS)
     right = round((column + 1) * sheet.width / GRID_COLUMNS)
@@ -459,18 +574,22 @@ def isolate_primary_subject(image: Image.Image) -> Image.Image:
     )
 
 
-def encode_jpeg(image: Image.Image) -> bytes:
+def encode_jpeg(
+    image: Image.Image,
+    max_quality: int = DEFAULT_JPEG_QUALITY,
+    min_quality: int = 58,
+) -> bytes:
     resized = ImageOps.contain(
         image,
         (IMAGE_SIZE, IMAGE_SIZE),
         Image.Resampling.LANCZOS,
     )
-    canvas = Image.new("RGB", (IMAGE_SIZE, IMAGE_SIZE), (250, 248, 241))
+    canvas = Image.new("RGB", (IMAGE_SIZE, IMAGE_SIZE), BACKGROUND_RGB)
     canvas.paste(
         resized,
         ((IMAGE_SIZE - resized.width) // 2, (IMAGE_SIZE - resized.height) // 2),
     )
-    for quality in (86, 82, 78, 74, 70):
+    for quality in range(max_quality, min_quality - 1, -4):
         output = BytesIO()
         canvas.save(
             output,
@@ -569,7 +688,14 @@ def build(output: Path) -> list[dict[str, object]]:
             file = (
                 f"{exercise.slug}-{index:02d}-{stage.id}.jpg"
             )
-            value = encode_jpeg(source)
+            value = encode_jpeg(
+                source,
+                max_quality=(
+                    PERSONAL_PRESET_JPEG_QUALITY
+                    if exercise.slug in PERSONAL_PRESET_EXERCISE_SLUGS
+                    else DEFAULT_JPEG_QUALITY
+                ),
+            )
             (output / file).write_bytes(value)
             stage_entries.append(
                 {

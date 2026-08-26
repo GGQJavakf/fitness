@@ -47,12 +47,14 @@ const candidate = {
   days: [{
     code: 'DAY_A',
     name: '训练日 A',
+    notes: ['候选训练日提示'],
     exercises: [{
       exerciseCode: 'GOBLET_SQUAT',
       workSets: 3,
       repRange: '8～12 次',
       restLabel: '休息 90 秒',
       weightLabel: '首次训练中校准',
+      notes: ['候选动作提示'],
     }],
   }],
 }
@@ -71,6 +73,7 @@ const activePlan = {
       days: [{
         code: 'DAY_A',
         name: '训练日 A',
+        notes: ['活动计划训练日提示'],
         exercises: [{
           exerciseCode: 'GOBLET_SQUAT',
           workSets: 3,
@@ -78,6 +81,7 @@ const activePlan = {
           repMax: 12,
           restSeconds: 90,
           weightStatus: 'NEEDS_CALIBRATION',
+          notes: ['活动计划动作提示'],
         }],
       }],
       locks: {},
@@ -131,6 +135,10 @@ describe('plan pages runtime interactions', () => {
 
     expect(renderedText(renderer)).toContain('你的规则生成训练方案')
     expect(renderedText(renderer)).toContain('规则生成计划 · 已通过安全校验')
+    expect(renderedText(renderer)).toContain('训练提示')
+    expect(renderedText(renderer)).toContain('动作提示')
+    expect(renderedText(renderer)).toContain('候选训练日提示')
+    expect(renderedText(renderer)).toContain('候选动作提示')
     expect(application.requestPlanExplanation).not.toHaveBeenCalled()
 
     await act(async () => {
@@ -235,6 +243,10 @@ describe('plan pages runtime interactions', () => {
     expect(copy).toContain('确定性规则引擎生成')
     expect(copy).toContain('推拉腿')
     expect(copy).toContain('训练分化')
+    expect(copy).toContain('训练提示')
+    expect(copy).toContain('动作提示')
+    expect(copy).toContain('活动计划训练日提示')
+    expect(copy).toContain('活动计划动作提示')
     expect(copy).not.toContain('基础保底计划')
     expect(copy).not.toContain('AI 生成暂不可用')
 
@@ -251,6 +263,41 @@ describe('plan pages runtime interactions', () => {
     })
     expect(application.navigation.open).toHaveBeenCalledWith('WORKOUT_PREPARE')
     expect(application.navigation.replace).toHaveBeenCalledWith('HISTORY')
+    expect(application.openPlanEditor).toHaveBeenCalledOnce()
+    expect(application.navigation.open).toHaveBeenCalledWith('PLAN_EDITOR')
+  })
+
+  it('keeps an activated system preset editable while showing its traceable source', async () => {
+    const presetPlan = {
+      ...activePlan,
+      activeVersion: {
+        ...activePlan.activeVersion,
+        plan: {
+          ...activePlan.activeVersion.plan,
+          presetCode: 'PERSONAL_5_DAY_HYPERTROPHY_V1',
+          presetVersion: '1.0.0',
+        },
+      },
+    }
+    application.getActivePlan.mockReturnValue(presetPlan)
+    application.loadActivePlan.mockResolvedValue(presetPlan)
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PlanPage))
+      await flushPage()
+    })
+    if (!renderer) throw new Error('preset plan page did not render')
+
+    const copy = renderedText(renderer)
+    expect(copy).toContain('系统个人预设 · 来源可追溯')
+    expect(copy).not.toContain('处方已锁定')
+
+    await act(async () => {
+      button(renderer!, '修改训练计划').props.onClick()
+      await flushPage()
+    })
+
     expect(application.openPlanEditor).toHaveBeenCalledOnce()
     expect(application.navigation.open).toHaveBeenCalledWith('PLAN_EDITOR')
   })
