@@ -26,6 +26,11 @@ application-local.yml
 coverage/
 artifacts/
 
+# Local UI and Android startup diagnostics belong outside the Git worktree
+.playwright-cli/
+miniprogram/diagnostic-taro/
+miniprogram/formal-*.png
+
 # Local generation and language caches
 .tmp/
 __pycache__/
