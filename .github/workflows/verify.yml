@@ -24,13 +24,18 @@ jobs:
       TARO_APP_CLOUDBASE_ENV_ID: ci-placeholder
       TARO_APP_CLOUDBASE_SERVICE_NAME: ci-placeholder
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: miniprogram/package-lock.json
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install deterministic exercise-guide image tooling
+        run: python -m pip install --only-binary=:all: --requirement requirements-ci.txt
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: 21
