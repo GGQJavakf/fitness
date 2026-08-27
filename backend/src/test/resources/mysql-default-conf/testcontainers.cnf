@@ -1,0 +1,5 @@
+[mysqld]
+# Flyway migrations create integrity-enforcing triggers. The Testcontainers
+# database uses a non-SUPER application user, so explicitly allow trusted
+# trigger/function creators while MySQL binary logging is enabled.
+log_bin_trust_function_creators=1
