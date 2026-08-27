@@ -59,6 +59,13 @@ export function buildVerificationSteps(platform, target) {
       unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
     },
     {
+      label: 'Maven runtime preflight',
+      executable: process.execPath,
+      arguments: [resolve(repositoryRoot, 'scripts', 'assert-maven-runtime.mjs')],
+      cwd: repositoryRoot,
+      unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
+    },
+    {
       label: 'backend verification',
       executable: windows ? 'mvnw.cmd' : 'sh',
       arguments: windows ? ['clean', 'verify'] : ['./mvnw', 'clean', 'verify'],
