@@ -16,10 +16,18 @@ const BACKEND_ONLY_RELEASE_ENVIRONMENT_KEYS = RELEASE_ENVIRONMENT_KEYS.filter(
 )
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 
-export function parseVerificationTarget(argumentsList) {
+export function parseVerificationOptions(argumentsList) {
   let target
+  let skipReleasePreflight = false
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index]
+    if (argument === '--skip-release-preflight') {
+      if (skipReleasePreflight) {
+        throw new Error('--skip-release-preflight may only be specified once')
+      }
+      skipReleasePreflight = true
+      continue
+    }
     if (argument !== '--target') throw new Error(`Unknown argument: ${argument}`)
     const value = argumentsList[index + 1]
     if (!value || value.startsWith('--')) throw new Error('--target requires a value')
@@ -31,26 +39,37 @@ export function parseVerificationTarget(argumentsList) {
     index += 1
   }
   if (!target) throw new Error('--target is required')
-  return target
+  if (target === 'public' && skipReleasePreflight) {
+    throw new Error('--skip-release-preflight is not allowed for public verification')
+  }
+  return { target, skipReleasePreflight }
 }
 
-export function buildVerificationSteps(platform, target) {
+export function parseVerificationTarget(argumentsList) {
+  return parseVerificationOptions(argumentsList).target
+}
+
+export function buildVerificationSteps(platform, target, options = {}) {
   if (!RELEASE_TARGETS.includes(target)) throw new Error(`Unsupported target: ${target}`)
   const windows = platform === 'win32'
-  return [
+  const steps = [
     {
       label: 'mini-program verification',
       executable: windows ? 'npm.cmd' : 'npm',
       arguments: ['run', 'verify'],
       cwd: resolve(repositoryRoot, 'miniprogram'),
       unsetEnvironment: BACKEND_ONLY_RELEASE_ENVIRONMENT_KEYS
-    },
-    {
+    }
+  ]
+  if (!options.skipReleasePreflight) {
+    steps.push({
       label: 'release configuration preflight',
       executable: windows ? 'npm.cmd' : 'npm',
       arguments: ['run', target === 'public' ? 'preflight:release' : 'preflight:staging'],
       cwd: resolve(repositoryRoot, 'miniprogram')
-    },
+    })
+  }
+  steps.push(
     {
       label: 'backend verification runtime preflight',
       executable: process.execPath,
@@ -86,12 +105,13 @@ export function buildVerificationSteps(platform, target) {
       cwd: repositoryRoot,
       unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
     }
-  ]
+  )
+  return steps
 }
 
 function run() {
   try {
-    const target = parseVerificationTarget(process.argv.slice(2))
+    const options = parseVerificationOptions(process.argv.slice(2))
     const selectedConfigurationFile = DEFAULT_LOCAL_RELEASE_ENVIRONMENT_FILE
     const configurationExists = existsSync(selectedConfigurationFile)
     const baseEnvironment = configurationExists
@@ -100,7 +120,13 @@ function run() {
     if (configurationExists) {
       console.log(`[verify] loaded local release configuration: ${selectedConfigurationFile}`)
     }
-    for (const step of buildVerificationSteps(process.platform, target)) {
+    if (options.skipReleasePreflight) {
+      console.log(
+        '[verify] release configuration preflight omitted for placeholder-only CI; '
+        + 'this run is not release acceptance'
+      )
+    }
+    for (const step of buildVerificationSteps(process.platform, options.target, options)) {
       console.log(`\n[verify] ${step.label}`)
       const environment = { ...baseEnvironment }
       for (const key of step.unsetEnvironment ?? []) delete environment[key]

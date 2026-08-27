@@ -55,5 +55,5 @@ jobs:
       - name: Audit packaged mini-program dependencies
         working-directory: miniprogram
         run: npm run audit:packaged
-      - name: Run repository verification
-        run: node scripts/verify.mjs --target staging-experience
+      - name: Run repository verification (not release acceptance)
+        run: node scripts/verify.mjs --target staging-experience --skip-release-preflight

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildVerificationSteps,
+  parseVerificationOptions,
   parseVerificationTarget
 } from '../../scripts/verify.mjs'
 import { ALLOWED_RELEASE_ENVIRONMENT_KEYS } from '../../scripts/release-environment.mjs'
@@ -13,6 +14,9 @@ describe('repository verification entry', () => {
     expect(() => parseVerificationTarget([])).toThrow(/--target is required/)
     expect(() => parseVerificationTarget(['--target', 'production'])).toThrow(/staging-experience, public/)
     expect(parseVerificationTarget(['--target', 'staging-experience'])).toBe('staging-experience')
+    expect(() => parseVerificationOptions([
+      '--target', 'public', '--skip-release-preflight'
+    ])).toThrow(/not allowed for public/)
   })
 
   it('composes frontend, release, Docker-or-MySQL, Maven, backend, zero-skip and audit gates', () => {
@@ -49,6 +53,27 @@ describe('repository verification entry', () => {
     expect(steps[6].arguments[0]).toMatch(/audit-maven-runtime-osv\.mjs$/)
     expect(steps[6].unsetEnvironment).toEqual(releaseKeys)
     expect(JSON.stringify(steps)).not.toMatch(/deploy|upload|release:publish/i)
+  })
+
+  it('allows placeholder-only staging CI to omit only release acceptance', () => {
+    const options = parseVerificationOptions([
+      '--target', 'staging-experience', '--skip-release-preflight'
+    ])
+    const steps = buildVerificationSteps('linux', options.target, options)
+
+    expect(options).toEqual({
+      target: 'staging-experience',
+      skipReleasePreflight: true
+    })
+    expect(steps.map((step) => step.label)).toEqual([
+      'mini-program verification',
+      'backend verification runtime preflight',
+      'Maven runtime preflight',
+      'backend verification',
+      'backend zero-skip report gate',
+      'backend runtime dependency audit'
+    ])
+    expect(steps.some((step) => step.label === 'release configuration preflight')).toBe(false)
   })
 
   it('documents one git-ignored local release configuration surface', () => {
