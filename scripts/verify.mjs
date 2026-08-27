@@ -52,10 +52,24 @@ export function buildVerificationSteps(platform, target) {
       cwd: resolve(repositoryRoot, 'miniprogram')
     },
     {
+      label: 'backend verification runtime preflight',
+      executable: process.execPath,
+      arguments: [resolve(repositoryRoot, 'scripts', 'assert-backend-verification-runtime.mjs')],
+      cwd: repositoryRoot,
+      unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
+    },
+    {
       label: 'backend verification',
       executable: windows ? 'mvnw.cmd' : 'sh',
       arguments: windows ? ['clean', 'verify'] : ['./mvnw', 'clean', 'verify'],
       cwd: resolve(repositoryRoot, 'backend'),
+      unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
+    },
+    {
+      label: 'backend zero-skip report gate',
+      executable: process.execPath,
+      arguments: [resolve(repositoryRoot, 'scripts', 'assert-maven-test-reports.mjs')],
+      cwd: repositoryRoot,
       unsetEnvironment: RELEASE_ENVIRONMENT_KEYS
     },
     {

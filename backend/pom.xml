@@ -170,6 +170,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <failIfNoTests>true</failIfNoTests>
                     <systemPropertyVariables>
                         <packaged.application.jar>${project.build.directory}/${project.build.finalName}.jar</packaged.application.jar>
                         <fitness.verification.run-id>${maven.build.timestamp}</fitness.verification.run-id>

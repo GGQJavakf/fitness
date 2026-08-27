@@ -15,7 +15,7 @@ describe('repository verification entry', () => {
     expect(parseVerificationTarget(['--target', 'staging-experience'])).toBe('staging-experience')
   })
 
-  it('composes frontend API drift, type, tests, build, preflight and backend verify', () => {
+  it('composes frontend, release, Docker-or-MySQL, backend, zero-skip and audit gates', () => {
     const steps = buildVerificationSteps('linux', 'staging-experience')
     const releaseKeys = [...ALLOWED_RELEASE_ENVIRONMENT_KEYS]
     const backendOnlyKeys = releaseKeys.filter((key) => !key.startsWith('TARO_APP_'))
@@ -23,19 +23,27 @@ describe('repository verification entry', () => {
     expect(steps.map((step) => step.label)).toEqual([
       'mini-program verification',
       'release configuration preflight',
+      'backend verification runtime preflight',
       'backend verification',
+      'backend zero-skip report gate',
       'backend runtime dependency audit'
     ])
     expect(steps[0].arguments).toEqual(['run', 'verify'])
     expect(steps[0].unsetEnvironment).toEqual(backendOnlyKeys)
     expect(steps[1].arguments).toEqual(['run', 'preflight:staging'])
     expect(steps[1].unsetEnvironment).toBeUndefined()
-    expect(steps[2].executable).toBe('sh')
-    expect(steps[2].arguments).toEqual(['./mvnw', 'clean', 'verify'])
+    expect(steps[2].executable).toBe(process.execPath)
+    expect(steps[2].arguments[0]).toMatch(/assert-backend-verification-runtime\.mjs$/)
     expect(steps[2].unsetEnvironment).toEqual(releaseKeys)
-    expect(steps[3].executable).toBe(process.execPath)
-    expect(steps[3].arguments[0]).toMatch(/audit-maven-runtime-osv\.mjs$/)
+    expect(steps[3].executable).toBe('sh')
+    expect(steps[3].arguments).toEqual(['./mvnw', 'clean', 'verify'])
     expect(steps[3].unsetEnvironment).toEqual(releaseKeys)
+    expect(steps[4].executable).toBe(process.execPath)
+    expect(steps[4].arguments[0]).toMatch(/assert-maven-test-reports\.mjs$/)
+    expect(steps[4].unsetEnvironment).toEqual(releaseKeys)
+    expect(steps[5].executable).toBe(process.execPath)
+    expect(steps[5].arguments[0]).toMatch(/audit-maven-runtime-osv\.mjs$/)
+    expect(steps[5].unsetEnvironment).toEqual(releaseKeys)
     expect(JSON.stringify(steps)).not.toMatch(/deploy|upload|release:publish/i)
   })
 
