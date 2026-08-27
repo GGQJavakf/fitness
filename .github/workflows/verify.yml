@@ -42,11 +42,13 @@ jobs:
         run: |
           node - <<'NODE'
           const fs = require('node:fs')
-          const source = JSON.parse(fs.readFileSync('miniprogram/project.config.json', 'utf8'))
-          const root = { ...source, miniprogramRoot: 'miniprogram/dist/' }
+          const template = JSON.parse(fs.readFileSync('project.config.example.json', 'utf8'))
+          const appid = 'wx0000000000000000'
+          const root = { ...template, appid, miniprogramRoot: 'miniprogram/dist/' }
           fs.writeFileSync('project.config.json', `${JSON.stringify(root, null, 2)}\n`)
-          fs.appendFileSync(process.env.GITHUB_ENV, `WECHAT_APP_ID=${source.appid}\n`)
+          fs.appendFileSync(process.env.GITHUB_ENV, `WECHAT_APP_ID=${appid}\n`)
           NODE
+          node scripts/prepare-wechat-project-config.mjs
       - name: Install mini-program dependencies
         working-directory: miniprogram
         run: npm ci --ignore-scripts

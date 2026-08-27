@@ -3,6 +3,7 @@
   "projectname": "ai-fitness-miniprogram",
   "description": "AI 健身助手微信小程序",
   "appid": "touristappid",
+  "libVersion": "3.15.1",
   "compileType": "miniprogram",
   "setting": {
     "urlCheck": true,

@@ -13,15 +13,16 @@ Set-Location backend
 .\mvnw.cmd spring-boot:run
 ```
 
-小程序默认请求 `http://127.0.0.1:8080`：
+小程序默认请求 `http://127.0.0.1:8080`。仓库根目录的 `project.config.json` 是唯一需要人工维护的微信项目配置：
 
 ```powershell
 Copy-Item project.config.example.json project.config.json
+# 在 project.config.json 中填写自己的微信小程序 AppID
 Set-Location miniprogram
 npm run dev:weapp
 ```
 
-首次启动前请在本地 `project.config.json` 中填写自己的微信小程序 AppID。该文件不会进入 Git，仓库仅维护脱敏模板 `project.config.example.json`。
+`npm run dev:weapp`、`npm run build:weapp` 和发布预检会自动从根配置派生 `miniprogram/project.config.json`，并把其 `miniprogramRoot` 调整为 `./dist`。两份实际配置都被 Git 忽略；仓库只维护脱敏模板，真实 AppID 不进入版本库。微信开发者工具直接导入仓库根目录。
 
 ### CloudBase AI
 
@@ -59,4 +60,4 @@ npm run build:weapp
 node scripts/verify.mjs --target staging-experience
 ```
 
-Docker 可用时，后端 `verify` 会额外使用临时 MySQL 启动打包 jar 并执行真实 HTTP smoke；数据库和进程仅用于本次验证。无本地 Docker 时，也可按 [发布预检手册](docs/release-preflight.md) 使用获批的非生产一次性空 MySQL 8 schema；不得复用或清理已有业务库。
+仓库级验证要求 Docker 服务可用，或同时配置获批的迁移测试与打包烟测 MySQL 8 临时数据库；随后会检查 Maven XML 报告，关键数据库迁移和打包 JAR 烟测不得缺失或跳过。数据库与进程仅用于本次验证。外部数据库必须按 [发布预检手册](docs/release-preflight.md) 使用非生产一次性空 schema，不得复用或清理已有业务库。
