@@ -1,10 +1,11 @@
 import { Button, Text, View } from '@tarojs/components'
-import Taro from '@tarojs/taro'
 import {
   Component,
   type PropsWithChildren,
   type ReactNode,
 } from 'react'
+
+import { recoverWeappHome } from './platform/weapp/appRecovery'
 
 import './app.scss'
 
@@ -36,9 +37,7 @@ class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBoundaryStat
 
     let recovery: Promise<unknown>
     try {
-      recovery = Promise.resolve(Taro.reLaunch({
-        url: '/presentation/pages/home/index',
-      }))
+      recovery = recoverWeappHome()
     } catch {
       this.setState({ failed: true, recovering: false })
       return
