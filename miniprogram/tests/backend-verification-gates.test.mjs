@@ -72,6 +72,26 @@ describe('Maven zero-skip report gate', () => {
     })
   })
 
+  it('fails closed when a testsuite counter is missing or malformed', () => {
+    expect(() => parseTestsuiteReport(
+      '<testsuite tests="1" failures="0" errors="0"></testsuite>',
+      'missing-counter.xml',
+    )).toThrow(/missing or invalid skipped attribute: missing-counter\.xml/)
+
+    expect(() => parseTestsuiteReport(
+      '<testsuite tests="1" failures="broken" errors="0" skipped="0"></testsuite>',
+      'malformed-counter.xml',
+    )).toThrow(/missing or invalid failures attribute: malformed-counter\.xml/)
+  })
+
+  it('rejects testsuite counters outside the JavaScript safe integer range', () => {
+    const unsafeTests = '9'.repeat(400)
+    expect(() => parseTestsuiteReport(
+      `<testsuite tests="${unsafeTests}" failures="0" errors="0" skipped="0"></testsuite>`,
+      'unsafe-counter.xml',
+    )).toThrow(/unsafe tests attribute: unsafe-counter\.xml/)
+  })
+
   it('requires both critical suites and rejects any skipped test', () => {
     const reports = [
       {

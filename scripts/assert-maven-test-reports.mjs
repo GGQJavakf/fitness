@@ -12,9 +12,16 @@ const CRITICAL_REPORTS = [
   'TEST-com.aifitness.assistant.release.PackagedApplicationSmokeIT.xml',
 ]
 
-function integerAttribute(attributes, name) {
-  const match = attributes.match(new RegExp(`\\b${name}="(\\d+)"`))
-  return match ? Number(match[1]) : 0
+function integerAttribute(attributes, name, path) {
+  const match = attributes.match(new RegExp(`\\b${name}\\s*=\\s*(["'])([^"']*)\\1`))
+  if (!match || !/^\d+$/.test(match[2])) {
+    throw new Error(`Maven test report contains missing or invalid ${name} attribute: ${path}`)
+  }
+  const value = Number(match[2])
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`Maven test report contains unsafe ${name} attribute: ${path}`)
+  }
+  return value
 }
 
 export function parseTestsuiteReport(source, path = '<memory>') {
@@ -22,10 +29,10 @@ export function parseTestsuiteReport(source, path = '<memory>') {
   if (matches.length === 0) throw new Error(`Maven test report contains no testsuite: ${path}`)
   return matches.map((match) => ({
     path,
-    tests: integerAttribute(match[1], 'tests'),
-    failures: integerAttribute(match[1], 'failures'),
-    errors: integerAttribute(match[1], 'errors'),
-    skipped: integerAttribute(match[1], 'skipped'),
+    tests: integerAttribute(match[1], 'tests', path),
+    failures: integerAttribute(match[1], 'failures', path),
+    errors: integerAttribute(match[1], 'errors', path),
+    skipped: integerAttribute(match[1], 'skipped', path),
   }))
 }
 
