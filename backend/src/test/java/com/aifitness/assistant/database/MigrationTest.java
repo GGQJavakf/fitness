@@ -21,10 +21,12 @@ import com.aifitness.assistant.identity.infrastructure.JdbcSessionStore;
 import com.aifitness.assistant.content.infrastructure.ClasspathContentCatalogRepository;
 import com.aifitness.assistant.content.infrastructure.JdbcContentCatalogPublisher;
 import com.aifitness.assistant.plan.application.PlanVersionService;
+import com.aifitness.assistant.plan.application.PlanCandidateService;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
+import com.aifitness.assistant.plan.infrastructure.JdbcPlanCandidateStore;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanWorkoutSnapshotQuery;
 import com.aifitness.assistant.profile.application.ProfileService;
 import com.aifitness.assistant.profile.domain.EquipmentProfile;
@@ -378,7 +380,8 @@ class MigrationTest {
                 "db/migration/V022__workout_set_safety_flag.sql",
                 "db/migration/V023__backfill_workout_set_idempotency.sql",
                 "db/migration/V024__workout_recovery_confirmation.sql",
-                "db/migration/V025__plan_candidate_commit_idempotency.sql"))
+                "db/migration/V025__plan_candidate_commit_idempotency.sql",
+                "db/migration/V026__shared_plan_candidates.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -535,6 +538,12 @@ class MigrationTest {
                 "ck_plan_candidate_commit_result",
                 "trg_plan_candidate_commit_receipt_controlled_update",
                 "trg_plan_candidate_commit_receipt_immutable_delete");
+        assertThat(readMigration("V026__shared_plan_candidates.sql")).contains(
+                "CREATE TABLE plan_candidate",
+                "candidate_json JSON NOT NULL",
+                "PRIMARY KEY (user_id, candidate_id)",
+                "idx_plan_candidate_expiry",
+                "fk_plan_candidate_user");
     }
 
     @Test
@@ -546,7 +555,69 @@ class MigrationTest {
                 .containsExactly(
                         "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
                         "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
-                        "025");
+                        "025", "026");
+    }
+
+    @Test
+    void generatedPlanCandidatesAreSharedAcrossJdbcAdaptersAndScopedToTheirOwner() throws Exception {
+        migrateEmptyMysqlDatabase();
+        AuthenticatedUserId owner = new AuthenticatedUserId(UUID.fromString(createUser()));
+        AuthenticatedUserId other = new AuthenticatedUserId(UUID.fromString(createUser()));
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JdbcPlanCandidateStore firstInstance = new JdbcPlanCandidateStore(dataSource, objectMapper, 512);
+        JdbcPlanCandidateStore secondInstance = new JdbcPlanCandidateStore(dataSource, objectMapper, 512);
+        String candidateId = UUID.randomUUID().toString();
+        Instant expiresAt = Instant.now().plusSeconds(300).truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        PlanCandidateService.CandidateEnvelope candidate = sharedCandidate(candidateId, expiresAt);
+
+        firstInstance.save(owner, candidate);
+
+        assertThat(secondInstance.find(owner, candidateId)).contains(candidate);
+        assertThat(secondInstance.find(other, candidateId)).isEmpty();
+        assertThat(secondInstance.find(owner, "not-a-uuid")).isEmpty();
+    }
+
+    @Test
+    void concurrentJdbcCandidateSavesRetainBothNewestCandidatesWithinTheSharedCapacity()
+            throws Exception {
+        migrateEmptyMysqlDatabase();
+        String ownerId = createUser();
+        AuthenticatedUserId owner = new AuthenticatedUserId(UUID.fromString(ownerId));
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+        JdbcPlanCandidateStore firstInstance = new JdbcPlanCandidateStore(dataSource, objectMapper, 2);
+        JdbcPlanCandidateStore secondInstance = new JdbcPlanCandidateStore(dataSource, objectMapper, 2);
+        Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+        firstInstance.save(owner, sharedCandidate(UUID.randomUUID().toString(), now.plusSeconds(300)));
+        secondInstance.save(owner, sharedCandidate(UUID.randomUUID().toString(), now.plusSeconds(300)));
+        PlanCandidateService.CandidateEnvelope firstNewest =
+                sharedCandidate(UUID.randomUUID().toString(), now.plusSeconds(600));
+        PlanCandidateService.CandidateEnvelope secondNewest =
+                sharedCandidate(UUID.randomUUID().toString(), now.plusSeconds(600));
+        CountDownLatch start = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+
+        try {
+            var firstSave = executor.submit(() -> {
+                start.await();
+                firstInstance.save(owner, firstNewest);
+                return null;
+            });
+            var secondSave = executor.submit(() -> {
+                start.await();
+                secondInstance.save(owner, secondNewest);
+                return null;
+            });
+            start.countDown();
+            firstSave.get(10, TimeUnit.SECONDS);
+            secondSave.get(10, TimeUnit.SECONDS);
+
+            assertThat(firstInstance.find(owner, firstNewest.candidateId())).contains(firstNewest);
+            assertThat(secondInstance.find(owner, secondNewest.candidateId())).contains(secondNewest);
+            assertThat(queryOne("SELECT COUNT(*) FROM plan_candidate WHERE user_id = "
+                    + binary(ownerId))).isEqualTo("2");
+        } finally {
+            executor.shutdownNow();
+        }
     }
 
     @Test
@@ -1393,6 +1464,32 @@ class MigrationTest {
                 Map.of());
     }
 
+    private static PlanCandidateService.CandidateEnvelope sharedCandidate(
+            String candidateId,
+            Instant expiresAt) {
+        return new PlanCandidateService.CandidateEnvelope(
+                candidateId,
+                PlanCandidateService.GenerationSource.FALLBACK_RULE_PLAN,
+                new PlanDraft(
+                        "TEST",
+                        "Shared candidate",
+                        List.of(new PlanDraft.Day(
+                                "DAY_1",
+                                "Day 1",
+                                List.of(new PlanDraft.Exercise(
+                                        "SQUAT",
+                                        3,
+                                        8,
+                                        12,
+                                        90,
+                                        PlanDraft.WeightStatus.NEEDS_CALIBRATION)))),
+                        Map.of()),
+                new RuleReference("rules", "templates", "exercises"),
+                PlanCandidateService.ExplanationStatus.DEGRADED,
+                "fallback",
+                expiresAt);
+    }
+
     private static PlanDraft noJumpPresetPlanDraft(String exerciseCode, int restSeconds) {
         PlanDraft plan = planDraft(exerciseCode, restSeconds);
         return new PlanDraft(
@@ -1681,7 +1778,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(14);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(15);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         if (externalValidationJdbcUrl != null) {

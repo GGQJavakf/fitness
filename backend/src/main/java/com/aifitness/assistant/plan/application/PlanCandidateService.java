@@ -51,7 +51,7 @@ public final class PlanCandidateService {
     private final PlanDurationEstimator durationEstimator;
     private final SystemPlanPresetCatalog presets;
     private final Clock clock;
-    private final PlanCandidateCache generatedCandidates;
+    private final PlanCandidateStore generatedCandidates;
 
     public PlanCandidateService(
             ProfileService profiles,
@@ -88,6 +88,20 @@ public final class PlanCandidateService {
             SystemPlanPresetCatalog presets,
             Clock clock,
             int maximumCachedCandidates) {
+        this(profiles, templates, exercises, generator, validator, policy, presets, clock,
+                new PlanCandidateCache(clock, maximumCachedCandidates));
+    }
+
+    public PlanCandidateService(
+            ProfileService profiles,
+            TemplateQueryService templates,
+            ExerciseQueryService exercises,
+            PlanGenerationEngine generator,
+            PlanValidationEngine validator,
+            PlanRulePolicy policy,
+            SystemPlanPresetCatalog presets,
+            Clock clock,
+            PlanCandidateStore generatedCandidates) {
         this.profiles = Objects.requireNonNull(profiles, "profiles must not be null");
         this.templates = Objects.requireNonNull(templates, "templates must not be null");
         this.exercises = Objects.requireNonNull(exercises, "exercises must not be null");
@@ -97,7 +111,8 @@ public final class PlanCandidateService {
         this.durationEstimator = new PlanDurationEstimator(policy.duration());
         this.presets = Objects.requireNonNull(presets, "presets must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
-        this.generatedCandidates = new PlanCandidateCache(clock, maximumCachedCandidates);
+        this.generatedCandidates = Objects.requireNonNull(
+                generatedCandidates, "generated candidates must not be null");
     }
 
     public GenerationContext generationContext(AuthenticatedUserId user, long profileVersion) {
@@ -288,7 +303,7 @@ public final class PlanCandidateService {
         if (candidateId == null || candidateId.isBlank()) {
             throw new IllegalArgumentException("candidateId must not be blank");
         }
-        return generatedCandidates.get(candidateKey(user, candidateId))
+        return generatedCandidates.find(user, candidateId)
                 .orElseThrow(CandidateNotFoundException::new);
     }
 
@@ -347,7 +362,7 @@ public final class PlanCandidateService {
             return noCandidate(issues, Map.of());
         }
         CandidateEnvelope candidate = presetEnvelope(user, profile, effectivePlan);
-        generatedCandidates.put(candidateKey(user, candidate.candidateId()), candidate);
+        generatedCandidates.save(user, candidate);
         return new GeneratedCandidates(
                 GenerationStatus.CANDIDATE_READY, Optional.of(candidate), issues, Map.of());
     }
@@ -547,7 +562,7 @@ public final class PlanCandidateService {
         Map<String, FieldLock.Status> lockedOutcomes = lockedOutcomes(result.lockedFieldOutcomes().keySet());
         Optional<CandidateEnvelope> candidate = result.candidate()
                 .map(value -> envelope(user, profile, value, lockedOutcomes, source, trainingSplit));
-        candidate.ifPresent(value -> generatedCandidates.put(candidateKey(user, value.candidateId()), value));
+        candidate.ifPresent(value -> generatedCandidates.save(user, value));
         return new GeneratedCandidates(
                 GenerationStatus.valueOf(result.status().name()), candidate, issues, lockedOutcomes);
     }
@@ -677,10 +692,6 @@ public final class PlanCandidateService {
             throw new ProfileService.VersionConflictException(profile.version());
         }
         return profile;
-    }
-
-    private static String candidateKey(AuthenticatedUserId user, String candidateId) {
-        return user.value() + ":" + candidateId;
     }
 
     private CandidateEnvelope envelope(

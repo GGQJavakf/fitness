@@ -12,6 +12,7 @@ import com.aifitness.assistant.content.infrastructure.JdbcContentCatalogPublishe
 import com.aifitness.assistant.plan.api.PlanCandidateController;
 import com.aifitness.assistant.plan.api.PlanController;
 import com.aifitness.assistant.plan.api.PlanExceptionHandler;
+import com.aifitness.assistant.plan.application.PlanCandidateStore;
 import com.aifitness.assistant.plan.application.PlanRepository;
 import com.aifitness.assistant.plan.infrastructure.JdbcPlanRepository;
 import com.aifitness.assistant.plan.infrastructure.PlanConfiguration;
@@ -50,6 +51,9 @@ class ExperienceContentPlanConfigurationTest {
             assertThat(context).hasSingleBean(ApplicationRunner.class);
             assertThat(context).hasSingleBean(PlanRepository.class);
             assertThat(context.getBean(PlanRepository.class)).isInstanceOf(JdbcPlanRepository.class);
+            assertThat(context).hasSingleBean(PlanCandidateStore.class);
+            assertThat(context.getBean(PlanCandidateStore.class).getClass().getSimpleName())
+                    .isEqualTo("JdbcPlanCandidateStore");
         });
     }
 

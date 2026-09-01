@@ -9,6 +9,8 @@ import com.aifitness.assistant.plan.application.CandidateCommitReceiptStore;
 import com.aifitness.assistant.plan.application.CandidateCommitService;
 import com.aifitness.assistant.plan.application.CandidateCommitTransaction;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
+import com.aifitness.assistant.plan.application.PlanCandidateCache;
+import com.aifitness.assistant.plan.application.PlanCandidateStore;
 import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.application.PlanRepository;
 import com.aifitness.assistant.plan.application.PlanVersionService;
@@ -65,9 +67,9 @@ public class PlanConfiguration {
             PlanRulePolicy policy,
             SystemPlanPresetCatalog presets,
             Clock clock,
-            @Value("${fitness.plan.candidate-cache-capacity:512}") int candidateCacheCapacity) {
+            PlanCandidateStore candidateStore) {
         return new PlanCandidateService(
-                profiles, templates, exercises, generator, validator, policy, presets, clock, candidateCacheCapacity);
+                profiles, templates, exercises, generator, validator, policy, presets, clock, candidateStore);
     }
 
     @Bean
@@ -142,6 +144,24 @@ public class PlanConfiguration {
     PlanRepository mysqlPlanRepository(DataSource dataSource, ObjectMapper objectMapper) {
         return new JdbcPlanRepository(dataSource, objectMapper, code -> UUID.nameUUIDFromBytes(
                 ("ai-fitness-exercise:" + code).getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @Bean
+    @ConditionalOnProperty(
+            prefix = "fitness.plan", name = "repository", havingValue = "memory", matchIfMissing = true)
+    PlanCandidateStore inMemoryPlanCandidateStore(
+            Clock clock,
+            @Value("${fitness.plan.candidate-cache-capacity:512}") int candidateCacheCapacity) {
+        return new PlanCandidateCache(clock, candidateCacheCapacity);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "fitness.plan", name = "repository", havingValue = "mysql")
+    PlanCandidateStore jdbcPlanCandidateStore(
+            DataSource dataSource,
+            ObjectMapper objectMapper,
+            @Value("${fitness.plan.candidate-cache-capacity:512}") int candidateCacheCapacity) {
+        return new JdbcPlanCandidateStore(dataSource, objectMapper, candidateCacheCapacity);
     }
 
     @Bean

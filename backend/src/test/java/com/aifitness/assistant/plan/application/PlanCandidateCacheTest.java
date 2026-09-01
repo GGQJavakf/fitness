@@ -3,6 +3,7 @@ package com.aifitness.assistant.plan.application;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.aifitness.assistant.common.domain.RuleReference;
+import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.plan.domain.PlanDraft;
 import java.time.Clock;
 import java.time.Instant;
@@ -14,15 +15,19 @@ import org.junit.jupiter.api.Test;
 
 class PlanCandidateCacheTest {
 
+    private static final AuthenticatedUserId USER = new AuthenticatedUserId(
+            java.util.UUID.fromString("00000000-0000-0000-0000-000000000101"));
+
     @Test
     void removesExpiredEntriesDuringReadMaintenance() {
         MutableClock clock = new MutableClock(Instant.parse("2026-08-11T08:00:00Z"));
         PlanCandidateCache cache = new PlanCandidateCache(clock, 3);
-        cache.put("first", candidate("first", clock.instant().plusSeconds(60)));
+        cache.save(USER, candidate("00000000-0000-0000-0000-000000000201",
+                clock.instant().plusSeconds(60)));
 
         clock.advanceSeconds(61);
 
-        assertThat(cache.get("first")).isEmpty();
+        assertThat(cache.find(USER, "00000000-0000-0000-0000-000000000201")).isEmpty();
         assertThat(cache.size()).isZero();
     }
 
@@ -30,15 +35,18 @@ class PlanCandidateCacheTest {
     void evictsTheEarliestExpiryAndNeverExceedsCapacity() {
         MutableClock clock = new MutableClock(Instant.parse("2026-08-11T08:00:00Z"));
         PlanCandidateCache cache = new PlanCandidateCache(clock, 2);
-        cache.put("early", candidate("early", clock.instant().plusSeconds(60)));
-        cache.put("late", candidate("late", clock.instant().plusSeconds(180)));
+        cache.save(USER, candidate("00000000-0000-0000-0000-000000000201",
+                clock.instant().plusSeconds(60)));
+        cache.save(USER, candidate("00000000-0000-0000-0000-000000000202",
+                clock.instant().plusSeconds(180)));
 
-        cache.put("middle", candidate("middle", clock.instant().plusSeconds(120)));
+        cache.save(USER, candidate("00000000-0000-0000-0000-000000000203",
+                clock.instant().plusSeconds(120)));
 
         assertThat(cache.size()).isEqualTo(2);
-        assertThat(cache.get("early")).isEmpty();
-        assertThat(cache.get("middle")).isPresent();
-        assertThat(cache.get("late")).isPresent();
+        assertThat(cache.find(USER, "00000000-0000-0000-0000-000000000201")).isEmpty();
+        assertThat(cache.find(USER, "00000000-0000-0000-0000-000000000203")).isPresent();
+        assertThat(cache.find(USER, "00000000-0000-0000-0000-000000000202")).isPresent();
     }
 
     @Test
@@ -46,11 +54,26 @@ class PlanCandidateCacheTest {
         MutableClock clock = new MutableClock(Instant.parse("2026-08-11T08:00:00Z"));
         PlanCandidateCache cache = new PlanCandidateCache(clock, 16);
 
-        IntStream.range(0, 128).parallel().forEach(index -> cache.put(
-                "candidate-" + index,
-                candidate("candidate-" + index, clock.instant().plusSeconds(60 + index))));
+        IntStream.range(0, 128).parallel().forEach(index -> {
+            String id = new java.util.UUID(0L, index + 1L).toString();
+            cache.save(USER, candidate(id, clock.instant().plusSeconds(60 + index)));
+        });
 
         assertThat(cache.size()).isEqualTo(16);
+    }
+
+    @Test
+    void isolatesTheSameCandidateIdByAuthenticatedUser() {
+        MutableClock clock = new MutableClock(Instant.parse("2026-08-11T08:00:00Z"));
+        PlanCandidateCache cache = new PlanCandidateCache(clock, 3);
+        String candidateId = "00000000-0000-0000-0000-000000000201";
+        AuthenticatedUserId otherUser = new AuthenticatedUserId(
+                java.util.UUID.fromString("00000000-0000-0000-0000-000000000102"));
+
+        cache.save(USER, candidate(candidateId, clock.instant().plusSeconds(60)));
+
+        assertThat(cache.find(USER, candidateId)).isPresent();
+        assertThat(cache.find(otherUser, candidateId)).isEmpty();
     }
 
     private static PlanCandidateService.CandidateEnvelope candidate(String id, Instant expiresAt) {

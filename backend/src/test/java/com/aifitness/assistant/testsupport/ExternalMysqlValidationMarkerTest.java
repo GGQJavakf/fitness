@@ -55,7 +55,7 @@ class ExternalMysqlValidationMarkerTest {
     }
 
     @Test
-    void markerMustExistAndHistoryMustBeExactlyV001ThroughV025() throws Exception {
+    void markerMustExistAndHistoryMustBeExactlyV001ThroughV026() throws Exception {
         Path marker = tempDirectory.resolve("external-mysql-validation-marker.json");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExternalMysqlValidationMarker.verifyAndConsume(
@@ -66,7 +66,7 @@ class ExternalMysqlValidationMarkerTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExternalMysqlValidationMarker.write(
                         marker.toString(), "run-1", JDBC_URL, incompleteHistoryConnection()))
-                .withMessage("External MySQL migration history does not match V001 through V025");
+                .withMessage("External MySQL migration history does not match V001 through V026");
     }
 
     @Test
