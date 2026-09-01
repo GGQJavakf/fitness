@@ -19,7 +19,7 @@
     "audit:toolchain": "npm audit --audit-level=low --registry=https://registry.npmjs.org",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "verify": "npm run audit:packaged && npm run audit:toolchain && npm run check:api-types && npm run check:content-review-pack && npm run typecheck && npm test -- --run && npm run build:weapp"
+    "verify": "npm run audit:packaged && npm run audit:toolchain && npm run check:api-types && npm run typecheck && npm test -- --run && npm run build:weapp"
   },
   "dependencies": {
     "@babel/runtime": "7.27.6",

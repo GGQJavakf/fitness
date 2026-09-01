@@ -81,16 +81,16 @@ class ValidatedConfigValidationTest {
     @Test
     void releasePolicyKeepsUnapprovedContentOutOfPublicAndInactiveStatesOutOfAllEnvironments()
             throws IOException {
-        JsonNode valid = readValidated("rule-config-v1.json");
+        JsonNode approved = readValidated("rule-config-v1.json");
+        JsonNode validated = withText(approved, "/metadata/status", "AI_VALIDATED");
 
-        assertThat(canActivate(valid, "local")).isTrue();
-        assertThat(canActivate(valid, "test")).isTrue();
-        assertThat(canActivate(valid, "staging-experience")).isTrue();
-        assertThat(canActivate(valid, "public")).isFalse();
-        assertThat(canActivate(withText(valid, "/metadata/status", "AI_DRAFT"), "local")).isFalse();
-        assertThat(canActivate(withText(valid, "/metadata/status", "RETIRED"), "local")).isFalse();
-        assertThat(canActivate(withText(valid, "/metadata/status", "PUBLIC_RELEASE_APPROVED"), "public"))
-                .isTrue();
+        assertThat(canActivate(validated, "local")).isTrue();
+        assertThat(canActivate(validated, "test")).isTrue();
+        assertThat(canActivate(validated, "staging-experience")).isTrue();
+        assertThat(canActivate(validated, "public")).isFalse();
+        assertThat(canActivate(withText(validated, "/metadata/status", "AI_DRAFT"), "local")).isFalse();
+        assertThat(canActivate(withText(validated, "/metadata/status", "RETIRED"), "local")).isFalse();
+        assertThat(canActivate(approved, "public")).isTrue();
     }
 
     @Test
@@ -752,6 +752,7 @@ class ValidatedConfigValidationTest {
 
     private static void assertPublicActivationGuard(String schemaFile, String documentFile) throws IOException {
         JsonNode approved = withText(readValidated(documentFile), "/metadata/status", "PUBLIC_RELEASE_APPROVED");
+        approved = withActivationEnvironments(approved, "local", "test", "staging-experience");
         assertThat(validate(schemaFile, approved)).as(documentFile + " missing public environment").isNotEmpty();
         ((com.fasterxml.jackson.databind.node.ArrayNode) approved.at("/metadata/activation/environments")).add("public");
         assertThat(validate(schemaFile, approved)).as(documentFile + " public approval errors").isEmpty();
@@ -829,6 +830,17 @@ class ValidatedConfigValidationTest {
     private static JsonNode withArrayCleared(JsonNode source, String pointer) {
         JsonNode copy = source.deepCopy();
         ((com.fasterxml.jackson.databind.node.ArrayNode) copy.at(pointer)).removeAll();
+        return copy;
+    }
+
+    private static JsonNode withActivationEnvironments(JsonNode source, String... environments) {
+        JsonNode copy = source.deepCopy();
+        com.fasterxml.jackson.databind.node.ArrayNode activationEnvironments =
+                (com.fasterxml.jackson.databind.node.ArrayNode) copy.at("/metadata/activation/environments");
+        activationEnvironments.removeAll();
+        for (String environment : environments) {
+            activationEnvironments.add(environment);
+        }
         return copy;
     }
 

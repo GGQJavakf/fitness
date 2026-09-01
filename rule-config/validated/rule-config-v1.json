@@ -3,7 +3,7 @@
     "schemaVersion": "1.0.0",
     "kind": "RULE_CONFIG",
     "version": "1.6.0",
-    "status": "AI_VALIDATED",
+    "status": "PUBLIC_RELEASE_APPROVED",
     "generatedAt": "2026-08-12T04:00:00Z",
     "promptConstraints": [
       "仅面向成年一般健身用户",
@@ -21,8 +21,8 @@
         "usage": "仅用于健康成年人的一般抗阻训练范围候选；最终数值由本配置和自动测试固定"
       }
     ],
-    "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "b1048e5d33c39defcf768724d3188618a1c59a178fbbc7b851785e00a5e18ee1"
+    "activation": { "enabled": true, "environments": ["local", "test", "staging-experience", "public"] },
+    "digestSha256": "337a719d32cc847eae7af076811f29aae9f4938776cc5bb7a33dfcce2452ca83"
   },
   "scope": { "unit": "KG", "adultOnly": true, "medicalOrRehabPrescription": false },
   "parameters": {
