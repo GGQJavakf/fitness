@@ -1,26 +1,54 @@
 export default defineAppConfig({
   pages: [
-    'presentation/pages/home/index',
-    'presentation/pages/onboarding/index',
-    'presentation/pages/plan-candidates/index',
-    'presentation/pages/plan-presets/index',
-    'presentation/pages/plan/index',
-    'presentation/pages/plan-editor/index',
-    'presentation/pages/my/index',
-    'presentation/pages/workout-prepare/index',
-    'presentation/pages/workout-summary/index',
-    'presentation/pages/sync-conflicts/index',
-    'presentation/pages/history/index',
-    'presentation/pages/exercise-trend/index',
-    'presentation/pages/exercise-preferences/index'
+    'presentation/pages/home/index'
   ],
   subPackages: [
     {
-      root: 'subpackages/exercise-guide',
+      root: 'subpackages/startup',
+      name: 'startup',
+      pages: ['pages/home/index']
+    },
+    {
+      root: 'subpackages/planning',
+      name: 'planning',
       pages: [
-        'pages/detail/index',
-        'pages/workout-session/index'
+        'pages/onboarding/index',
+        'pages/plan-candidates/index',
+        'pages/plan-presets/index',
+        'pages/plan/index',
+        'pages/plan-editor/index'
       ]
+    },
+    {
+      root: 'subpackages/workout',
+      name: 'workout',
+      pages: [
+        'pages/workout-prepare/index',
+        'pages/workout-session/index',
+        'pages/workout-summary/index'
+      ]
+    },
+    {
+      root: 'subpackages/progress',
+      name: 'progress',
+      pages: [
+        'pages/sync-conflicts/index',
+        'pages/history/index',
+        'pages/exercise-trend/index'
+      ]
+    },
+    {
+      root: 'subpackages/account',
+      name: 'account',
+      pages: [
+        'pages/my/index',
+        'pages/exercise-preferences/index'
+      ]
+    },
+    {
+      root: 'subpackages/exercise-guide',
+      name: 'exercise-guide',
+      pages: ['pages/detail/index']
     }
   ],
   window: {

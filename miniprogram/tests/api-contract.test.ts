@@ -61,5 +61,8 @@ describe('OpenAPI client contract', () => {
     expect(schema).toContain('"/api/v1/plans/{planId}/exercise-options"')
     expect(schema).toContain('"/api/v1/plans/{planId}/exercise-replacements"')
     expect(schema).toContain('"/api/v1/plans/{planId}/day-options"')
+    expect(schema).toContain('"/api/v1/plans/candidate-commits"')
+    expect(schema).toContain('CandidateCommitRequest: {')
+    expect(schema).toContain('expectedActiveVersionNumber: number;')
   })
 })

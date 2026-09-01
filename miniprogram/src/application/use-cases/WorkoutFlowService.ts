@@ -24,6 +24,7 @@ import type { ExerciseReplacementCandidate, WorkoutReplacementPort } from '../po
 import type {
   RecoverableActiveWorkout,
   StartWorkoutSessionRequest,
+  StartedWorkoutSession,
   WorkoutSessionStartPort,
 } from '../ports/WorkoutSessionStartPort'
 import { ActiveWorkoutExistsError } from '../errors'
@@ -68,8 +69,25 @@ export type StartOrResumeWorkoutResult =
   | { kind: 'RESUMED'; state: WorkoutFlowState }
   | { kind: 'RESUME_REQUIRED'; state: WorkoutFlowState }
 
+export interface WorkoutGenerationFence {
+  capture(): number
+  assertCurrent(generation: number): void
+}
+
+export interface WorkoutLocalResumeResult {
+  readonly state: WorkoutFlowState
+  readonly remainingSeconds: number
+  readonly warmupRemainingSeconds: number
+  readonly clockRollbackDetected: boolean
+}
+
+export interface WorkoutResumeResult extends WorkoutLocalResumeResult {
+  readonly syncFailed: boolean
+}
+
 export class WorkoutFlowService {
   private readonly commandTails = new Map<string, Promise<void>>()
+  private readonly synchronizationTails = new Map<string, Promise<void>>()
 
   constructor(
     private readonly drafts: WorkoutDraftStore,
@@ -78,87 +96,160 @@ export class WorkoutFlowService {
     private readonly completion?: WorkoutCompletionPort,
     private readonly replacements?: WorkoutReplacementPort,
     private readonly starter?: WorkoutSessionStartPort,
+    private readonly userGeneration?: WorkoutGenerationFence,
   ) {}
 
   async start(input: StartWorkoutFlowInput): Promise<WorkoutFlowState> {
-    return this.serialize('__active-workout__', async () => {
-      const existing = await this.drafts.loadActive()
+    return this.serialize('__active-workout__', async (generation) => {
+      const existing = await this.awaitCurrent(generation, () => this.drafts.loadActive())
       if (existing) {
         if (existing.clientSessionKey === input.clientSessionKey) return restoreFlowFromDraft(existing)
         throw new Error('an unfinished workout must be resumed or explicitly abandoned')
       }
-      return this.startNew(input)
+      return this.startNew(input, generation)
     })
   }
 
   async startOrResume(input: StartOrResumeWorkoutInput): Promise<StartOrResumeWorkoutResult> {
-    return this.serialize('__active-workout__', async () => {
-      const existing = await this.drafts.loadActive()
+    return this.serialize('__active-workout__', async (generation) => {
+      const existing = await this.awaitCurrent(generation, () => this.drafts.loadActive())
       if (existing) {
         const state = restoreFlowFromDraft(existing)
-        return input.activeDraftDecision === 'RESUME'
+        return existing.clientSessionKey === input.clientSessionKey
+          || input.activeDraftDecision === 'RESUME'
           ? { kind: 'RESUMED', state }
           : { kind: 'RESUME_REQUIRED', state }
       }
       if (!this.starter) throw new Error('workout session start is unavailable')
       let session
       try {
-        session = await this.starter.startWorkoutSession({
-          clientSessionKey: input.clientSessionKey,
-          planId: input.planId,
-          planVersionNo: input.planVersionNo,
-          planDayId: input.planDayId,
-          recoveryConfirmationToken: input.recoveryConfirmationToken,
-        })
+        session = await this.awaitCurrent(
+          generation,
+          () => this.starter!.startWorkoutSession({
+            clientSessionKey: input.clientSessionKey,
+            planId: input.planId,
+            planVersionNo: input.planVersionNo,
+            planDayId: input.planDayId,
+            recoveryConfirmationToken: input.recoveryConfirmationToken,
+          }),
+        )
       } catch (error) {
+        this.assertCurrent(generation)
         if (error instanceof ActiveWorkoutExistsError) {
           const active = ['CREATED', 'PAUSED'].includes(error.activeWorkout.session.status)
-            ? await this.activateRecoveredWorkout(error.activeWorkout)
+            ? await this.activateRecoveredWorkout(error.activeWorkout, generation)
             : error.activeWorkout
-          const state = await this.restoreActiveWorkout(active)
+          const state = await this.restoreActiveWorkout(active, generation)
           return { kind: 'RESUME_REQUIRED', state }
         }
         throw error
       }
-      const state = await this.startNew({
-        clientSessionKey: input.clientSessionKey,
-        planVersionId: session.planVersionId,
-        serverSessionId: session.id,
-        serverVersion: session.version,
-        startedAtUtc: session.startedAt ?? this.clock.nowUtc(),
-        warmupPrescription: session.warmupPrescription,
-        exercises: session.exercises.map((exercise) => ({
-          snapshotExerciseKey: exercise.id,
-          exerciseCode: exercise.exerciseCode,
-          name: exercise.exerciseName,
-          targetWorkSets: exercise.prescription.workSets,
-          targetRepMin: exercise.prescription.repMin,
-          targetRepMax: exercise.prescription.repMax,
-          restSeconds: exercise.prescription.restSeconds,
-          weightStatus: exercise.prescription.weightStatus,
-          targetWeightKg: exercise.prescription.targetWeightKg,
-          targetRirMin: exercise.prescription.targetRirMin,
-          targetRirMax: exercise.prescription.targetRirMax,
-          eccentricSeconds: exercise.prescription.eccentricSeconds,
-          perSide: exercise.prescription.perSide,
-          executionGroup: exercise.prescription.executionGroup,
-          executionOrder: exercise.prescription.executionOrder,
-          optionalSetRule: exercise.prescription.optionalSetRule,
-        })),
-      })
+      const state = await this.startFromServerSession(input.clientSessionKey, session, generation)
       return { kind: 'STARTED', state }
     })
   }
 
+  /**
+   * Replaces the authoritative active session with one idempotent server command.
+   * The old local draft is retained until the server has committed both the early end and the new start.
+   */
+  async replaceActiveAndStart(
+    state: WorkoutFlowState,
+    input: StartOrResumeWorkoutInput,
+  ): Promise<StartOrResumeWorkoutResult> {
+    return this.serialize('__active-workout__', async (generation) => this.serialize(
+      state.clientSessionKey,
+      async (currentGeneration) => {
+        const draft = await this.awaitCurrent(currentGeneration, () => this.drafts.loadActive())
+        if (!draft || draft.clientSessionKey !== state.clientSessionKey) {
+          throw new Error('the active workout changed before replacement')
+        }
+        if (!draft.sessionId || !this.starter) {
+          throw new Error('authoritative workout replacement is unavailable')
+        }
+        if (!this.drafts.replaceActive) {
+          throw new Error('atomic local workout replacement is unavailable')
+        }
+        const session = await this.awaitCurrent(
+          currentGeneration,
+          () => this.starter!.startWorkoutSession({
+            clientSessionKey: input.clientSessionKey,
+            planId: input.planId,
+            planVersionNo: input.planVersionNo,
+            planDayId: input.planDayId,
+            recoveryConfirmationToken: input.recoveryConfirmationToken,
+            activeWorkoutReplacement: {
+              sessionId: draft.sessionId!,
+              expectedVersion: draft.lastServerVersion,
+            },
+          }),
+        )
+        const replacement = this.createNewWorkout(
+          this.toStartWorkoutFlowInput(input.clientSessionKey, session),
+        )
+        await this.awaitCurrent(currentGeneration, () => this.drafts.replaceActive!(
+          draft.draftId,
+          replacement.draft,
+        ))
+        return { kind: 'STARTED' as const, state: replacement.state }
+      },
+      generation,
+    ))
+  }
+
+  private startFromServerSession(
+    clientSessionKey: string,
+    session: StartedWorkoutSession,
+    generation: number | undefined,
+  ): Promise<WorkoutFlowState> {
+    return this.startNew(this.toStartWorkoutFlowInput(clientSessionKey, session), generation)
+  }
+
+  private toStartWorkoutFlowInput(
+    clientSessionKey: string,
+    session: StartedWorkoutSession,
+  ): StartWorkoutFlowInput {
+    return {
+      clientSessionKey,
+      planVersionId: session.planVersionId,
+      serverSessionId: session.id,
+      serverVersion: session.version,
+      startedAtUtc: session.startedAt ?? this.clock.nowUtc(),
+      warmupPrescription: session.warmupPrescription,
+      exercises: session.exercises.map((exercise) => ({
+        snapshotExerciseKey: exercise.id,
+        exerciseCode: exercise.exerciseCode,
+        name: exercise.exerciseName,
+        targetWorkSets: exercise.prescription.workSets,
+        targetRepMin: exercise.prescription.repMin,
+        targetRepMax: exercise.prescription.repMax,
+        restSeconds: exercise.prescription.restSeconds,
+        weightStatus: exercise.prescription.weightStatus,
+        targetWeightKg: exercise.prescription.targetWeightKg,
+        targetRirMin: exercise.prescription.targetRirMin,
+        targetRirMax: exercise.prescription.targetRirMax,
+        eccentricSeconds: exercise.prescription.eccentricSeconds,
+        perSide: exercise.prescription.perSide,
+        executionGroup: exercise.prescription.executionGroup,
+        executionOrder: exercise.prescription.executionOrder,
+        optionalSetRule: exercise.prescription.optionalSetRule,
+      })),
+    }
+  }
+
   private async activateRecoveredWorkout(
     active: RecoverableActiveWorkout,
+    generation: number | undefined,
   ): Promise<RecoverableActiveWorkout> {
     if (!this.starter?.activateWorkoutSession) {
       throw new Error('active workout recovery cannot activate the server session')
     }
-    const activated = await this.starter.activateWorkoutSession(
-      active.session.id,
-      active.session.version,
+    const activated = await this.awaitCurrent(
+      generation,
+      () => this.starter!.activateWorkoutSession!(
+        active.session.id,
+        active.session.version,
+      ),
     )
     if (!('status' in activated) || activated.status !== 'IN_PROGRESS') {
       throw new Error('active workout recovery did not enter progress')
@@ -174,7 +265,10 @@ export class WorkoutFlowService {
     }
   }
 
-  private async restoreActiveWorkout(active: RecoverableActiveWorkout): Promise<WorkoutFlowState> {
+  private async restoreActiveWorkout(
+    active: RecoverableActiveWorkout,
+    generation: number | undefined,
+  ): Promise<WorkoutFlowState> {
     const session = active.session
     const base = createWorkoutFlow({
       clientSessionKey: session.clientSessionKey,
@@ -255,15 +349,27 @@ export class WorkoutFlowService {
       ) : null,
     })
     const draft = toWorkoutDraft(restored, null, this.clock.nowUtc())
-    await this.drafts.save({
-      ...draft,
-      sessionId: session.id,
-      lastServerVersion: session.version,
-    }, null)
+    await this.awaitCurrent(generation, () => this.drafts.save({
+        ...draft,
+        sessionId: session.id,
+        lastServerVersion: session.version,
+      }, null))
     return restored
   }
 
-  private async startNew(input: StartWorkoutFlowInput): Promise<WorkoutFlowState> {
+  private async startNew(
+    input: StartWorkoutFlowInput,
+    generation: number | undefined,
+  ): Promise<WorkoutFlowState> {
+    const { state, draft } = this.createNewWorkout(input)
+    await this.awaitCurrent(generation, () => this.drafts.save(draft, null))
+    return state
+  }
+
+  private createNewWorkout(input: StartWorkoutFlowInput): {
+    state: WorkoutFlowState
+    draft: WorkoutDraft
+  } {
     const created = createWorkoutFlow({
       ...input,
       startedAtUtc: input.startedAtUtc ?? this.clock.nowUtc(),
@@ -280,16 +386,16 @@ export class WorkoutFlowService {
       },
     }
     const draft = toWorkoutDraft(state, null, this.clock.nowUtc())
-    await this.drafts.save({
-      ...draft,
-      sessionId: input.serverSessionId ?? null,
-      lastServerVersion: input.serverVersion ?? 0,
-    }, null)
-    return state
+    return { state, draft: {
+        ...draft,
+        sessionId: input.serverSessionId ?? null,
+        lastServerVersion: input.serverVersion ?? 0,
+      } }
   }
 
   async load(): Promise<WorkoutFlowState | null> {
-    const draft = await this.drafts.loadActive()
+    const generation = this.captureGeneration()
+    const draft = await this.awaitCurrent(generation, () => this.drafts.loadActive())
     return draft ? restoreFlowFromDraft(draft) : null
   }
 
@@ -298,18 +404,23 @@ export class WorkoutFlowService {
     | { kind: 'ACTIVE'; state: WorkoutFlowState }
     | { kind: 'RECOVERY_REQUIRED' }
   > {
+    const generation = this.captureGeneration()
     try {
-      const state = await this.load()
+      const state = await this.awaitCurrent(generation, () => this.load())
       return state ? { kind: 'ACTIVE', state } : { kind: 'NONE' }
     } catch (error) {
+      this.assertCurrent(generation)
       if (error instanceof WorkoutDraftRecoveryRequiredError) return { kind: 'RECOVERY_REQUIRED' }
       throw error
     }
   }
 
   async recordSet(state: WorkoutFlowState, input: RecordWorkoutSetInput): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, async () => {
-      const { draft: previous, state: current } = await this.requireLatest(state.clientSessionKey)
+    return this.serialize(state.clientSessionKey, async (generation) => {
+      const { draft: previous, state: current } = await this.requireLatest(
+        state.clientSessionKey,
+        generation,
+      )
       let updated = recordWorkoutSet(current, input)
       if (updated === current) return current
       const prescriptionFinished = isWorkoutPrescriptionFinished(updated)
@@ -331,7 +442,7 @@ export class WorkoutFlowService {
             }
       }
       if (!previous.sessionId) {
-        await this.persist(updated, previous)
+        await this.persist(updated, previous, generation)
         return updated
       }
       updated = {
@@ -365,44 +476,67 @@ export class WorkoutFlowService {
           confirmAnomaly: false,
         },
       })
-      await this.drafts.save({ ...mapped, queue: queued.queue }, previous.revision)
+      await this.awaitCurrent(
+        generation,
+        () => this.drafts.save({ ...mapped, queue: queued.queue }, previous.revision),
+      )
       return updated
     })
   }
 
-  async resume(state: WorkoutFlowState): Promise<{
-    state: WorkoutFlowState
-    remainingSeconds: number
-    warmupRemainingSeconds: number
-    clockRollbackDetected: boolean
-    syncFailed: boolean
-  }> {
-    return this.serialize(state.clientSessionKey, async () => {
-      const { draft, state: current } = await this.requireLatest(state.clientSessionKey)
-      const nowUtc = this.clock.nowUtc()
-      const rest = current.restTimer ? resumeRestTimer(current.restTimer, nowUtc) : null
-      const general = current.warmup.generalTimer ? resumeRestTimer(current.warmup.generalTimer, nowUtc) : null
-      const updated = {
-        ...current,
-        restTimer: rest?.timer ?? current.restTimer,
-        warmup: { ...current.warmup, generalTimer: general?.timer ?? current.warmup.generalTimer },
-      }
-      await this.persist(updated, draft)
-      let recovered = updated
-      let syncFailed = false
-      try {
-        recovered = await this.flushUnlocked(updated)
-      } catch {
-        syncFailed = true
-      }
-      return {
-        state: recovered,
-        remainingSeconds: rest?.remainingSeconds ?? 0,
-        warmupRemainingSeconds: general?.remainingSeconds ?? 0,
-        clockRollbackDetected: Boolean(rest?.clockRollbackDetected || general?.clockRollbackDetected),
-        syncFailed,
-      }
-    })
+  async resume(state: WorkoutFlowState): Promise<WorkoutResumeResult> {
+    const generation = this.captureGeneration()
+    const local = await this.serialize(
+      state.clientSessionKey,
+      (currentGeneration) => this.resumeLocalUnlocked(state, currentGeneration),
+      generation,
+    )
+    let recovered = local.state
+    let syncFailed = false
+    try {
+      recovered = await this.flushWithGeneration(local.state, generation)
+    } catch {
+      this.assertCurrent(generation)
+      syncFailed = true
+    }
+    return {
+      ...local,
+      state: recovered,
+      syncFailed,
+    }
+  }
+
+  /** Restores the persisted draft and timers without waiting for network synchronization. */
+  async resumeLocal(state: WorkoutFlowState): Promise<WorkoutLocalResumeResult> {
+    return this.serialize(
+      state.clientSessionKey,
+      (generation) => this.resumeLocalUnlocked(state, generation),
+    )
+  }
+
+  private async resumeLocalUnlocked(
+    state: WorkoutFlowState,
+    generation: number | undefined,
+  ): Promise<WorkoutLocalResumeResult> {
+    const { draft, state: current } = await this.requireLatest(
+      state.clientSessionKey,
+      generation,
+    )
+    const nowUtc = this.clock.nowUtc()
+    const rest = current.restTimer ? resumeRestTimer(current.restTimer, nowUtc) : null
+    const general = current.warmup.generalTimer ? resumeRestTimer(current.warmup.generalTimer, nowUtc) : null
+    const updated = {
+      ...current,
+      restTimer: rest?.timer ?? current.restTimer,
+      warmup: { ...current.warmup, generalTimer: general?.timer ?? current.warmup.generalTimer },
+    }
+    await this.persist(updated, draft, generation)
+    return {
+      state: updated,
+      remainingSeconds: rest?.remainingSeconds ?? 0,
+      warmupRemainingSeconds: general?.remainingSeconds ?? 0,
+      clockRollbackDetected: Boolean(rest?.clockRollbackDetected || general?.clockRollbackDetected),
+    }
   }
 
   async completeGeneralWarmup(state: WorkoutFlowState): Promise<WorkoutFlowState> {
@@ -455,66 +589,110 @@ export class WorkoutFlowService {
   }
 
   async flush(state: WorkoutFlowState): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, () => this.flushUnlocked(state))
+    return this.flushWithGeneration(state, this.captureGeneration())
   }
 
-  private async flushUnlocked(state: WorkoutFlowState): Promise<WorkoutFlowState> {
+  private async flushWithGeneration(
+    state: WorkoutFlowState,
+    generation: number | undefined,
+  ): Promise<WorkoutFlowState> {
+    return this.serializeSynchronization(
+      state.clientSessionKey,
+      (currentGeneration) => this.synchronizeWithoutBlockingCommands(state, currentGeneration),
+      generation,
+    )
+  }
+
+  /**
+   * Synchronizes a stable queue snapshot without retaining the local command lock
+   * across network I/O. Later local facts are merged when the result is applied.
+   */
+  private async synchronizeWithoutBlockingCommands(
+    state: WorkoutFlowState,
+    generation: number | undefined,
+  ): Promise<WorkoutFlowState> {
     if (!this.remote) return state
-    const draft = await this.drafts.loadActive()
-    if (!draft || draft.clientSessionKey !== state.clientSessionKey) return state
-    const pending = draft.queue.operations.filter((operation) => operation.status === 'PENDING' && operation.type === 'UPSERT_SET')
-    if (pending.length === 0) return restoreFlowFromDraft(draft)
-    const results = await this.remote.syncWorkoutOperations(pending.map((operation) => ({
-      clientOperationSeq: operation.clientOperationSeq,
-      operationType: 'UPSERT_SET' as const,
-      clientKey: operation.idempotencyKey,
-      payload: operation.payload as Readonly<Record<string, unknown>>,
-    })))
-    const latest = await this.drafts.loadActive()
-    if (!latest || latest.clientSessionKey !== state.clientSessionKey) return state
-    const persisted = restoreFlowFromDraft(latest)
-    let queue = latest.queue
-    let serverVersion = latest.lastServerVersion
-    let syncStatus: WorkoutFlowState['syncStatus'] = 'SYNCED'
-    for (const result of results) {
-      const operation = pending.find((item) => item.clientOperationSeq === result.clientOperationSeq)
-      if (!operation) continue
-      if (result.status === 'CONFLICT') {
-        if (!result.conflictId) throw new Error('sync conflict response is missing conflict identity')
-        queue = markOperationConflict(
-          queue,
-          result.clientOperationSeq,
-          result.conflictId,
-          result.reasonCode,
+    const prepared = await this.serialize(state.clientSessionKey, async (currentGeneration) => {
+      const draft = await this.awaitCurrent(currentGeneration, () => this.drafts.loadActive())
+      if (!draft || draft.clientSessionKey !== state.clientSessionKey) return null
+      const pending = draft.queue.operations.filter(
+        (operation) => operation.status === 'PENDING' && operation.type === 'UPSERT_SET',
+      )
+      return { state: restoreFlowFromDraft(draft), pending }
+    }, generation)
+    if (!prepared) return state
+    if (prepared.pending.length === 0) return prepared.state
+    const results = await this.awaitCurrent(
+      generation,
+      () => this.remote!.syncWorkoutOperations(prepared.pending.map((operation) => ({
+        clientOperationSeq: operation.clientOperationSeq,
+        operationType: 'UPSERT_SET' as const,
+        clientKey: operation.idempotencyKey,
+        payload: operation.payload as Readonly<Record<string, unknown>>,
+      }))),
+    )
+    return this.serialize(state.clientSessionKey, async (currentGeneration) => {
+      const latest = await this.awaitCurrent(currentGeneration, () => this.drafts.loadActive())
+      if (!latest || latest.clientSessionKey !== state.clientSessionKey) return state
+      const persisted = restoreFlowFromDraft(latest)
+      let queue = latest.queue
+      let serverVersion = latest.lastServerVersion
+      let syncStatus: WorkoutFlowState['syncStatus'] = 'SYNCED'
+      for (const result of results) {
+        const operation = prepared.pending.find(
+          (item) => item.clientOperationSeq === result.clientOperationSeq,
         )
+        const currentOperation = queue.operations.find(
+          (item) => item.clientOperationSeq === result.clientOperationSeq,
+        )
+        if (!operation || currentOperation?.status !== 'PENDING'
+          || currentOperation.idempotencyKey !== operation.idempotencyKey) continue
+        if (result.status === 'CONFLICT') {
+          if (!result.conflictId) throw new Error('sync conflict response is missing conflict identity')
+          queue = markOperationConflict(
+            queue,
+            result.clientOperationSeq,
+            result.conflictId,
+            result.reasonCode,
+          )
+          syncStatus = 'CONFLICT'
+        }
+        if (result.status === 'REJECTED') {
+          queue = markOperationRejected(queue, result.clientOperationSeq, result.reasonCode)
+          syncStatus = 'SYNC_REJECTED'
+        }
+        if (result.status === 'APPLIED' || result.status === 'DUPLICATE') {
+          queue = acknowledgeOperation(queue, result.clientOperationSeq)
+          const expected = Number((operation.payload as { expectedSessionVersion?: unknown }).expectedSessionVersion)
+          if (Number.isSafeInteger(expected)) serverVersion = Math.max(serverVersion, expected + 1)
+        }
+      }
+      if (queue.operations.some((operation) => operation.status === 'CONFLICT')) {
         syncStatus = 'CONFLICT'
-      }
-      if (result.status === 'REJECTED') {
-        queue = markOperationRejected(queue, result.clientOperationSeq, result.reasonCode)
+      } else if (queue.operations.some((operation) => operation.status === 'REJECTED')) {
         syncStatus = 'SYNC_REJECTED'
+      } else if (queue.operations.some((operation) => operation.status === 'PENDING') && syncStatus === 'SYNCED') {
+        syncStatus = 'OFFLINE_PENDING'
       }
-      if (result.status === 'APPLIED' || result.status === 'DUPLICATE') {
-        queue = acknowledgeOperation(queue, result.clientOperationSeq)
-        const expected = Number((operation.payload as { expectedSessionVersion?: unknown }).expectedSessionVersion)
-        if (Number.isSafeInteger(expected)) serverVersion = Math.max(serverVersion, expected + 1)
-      }
-    }
-    if (queue.operations.some((operation) => operation.status === 'CONFLICT')) {
-      syncStatus = 'CONFLICT'
-    } else if (queue.operations.some((operation) => operation.status === 'REJECTED')) {
-      syncStatus = 'SYNC_REJECTED'
-    } else if (queue.operations.some((operation) => operation.status === 'PENDING') && syncStatus === 'SYNCED') {
-      syncStatus = 'OFFLINE_PENDING'
-    }
-    const updated = { ...persisted, syncStatus }
-    const mapped = toWorkoutDraft(updated, latest, this.clock.nowUtc())
-    await this.drafts.save({ ...mapped, queue, lastServerVersion: serverVersion }, latest.revision)
-    return updated
+      const updated = { ...persisted, syncStatus }
+      const mapped = toWorkoutDraft(updated, latest, this.clock.nowUtc())
+      await this.awaitCurrent(
+        currentGeneration,
+        () => this.drafts.save(
+          { ...mapped, queue, lastServerVersion: serverVersion },
+          latest.revision,
+        ),
+      )
+      return updated
+    }, generation)
   }
 
   async abandonBlockedOperations(state: WorkoutFlowState): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, async () => {
-      const { draft, state: current } = await this.requireLatest(state.clientSessionKey)
+    return this.serialize(state.clientSessionKey, async (generation) => {
+      const { draft, state: current } = await this.requireLatest(
+        state.clientSessionKey,
+        generation,
+      )
       const queue = abandonBlockedQueueOperations(draft.queue)
       const updated: WorkoutFlowState = {
         ...current,
@@ -523,27 +701,37 @@ export class WorkoutFlowService {
           : 'SYNCED',
       }
       const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
-      await this.drafts.save({ ...mapped, queue }, draft.revision)
+      await this.awaitCurrent(
+        generation,
+        () => this.drafts.save({ ...mapped, queue }, draft.revision),
+      )
       return updated
     })
   }
 
   async retryRejectedOperations(state: WorkoutFlowState): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, async () => {
-      const { draft, state: current } = await this.requireLatest(state.clientSessionKey)
+    return this.serialize(state.clientSessionKey, async (generation) => {
+      const { draft, state: current } = await this.requireLatest(
+        state.clientSessionKey,
+        generation,
+      )
       const queue = rebuildRejectedOperations(draft.queue, this.clock.nowUtc())
       const updated: WorkoutFlowState = { ...current, syncStatus: 'OFFLINE_PENDING' }
       const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
-      await this.drafts.save({ ...mapped, queue }, draft.revision)
+      await this.awaitCurrent(
+        generation,
+        () => this.drafts.save({ ...mapped, queue }, draft.revision),
+      )
       return updated
     })
   }
 
   async convergeConflict(result: WorkoutConflictResolutionResult): Promise<WorkoutFlowState | null> {
-    const active = await this.drafts.loadActive()
+    const operationGeneration = this.captureGeneration()
+    const active = await this.awaitCurrent(operationGeneration, () => this.drafts.loadActive())
     if (!active) return null
-    return this.serialize(active.clientSessionKey, async () => {
-      const { draft, state } = await this.requireLatest(active.clientSessionKey)
+    return this.serialize(active.clientSessionKey, async (generation) => {
+      const { draft, state } = await this.requireLatest(active.clientSessionKey, generation)
       const operation = draft.queue.operations.find((item) => (
         item.status === 'CONFLICT'
         && item.conflictId === result.conflictId
@@ -583,30 +771,35 @@ export class WorkoutFlowService {
               : 'SYNCED',
       }
       const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
-      await this.drafts.save({
-        ...mapped,
-        queue,
-        lastServerVersion: result.authoritativeSessionVersion,
-      }, draft.revision)
+      await this.awaitCurrent(generation, () => this.drafts.save({
+          ...mapped,
+          queue,
+          lastServerVersion: result.authoritativeSessionVersion,
+        }, draft.revision))
       return updated
-    })
+    }, operationGeneration)
   }
 
   async rememberConflictResolution(intent: WorkoutConflictResolutionIntent): Promise<boolean> {
-    const active = await this.drafts.loadActive()
+    const operationGeneration = this.captureGeneration()
+    const active = await this.awaitCurrent(operationGeneration, () => this.drafts.loadActive())
     if (!active) return false
-    return this.serialize(active.clientSessionKey, async () => {
-      const draft = await this.drafts.loadActive()
+    return this.serialize(active.clientSessionKey, async (generation) => {
+      const draft = await this.awaitCurrent(generation, () => this.drafts.loadActive())
       if (!draft || draft.clientSessionKey !== active.clientSessionKey) return false
       const queue = rememberQueueConflictResolution(draft.queue, intent)
       if (JSON.stringify(queue) === JSON.stringify(draft.queue)) return false
-      await this.drafts.save({ ...draft, queue, revision: draft.revision + 1 }, draft.revision)
+      await this.awaitCurrent(
+        generation,
+        () => this.drafts.save({ ...draft, queue, revision: draft.revision + 1 }, draft.revision),
+      )
       return true
-    })
+    }, operationGeneration)
   }
 
   async pendingConflictResolutions(): Promise<readonly WorkoutConflictResolutionIntent[]> {
-    const active = await this.drafts.loadActive()
+    const generation = this.captureGeneration()
+    const active = await this.awaitCurrent(generation, () => this.drafts.loadActive())
     if (!active) return []
     return active.queue.operations.flatMap((operation) => {
       const intent = operation.conflictResolutionIntent
@@ -621,40 +814,47 @@ export class WorkoutFlowService {
   }
 
   async abandonActive(state: WorkoutFlowState): Promise<void> {
-    await this.serialize(state.clientSessionKey, async () => {
-      const { draft, state: current } = await this.requireLatest(state.clientSessionKey)
+    await this.serialize(state.clientSessionKey, async (generation) => {
+      const { draft, state: current } = await this.requireLatest(
+        state.clientSessionKey,
+        generation,
+      )
       const queue = abandonUnresolvedOperations(draft.queue)
       const abandoned = { ...current, syncStatus: 'SYNCED' as const }
       const mapped = toWorkoutDraft(abandoned, draft, this.clock.nowUtc())
       const persisted = { ...mapped, queue }
-      await this.drafts.save(persisted, draft.revision)
+      await this.awaitCurrent(generation, () => this.drafts.save(persisted, draft.revision))
       if (draft.sessionId) {
         if (!this.completion) throw new Error('workout completion is unavailable')
-        await this.completion.completeWorkout(
-          draft.sessionId,
-          { expectedVersion: draft.lastServerVersion, completionType: 'EARLY_END' },
-          `${state.clientSessionKey}-complete-EARLY_END`,
+        await this.awaitCurrent(
+          generation,
+          () => this.completion!.completeWorkout(
+            draft.sessionId!,
+            { expectedVersion: draft.lastServerVersion, completionType: 'EARLY_END' },
+            `${state.clientSessionKey}-complete-EARLY_END`,
+          ),
         )
       }
-      await this.drafts.clearActive(draft.draftId)
+      await this.awaitCurrent(generation, () => this.drafts.clearActive(draft.draftId))
     })
   }
 
   async discardOrphanedLocalWorkout(state: WorkoutFlowState): Promise<void> {
-    await this.serialize(state.clientSessionKey, async () => {
-      const draft = await this.drafts.loadActive()
+    await this.serialize(state.clientSessionKey, async (generation) => {
+      const draft = await this.awaitCurrent(generation, () => this.drafts.loadActive())
       if (!draft || draft.clientSessionKey !== state.clientSessionKey) {
         throw new Error('the active workout changed before local discard')
       }
-      await this.drafts.clearActive(draft.draftId)
+      await this.awaitCurrent(generation, () => this.drafts.clearActive(draft.draftId))
     })
   }
 
   async complete(state: WorkoutFlowState, completionType: WorkoutCompletionType): Promise<WorkoutCompletionResult> {
-    return this.serialize(state.clientSessionKey, async () => {
-      if (!this.completion) throw new Error('workout completion is unavailable')
-      const synchronized = await this.flushUnlocked(state)
-      const draft = await this.drafts.loadActive()
+    if (!this.completion) throw new Error('workout completion is unavailable')
+    const generation = this.captureGeneration()
+    const synchronized = await this.flushWithGeneration(state, generation)
+    return this.serialize(state.clientSessionKey, async (currentGeneration) => {
+      const draft = await this.awaitCurrent(currentGeneration, () => this.drafts.loadActive())
       if (!draft || !draft.sessionId || draft.clientSessionKey !== state.clientSessionKey) {
         throw new Error('server workout session is unavailable')
       }
@@ -663,35 +863,43 @@ export class WorkoutFlowService {
         || synchronized.syncStatus === 'SYNC_REJECTED') {
         throw new Error('workout facts must be synchronized or explicitly abandoned before completion')
       }
-      const result = await this.completion.completeWorkout(
-        draft.sessionId,
-        { expectedVersion: draft.lastServerVersion, completionType },
-        `${state.clientSessionKey}-complete-${completionType}`,
+      const result = await this.awaitCurrent(
+        currentGeneration,
+        () => this.completion!.completeWorkout(
+          draft.sessionId!,
+          { expectedVersion: draft.lastServerVersion, completionType },
+          `${state.clientSessionKey}-complete-${completionType}`,
+        ),
       )
-      await this.drafts.clearActive(draft.draftId)
+      await this.awaitCurrent(currentGeneration, () => this.drafts.clearActive(draft.draftId))
       return result
-    })
+    }, generation)
   }
 
   async replacementCandidates(state: WorkoutFlowState): Promise<readonly ExerciseReplacementCandidate[]> {
+    const generation = this.captureGeneration()
     if (!this.replacements) throw new Error('exercise replacement is unavailable')
-    const draft = await this.drafts.loadActive()
+    const draft = await this.awaitCurrent(generation, () => this.drafts.loadActive())
     if (!draft?.sessionId || draft.clientSessionKey !== state.clientSessionKey) {
       throw new Error('workout session is unavailable for exercise replacement')
     }
     const current = state.exercises[state.currentExerciseIndex]
-    return this.replacements.listExerciseReplacements(
-      draft.sessionId, current.snapshotExerciseKey, current.exerciseCode,
+    return this.awaitCurrent(
+      generation,
+      () => this.replacements!.listExerciseReplacements(
+        draft.sessionId!, current.snapshotExerciseKey, current.exerciseCode,
+      ),
     )
   }
 
   async replaceCurrentExercise(
     state: WorkoutFlowState, candidate: ExerciseReplacementCandidate,
   ): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, async () => {
-      if (!this.replacements) throw new Error('exercise replacement is unavailable')
-      const synchronized = await this.flushUnlocked(state)
-      const draft = await this.drafts.loadActive()
+    if (!this.replacements) throw new Error('exercise replacement is unavailable')
+    const generation = this.captureGeneration()
+    const synchronized = await this.flushWithGeneration(state, generation)
+    return this.serialize(state.clientSessionKey, async (currentGeneration) => {
+      const draft = await this.awaitCurrent(currentGeneration, () => this.drafts.loadActive())
       if (!draft || !draft.sessionId || draft.clientSessionKey !== state.clientSessionKey
         || hasBlockingOperations(draft.queue)
         || synchronized.syncStatus === 'CONFLICT' || synchronized.syncStatus === 'SYNC_REJECTED') {
@@ -700,8 +908,11 @@ export class WorkoutFlowService {
       const latest = restoreFlowFromDraft(draft)
       const index = latest.currentExerciseIndex
       const current = latest.exercises[index]
-      const session = await this.replacements.replaceWorkoutExercise(
-        draft.sessionId, current.snapshotExerciseKey, candidate.code, draft.lastServerVersion,
+      const session = await this.awaitCurrent(
+        currentGeneration,
+        () => this.replacements!.replaceWorkoutExercise(
+          draft.sessionId!, current.snapshotExerciseKey, candidate.code, draft.lastServerVersion,
+        ),
       )
       const effective = session.exercises.find((exercise) => exercise.id === current.snapshotExerciseKey)
       if (!effective) throw new Error('replacement response is missing the current exercise')
@@ -724,50 +935,138 @@ export class WorkoutFlowService {
         optionalSetRule: effective.prescription.optionalSetRule,
       })
       const mapped = toWorkoutDraft(updated, draft, this.clock.nowUtc())
-      await this.drafts.save({ ...mapped, lastServerVersion: session.version }, draft.revision)
+      await this.awaitCurrent(
+        currentGeneration,
+        () => this.drafts.save(
+          { ...mapped, lastServerVersion: session.version },
+          draft.revision,
+        ),
+      )
       return updated
-    })
+    }, generation)
   }
 
   async discardCorruptedDraft(): Promise<void> {
+    const generation = this.captureGeneration()
     if (!this.drafts.discardCorrupted) throw new Error('workout draft recovery is unavailable')
-    await this.drafts.discardCorrupted()
+    await this.awaitCurrent(generation, () => this.drafts.discardCorrupted!())
   }
 
   private async mutate(
     state: WorkoutFlowState,
     update: (current: WorkoutFlowState) => WorkoutFlowState,
   ): Promise<WorkoutFlowState> {
-    return this.serialize(state.clientSessionKey, async () => {
-      const { draft, state: current } = await this.requireLatest(state.clientSessionKey)
+    return this.serialize(state.clientSessionKey, async (generation) => {
+      const { draft, state: current } = await this.requireLatest(
+        state.clientSessionKey,
+        generation,
+      )
       const updated = update(current)
       if (updated === current) return current
-      await this.persist(updated, draft)
+      await this.persist(updated, draft, generation)
       return updated
     })
   }
 
-  private async persist(state: WorkoutFlowState, previous: WorkoutDraft): Promise<void> {
-    await this.drafts.save(toWorkoutDraft(state, previous, this.clock.nowUtc()), previous.revision)
+  private async persist(
+    state: WorkoutFlowState,
+    previous: WorkoutDraft,
+    generation: number | undefined,
+  ): Promise<void> {
+    await this.awaitCurrent(
+      generation,
+      () => this.drafts.save(
+        toWorkoutDraft(state, previous, this.clock.nowUtc()),
+        previous.revision,
+      ),
+    )
   }
 
-  private async requireLatest(clientSessionKey: string): Promise<{ draft: WorkoutDraft; state: WorkoutFlowState }> {
-    const draft = await this.drafts.loadActive()
+  private async requireLatest(
+    clientSessionKey: string,
+    generation: number | undefined,
+  ): Promise<{ draft: WorkoutDraft; state: WorkoutFlowState }> {
+    const draft = await this.awaitCurrent(generation, () => this.drafts.loadActive())
     if (!draft || draft.clientSessionKey !== clientSessionKey) {
       throw new Error('active workout draft does not match the workout session')
     }
     return { draft, state: restoreFlowFromDraft(draft) }
   }
 
-  private async serialize<T>(clientSessionKey: string, command: () => Promise<T>): Promise<T> {
-    const previous = this.commandTails.get(clientSessionKey) ?? Promise.resolve()
-    const result = previous.catch(() => undefined).then(command)
+  private async serialize<T>(
+    clientSessionKey: string,
+    command: (generation: number | undefined) => Promise<T>,
+    operationGeneration = this.captureGeneration(),
+  ): Promise<T> {
+    return this.serializeInLane(
+      this.commandTails,
+      clientSessionKey,
+      command,
+      operationGeneration,
+    )
+  }
+
+  /** Serializes remote synchronization flights without blocking local workout commands. */
+  private async serializeSynchronization<T>(
+    clientSessionKey: string,
+    synchronization: (generation: number | undefined) => Promise<T>,
+    operationGeneration = this.captureGeneration(),
+  ): Promise<T> {
+    return this.serializeInLane(
+      this.synchronizationTails,
+      clientSessionKey,
+      synchronization,
+      operationGeneration,
+    )
+  }
+
+  private async serializeInLane<T>(
+    tails: Map<string, Promise<void>>,
+    clientSessionKey: string,
+    operation: (generation: number | undefined) => Promise<T>,
+    operationGeneration: number | undefined,
+  ): Promise<T> {
+    const previous = tails.get(clientSessionKey) ?? Promise.resolve()
+    const result = previous.catch(() => undefined).then(async () => {
+      this.assertCurrent(operationGeneration)
+      try {
+        const value = await operation(operationGeneration)
+        this.assertCurrent(operationGeneration)
+        return value
+      } catch (error) {
+        this.assertCurrent(operationGeneration)
+        throw error
+      }
+    })
     const tail = result.then(() => undefined, () => undefined)
-    this.commandTails.set(clientSessionKey, tail)
+    tails.set(clientSessionKey, tail)
     try {
       return await result
     } finally {
-      if (this.commandTails.get(clientSessionKey) === tail) this.commandTails.delete(clientSessionKey)
+      if (tails.get(clientSessionKey) === tail) tails.delete(clientSessionKey)
+    }
+  }
+
+  private captureGeneration(): number | undefined {
+    return this.userGeneration?.capture()
+  }
+
+  private assertCurrent(generation: number | undefined): void {
+    if (generation !== undefined) this.userGeneration?.assertCurrent(generation)
+  }
+
+  private async awaitCurrent<T>(
+    generation: number | undefined,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    this.assertCurrent(generation)
+    try {
+      const result = await operation()
+      this.assertCurrent(generation)
+      return result
+    } catch (error) {
+      this.assertCurrent(generation)
+      throw error
     }
   }
 }

@@ -8,16 +8,27 @@ const repositoryRoot = resolve(projectRoot, '..')
 const require = createRequire(import.meta.url)
 
 describe('Taro weapp toolchain', () => {
-  it('provides the application entry and a home page', () => {
+  it('provides the application entry, the visible bootstrap, and the isolated startup home', () => {
     expect(existsSync(resolve(projectRoot, 'src/app.tsx'))).toBe(true)
     expect(existsSync(resolve(projectRoot, 'src/presentation/pages/home/index.tsx'))).toBe(true)
+    expect(existsSync(resolve(projectRoot, 'src/subpackages/startup/pages/home/index.tsx'))).toBe(true)
+    expect(existsSync(resolve(
+      projectRoot,
+      'src/subpackages/startup/pages/home/startupApplicationLoader.ts',
+    ))).toBe(true)
   })
 
-  it('registers onboarding, plan, and plan editing pages without App release targets', () => {
+  it('keeps only the bootstrap in the main package and registers business pages by feature', () => {
     const config = readFileSync(resolve(projectRoot, 'src/app.config.ts'), 'utf8')
-    for (const page of ['home', 'onboarding', 'plan-candidates', 'plan', 'plan-editor']) {
-      expect(config).toContain(`presentation/pages/${page}/index`)
+    expect(config).toMatch(/pages:\s*\[\s*'presentation\/pages\/home\/index'\s*\]/)
+    for (const [root, pages] of [
+      ['startup', ['home']],
+      ['planning', ['onboarding', 'plan-candidates', 'plan', 'plan-editor']],
+    ] as const) {
+      expect(config).toContain(`root: 'subpackages/${root}'`)
+      for (const page of pages) expect(config).toContain(`'pages/${page}/index'`)
     }
+    expect(config).not.toMatch(/presentation\/pages\/(?:onboarding|plan-candidates|plan|plan-editor)\/index/)
     expect(config).not.toMatch(/android|ios|app-release/i)
   })
 
@@ -35,14 +46,93 @@ describe('Taro weapp toolchain', () => {
 
   it('injects runtime configuration at build time without Node globals in app code', () => {
     const taroConfig = readFileSync(resolve(projectRoot, 'config/index.ts'), 'utf8')
-    const compositionRoot = readFileSync(
-      resolve(projectRoot, 'src/platform/weapp/compositionRoot.ts'),
+    const featureCore = readFileSync(
+      resolve(projectRoot, 'src/platform/weapp/featureCore.ts'),
+      'utf8',
+    )
+    const startupRoot = readFileSync(
+      resolve(projectRoot, 'src/platform/weapp/featureRoots/startupCompositionRoot.ts'),
       'utf8',
     )
 
     expect(taroConfig).toContain('defineConstants')
-    expect(compositionRoot).toContain('__FITNESS_API_BASE_URL__')
-    expect(compositionRoot).not.toMatch(/\bprocess\s*\./)
+    for (const constant of [
+      '__FITNESS_API_BASE_URL__',
+      '__FITNESS_CLOUDBASE_ENV_ID__',
+      '__FITNESS_CLOUDBASE_SERVICE_NAME__',
+    ]) {
+      expect(taroConfig).toContain(constant)
+      expect(`${featureCore}\n${startupRoot}`).toContain(constant)
+    }
+    expect(featureCore).not.toMatch(/\bprocess\s*\./)
+    expect(startupRoot).not.toMatch(/\bprocess\s*\./)
+    expect(existsSync(resolve(projectRoot, 'src/platform/weapp/compositionRoot.ts'))).toBe(false)
+  })
+
+  it('rewrites standard-library calls to an audited pure runtime', () => {
+    const babelConfig = require(resolve(projectRoot, 'babel.config.js')) as {
+      presets?: Array<[string, Record<string, unknown>]>
+    }
+    const appSource = readFileSync(resolve(projectRoot, 'src/app.tsx'), 'utf8')
+    const globalAdapterSource = readFileSync(
+      resolve(projectRoot, 'src/platform/weapp/coreJsWeappGlobal.cjs'),
+      'utf8',
+    )
+    const buildPluginSource = readFileSync(
+      resolve(projectRoot, 'scripts/taro-build-plugin.cjs'),
+      'utf8',
+    )
+    const compatibilityPlugin = require(resolve(
+      projectRoot,
+      'scripts/babel-plugin-weapp-runtime-compatibility.cjs',
+    )) as {
+      INSTANCE_HELPERS?: Record<string, string>
+      STATIC_HELPERS?: Record<string, string>
+      UNCURRIED_INSTANCE_HELPERS?: Record<string, string>
+    }
+    const packageJson = JSON.parse(readFileSync(resolve(projectRoot, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>
+    }
+    const taroPreset = babelConfig.presets?.find(([name]) => name === 'taro')
+
+    expect(taroPreset?.[1]).toMatchObject({
+      targets: { ios: '9', android: '5' },
+      useBuiltIns: false,
+    })
+    expect(babelConfig).toMatchObject({
+      plugins: [resolve(
+        projectRoot,
+        'scripts/babel-plugin-weapp-runtime-compatibility.cjs',
+      )],
+    })
+    expect(appSource).not.toContain('runtimeCompatibility')
+    expect(existsSync(resolve(
+      projectRoot,
+      'src/platform/weapp/runtimeCompatibility.ts',
+    ))).toBe(false)
+    expect(globalAdapterSource).toContain('standardLibraryGlobal')
+    expect(globalAdapterSource).not.toMatch(/\b(?:new\s+)?Function\s*\(/)
+    expect(buildPluginSource).toContain('installCoreJsWeappGlobalAdapter(chain, webpack)')
+    expect(Object.keys(compatibilityPlugin.INSTANCE_HELPERS ?? {}).sort()).toEqual([
+      'at',
+      'flatMap',
+      'includes',
+      'padStart',
+      'startsWith',
+    ])
+    expect(compatibilityPlugin.UNCURRIED_INSTANCE_HELPERS).toEqual({
+      finally: 'core-js-pure/stable/promise/finally',
+    })
+    expect(Object.keys(compatibilityPlugin.STATIC_HELPERS ?? {}).sort()).toEqual([
+      'Array.from',
+      'Number.isSafeInteger',
+      'Object.entries',
+      'Object.fromEntries',
+      'Object.values',
+    ])
+    expect(packageJson.dependencies?.['@babel/runtime-corejs3']).toBe('7.29.7')
+    expect(packageJson.dependencies?.['core-js-pure']).toBe('3.49.0')
+    expect(packageJson.dependencies).not.toHaveProperty('core-js')
   })
 
   it('uses an explicit mobile API timeout instead of the 60 second platform default', () => {

@@ -41,7 +41,7 @@ public class WorkoutConfiguration {
     @Bean
     @ConditionalOnProperty(
             prefix = "fitness.workout", name = "repository", havingValue = "memory", matchIfMissing = true)
-    WorkoutSessionRepository workoutSessionRepository() {
+    InMemoryWorkoutSessionRepository workoutSessionRepository() {
         return new InMemoryWorkoutSessionRepository();
     }
 

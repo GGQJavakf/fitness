@@ -2,8 +2,6 @@ import { Button, Image, Text, View } from '@tarojs/components'
 import { useEffect, useState } from 'react'
 
 import { resolveExerciseGuide } from './assets'
-import './index.scss'
-
 interface ExerciseMotionGuideProps {
   readonly exerciseCode: string
   readonly exerciseName: string

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const taro = vi.hoisted(() => ({
   getStorage: vi.fn(),
+  getStorageSync: vi.fn(),
   setStorage: vi.fn(),
   removeStorage: vi.fn(),
   request: vi.fn(),
@@ -10,6 +11,10 @@ const taro = vi.hoisted(() => ({
   redirectTo: vi.fn(),
   reLaunch: vi.fn(),
   navigateBack: vi.fn(),
+}))
+
+const wechat = vi.hoisted(() => ({
+  loadSubpackage: vi.fn(),
 }))
 
 vi.mock('@tarojs/taro', () => ({ default: taro }))
@@ -23,6 +28,10 @@ import {
 describe('WeApp session storage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    wechat.loadSubpackage.mockImplementation((options: { success: () => void }) => {
+      options.success()
+    })
+    Reflect.set(globalThis, 'wx', wechat)
   })
 
   afterEach(() => {
@@ -37,6 +46,18 @@ describe('WeApp session storage', () => {
     await expect(createWeappSessionStore().load()).rejects.toThrow('storage permission denied')
   })
 
+  it('captures a validated session synchronously for atomic logout preparation', () => {
+    const session = {
+      accessToken: 'access-redacted',
+      refreshToken: 'refresh-redacted',
+      expiresAt: '2026-08-28T12:00:00Z',
+    }
+    taro.getStorageSync.mockReturnValueOnce(session).mockReturnValueOnce({ accessToken: 'partial' })
+
+    expect(createWeappSessionStore().loadImmediately?.()).toEqual(session)
+    expect(createWeappSessionStore().loadImmediately?.()).toBeNull()
+  })
+
   it('does not hide unexpected session removal failures', async () => {
     taro.removeStorage.mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(createWeappSessionStore().clear()).rejects.toThrow('storage unavailable')
@@ -48,14 +69,35 @@ describe('WeApp session storage', () => {
     expect(taro.reLaunch).toHaveBeenCalledWith({
       url: '/presentation/pages/home/index',
     })
+    expect(wechat.loadSubpackage).not.toHaveBeenCalled()
     expect(taro.redirectTo).not.toHaveBeenCalled()
   })
 
-  it('loads the live workout from the exercise-guide subpackage', async () => {
+  it('loads the workout feature before navigating to the live workout route', async () => {
     await createWeappNavigation().open('WORKOUT_SESSION')
 
+    expect(wechat.loadSubpackage).toHaveBeenCalledWith({
+      name: 'workout',
+      success: expect.any(Function),
+      fail: expect.any(Function),
+    })
     expect(taro.navigateTo).toHaveBeenCalledWith({
-      url: '/subpackages/exercise-guide/pages/workout-session/index',
+      url: '/subpackages/workout/pages/workout-session/index',
+    })
+    expect(wechat.loadSubpackage.mock.invocationCallOrder[0])
+      .toBeLessThan(taro.navigateTo.mock.invocationCallOrder[0])
+  })
+
+  it('loads the startup feature before opening the business home', async () => {
+    await createWeappNavigation().open('HOME')
+
+    expect(wechat.loadSubpackage).toHaveBeenCalledWith({
+      name: 'startup',
+      success: expect.any(Function),
+      fail: expect.any(Function),
+    })
+    expect(taro.navigateTo).toHaveBeenCalledWith({
+      url: '/subpackages/startup/pages/home/index',
     })
   })
 
@@ -65,8 +107,42 @@ describe('WeApp session storage', () => {
     })
 
     expect(taro.redirectTo).toHaveBeenCalledWith({
-      url: '/presentation/pages/workout-prepare/index?trainingDayCode=DAY%20A%2F1',
+      url: '/subpackages/workout/pages/workout-prepare/index?trainingDayCode=DAY%20A%2F1',
     })
+  })
+
+  it('does not navigate when loading the destination feature fails', async () => {
+    wechat.loadSubpackage.mockImplementation((options: { fail: (error: Error) => void }) => {
+      options.fail(new Error('feature package unavailable'))
+    })
+
+    await expect(createWeappNavigation().open('HISTORY'))
+      .rejects.toThrow('feature package unavailable')
+
+    expect(taro.navigateTo).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['open', () => createWeappNavigation(generationFence).open('HISTORY'), 'navigateTo'],
+    ['replace', () => createWeappNavigation(generationFence).replace('HISTORY'), 'redirectTo'],
+    ['replaceApp', () => createWeappNavigation(generationFence).replaceApp('HOME'), 'reLaunch'],
+  ] as const)('does not execute stale %s navigation after subpackage loading', async (
+    _name,
+    navigate,
+    taroMethod,
+  ) => {
+    let finishLoad!: () => void
+    wechat.loadSubpackage.mockImplementationOnce((options: { success: () => void }) => {
+      finishLoad = options.success
+    })
+
+    const pending = navigate()
+    await vi.waitFor(() => expect(wechat.loadSubpackage).toHaveBeenCalledOnce())
+    generationFence.begin()
+    finishLoad()
+
+    await expect(pending).rejects.toThrow('generation invalidated')
+    expect(taro[taroMethod]).not.toHaveBeenCalled()
   })
 
   it('uses the CloudBase private container path when a service is configured', async () => {
@@ -167,3 +243,14 @@ describe('WeApp session storage', () => {
     }
   })
 })
+
+let navigationGeneration = 0
+const generationFence = {
+  capture: () => navigationGeneration,
+  assertCurrent(expected: number): void {
+    if (expected !== navigationGeneration) throw new Error('generation invalidated')
+  },
+  begin(): void {
+    navigationGeneration += 1
+  },
+}

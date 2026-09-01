@@ -19,7 +19,23 @@ public record PlanDraft(
         String presetCode,
         String presetVersion,
         List<String> executionRules,
-        List<String> progressionRules) {
+        List<String> progressionRules,
+        MovementImpactConstraint movementImpactConstraint) {
+
+    public PlanDraft(
+            String templateCode,
+            TrainingSplit trainingSplit,
+            String name,
+            List<Day> days,
+            Map<String, FieldLock.Status> locks,
+            String presetCode,
+            String presetVersion,
+            List<String> executionRules,
+            List<String> progressionRules) {
+        this(
+                templateCode, trainingSplit, name, days, locks, presetCode, presetVersion,
+                executionRules, progressionRules, null);
+    }
 
     public PlanDraft(
             String templateCode,
@@ -27,7 +43,7 @@ public record PlanDraft(
             String name,
             List<Day> days,
             Map<String, FieldLock.Status> locks) {
-        this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of());
+        this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of(), null);
     }
 
     public PlanDraft(
@@ -35,7 +51,7 @@ public record PlanDraft(
             String name,
             List<Day> days,
             Map<String, FieldLock.Status> locks) {
-        this(templateCode, inferTrainingSplit(templateCode), name, days, locks, null, null, List.of(), List.of());
+        this(templateCode, inferTrainingSplit(templateCode), name, days, locks, null, null, List.of(), List.of(), null);
     }
 
     public PlanDraft {
@@ -241,7 +257,7 @@ public record PlanDraft(
     private PlanDraft copyWith(List<Day> updatedDays, Map<String, FieldLock.Status> updatedLocks) {
         return new PlanDraft(
                 templateCode, trainingSplit, name, updatedDays, updatedLocks,
-                presetCode, presetVersion, executionRules, progressionRules);
+                presetCode, presetVersion, executionRules, progressionRules, movementImpactConstraint);
     }
 
     public record Day(
@@ -420,13 +436,19 @@ public record PlanDraft(
     }
 
     public enum TrainingSplit {
+        FULL_BODY,
         UPPER_LOWER,
         PUSH_PULL_LEGS,
         BODY_PART_FIVE_DAY
     }
 
+    public enum MovementImpactConstraint {
+        NO_JUMP
+    }
+
     public static TrainingSplit inferTrainingSplit(String templateCode) {
         if (templateCode == null) return null;
+        if (templateCode.startsWith("FULL_BODY_")) return TrainingSplit.FULL_BODY;
         if (templateCode.startsWith("UPPER_LOWER_")) return TrainingSplit.UPPER_LOWER;
         if (templateCode.startsWith("PUSH_PULL_LEGS_")) return TrainingSplit.PUSH_PULL_LEGS;
         if (templateCode.startsWith("BODY_PART_")) return TrainingSplit.BODY_PART_FIVE_DAY;

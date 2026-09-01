@@ -15,13 +15,10 @@ import {
   updateOnboardingDraft,
   type OnboardingDraft,
 } from '../../../application/onboarding'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getPlanningApplication } from '../../../platform/weapp/featureRoots/planningCompositionRoot'
 import { experienceDisplayName, goalDisplayName, locationDisplayName } from '../../copy'
 import type { ExperienceLevel, TrainingSplit } from '../../../application/models'
 
-import './index.scss'
-
-const application = getWeappApplication()
 const primaryDurations = [30, 45, 60] as const
 const moreDurations = [75, 90] as const
 
@@ -34,6 +31,7 @@ function gymEquipment() {
 }
 
 export default function OnboardingPage() {
+  const application = getPlanningApplication()
   const aiPlanGenerationAvailable = application.aiPlanGenerationAvailable
   const [state, setState] = useState(() => {
     const resumed = application.resumeOnboarding()
@@ -165,16 +163,7 @@ export default function OnboardingPage() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      const candidate = await application.completeOnboarding(checked.draft)
-      application.telemetry.track('onboarding_completed', {
-        daysPerWeek: checked.draft.weeklyFrequency!,
-        sessionMinutes: checked.draft.sessionMinutes!,
-      })
-      application.telemetry.track('plan_generated', {
-        result: candidate.status === 'READY' ? 'ready' : 'needs_adjustment',
-        issueCount: candidate.status === 'READY' ? 0 : 1,
-      })
-      await application.navigation.open('PLAN_CANDIDATES')
+      await application.completeOnboardingAndOpenCandidates(checked.draft)
     } catch (error) {
       application.telemetry.track('plan_generation_failed', { reason: 'network' })
       setSubmitError(error instanceof Error ? error.message : '保存失败，请稍后重试')
@@ -274,7 +263,8 @@ export default function OnboardingPage() {
               <Text className='field-label'>训练分化</Text>
               <View className='onboarding__option-list'>
                 {([
-                  ['UPPER_LOWER', '2 分化', '上肢 / 下肢，适合新手建立动作和恢复节奏'],
+                  ['FULL_BODY', '全身训练', '每次覆盖全身主要动作，适合新手每周训练 2～3 天'],
+                  ['UPPER_LOWER', '2 分化', '上肢 / 下肢，适合每周训练 2 或 4 天'],
                   ['PUSH_PULL_LEGS', '3 分化', '推 / 拉 / 腿，适合已有训练基础的用户'],
                   ['BODY_PART_FIVE_DAY', '5 分化', '胸 / 背 / 腿 / 手臂 / 肩，适合恢复和动作控制更成熟的用户'],
                 ] as const).map(([value, label, description]) => {

@@ -2,14 +2,11 @@ import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import { toExerciseTrendRows, type ExerciseTrendRow } from '../../../application/progression'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getProgressApplication } from '../../../platform/weapp/featureRoots/progressCompositionRoot'
 import { exerciseDisplayName } from '../../copy'
 
-import './index.scss'
-
-const application = getWeappApplication()
-
 export default function ExerciseTrendPage() {
+  const application = getProgressApplication()
   const exerciseCode = application.routeParameter('exerciseCode')
   const [rows, setRows] = useState<ExerciseTrendRow[]>([])
   const [message, setMessage] = useState('正在读取训练变化…')

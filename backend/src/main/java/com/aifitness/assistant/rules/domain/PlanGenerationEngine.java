@@ -790,7 +790,7 @@ public final class PlanGenerationEngine {
     public enum LockStatus { USER_LOCKED }
     public enum ExperienceLevel { BEGINNER, INTERMEDIATE, ADVANCED }
     public enum FitnessGoal { STRENGTH, HYPERTROPHY, GENERAL_FITNESS }
-    public enum TrainingSplit { UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY }
+    public enum TrainingSplit { FULL_BODY, UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY }
 
     public enum SessionFocus {
         FULL_BODY(Set.of(), Set.of()),
@@ -799,6 +799,9 @@ public final class PlanGenerationEngine {
                         "SHOULDER_ABDUCTION", "SHOULDER_HORIZONTAL_ABDUCTION", "SCAPULAR_ELEVATION",
                         "ELBOW_FLEXION", "ELBOW_EXTENSION"),
                 Set.of("HORIZONTAL_PUSH", "HORIZONTAL_PULL", "ELBOW_FLEXION", "ELBOW_EXTENSION")),
+        BODYWEIGHT_UPPER(
+                Set.of("HORIZONTAL_PUSH", "HORIZONTAL_PULL", "CORE"),
+                Set.of("HORIZONTAL_PUSH", "HORIZONTAL_PULL")),
         LOWER(
                 Set.of("SQUAT", "HINGE", "CALF_RAISE", "CORE"),
                 Set.of("SQUAT", "HINGE")),
@@ -883,6 +886,7 @@ public final class PlanGenerationEngine {
         public static SessionFocus forSplitIndex(TrainingSplit split, int sessionsPerWeek, int dayIndex) {
             Objects.requireNonNull(split, "training split must not be null");
             return switch (split) {
+                case FULL_BODY -> FULL_BODY;
                 case UPPER_LOWER -> dayIndex % 2 == 0 ? UPPER : LOWER;
                 case PUSH_PULL_LEGS -> switch (dayIndex % 3) {
                     case 0 -> PUSH;

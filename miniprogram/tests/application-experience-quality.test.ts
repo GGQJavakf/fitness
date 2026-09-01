@@ -24,7 +24,8 @@ describe('application-wide premium experience contract', () => {
 
   it('uses the plan as the authenticated landing surface with a clear progress section', () => {
     const navigation = source('src/presentation/components/main-navigation/index.tsx')
-    const home = source('src/presentation/pages/home/index.tsx')
+    const bootstrap = source('src/presentation/pages/home/index.tsx')
+    const home = source('src/subpackages/startup/pages/home/index.tsx')
     const appConfig = source('src/app.config.ts')
 
     for (const destination of ["'PLAN'", "'HISTORY'", "'MY'"]) {
@@ -32,10 +33,14 @@ describe('application-wide premium experience contract', () => {
     }
     expect(navigation).not.toContain("'HOME'")
     expect(navigation).toContain("label: '进展'")
+    expect(bootstrap).toContain('正在准备训练空间')
+    expect(bootstrap).not.toContain('MainNavigation')
     expect(home).not.toContain("current='HOME'")
     expect(home).not.toContain('screen--with-nav')
     expect(home).toContain('正在打开你的训练计划')
-    expect(appConfig).toContain('presentation/pages/plan-editor/index')
+    expect(appConfig).toContain("root: 'subpackages/planning'")
+    expect(appConfig).toContain("'pages/plan-editor/index'")
+    expect(appConfig).not.toContain('presentation/pages/plan-editor/index')
   })
 
   it('turns workout preparation into a clear pre-flight checklist without engineering copy', () => {
@@ -67,7 +72,7 @@ describe('application-wide premium experience contract', () => {
       "weightStatus === 'BODYWEIGHT'",
       '自重动作无需填写重量',
       "className='action-row action-row--sticky workout-actions'",
-      'isWorkoutPrescriptionFinished(resumed.state)',
+      'if (loaded.openSummary)',
       '完成本组',
       '疼痛或明显不适',
     ]) {

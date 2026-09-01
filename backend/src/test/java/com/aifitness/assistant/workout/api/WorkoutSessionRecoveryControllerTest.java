@@ -48,11 +48,14 @@ class WorkoutSessionRecoveryControllerTest {
                 "1.3.0", 48, clock.instant(), Set.of("CHEST"),
                 List.of(new WorkoutRecoveryAssessment.CompletedMuscleFact(
                         clock.instant().minus(Duration.ofHours(18)), Set.of("CHEST"))));
+        InMemoryWorkoutRecoveryConfirmationStore confirmations =
+                new InMemoryWorkoutRecoveryConfirmationStore();
         WorkoutSessionStartService starts = new WorkoutSessionStartService(
                 sessions, repository, new InMemoryWorkoutSetRepository(repository),
                 (user, selectedPlan, version, day) -> warning,
-                new InMemoryWorkoutRecoveryConfirmationStore(),
-                new InMemoryWorkoutSessionStartTransaction(), clock, Duration.ofMinutes(5));
+                confirmations,
+                new InMemoryWorkoutSessionStartTransaction(repository, confirmations),
+                clock, Duration.ofMinutes(5));
         WorkoutSessionController controller = new WorkoutSessionController(
                 sessions, starts, mock(WorkoutCompletionService.class),
                 mock(ExerciseReplacementService.class), clock);
@@ -97,11 +100,14 @@ class WorkoutSessionRecoveryControllerTest {
                 repository, plans, clock, () -> new UUID(0, ids.getAndIncrement()));
         WorkoutRecoveryAssessment ready = WorkoutRecoveryAssessment.evaluate(
                 "1.3.0", 48, clock.instant(), Set.of("CHEST"), List.of());
+        InMemoryWorkoutRecoveryConfirmationStore confirmations =
+                new InMemoryWorkoutRecoveryConfirmationStore();
         WorkoutSessionStartService starts = new WorkoutSessionStartService(
                 sessions, repository, new InMemoryWorkoutSetRepository(repository),
                 (user, selectedPlan, version, day) -> ready,
-                new InMemoryWorkoutRecoveryConfirmationStore(),
-                new InMemoryWorkoutSessionStartTransaction(), clock, Duration.ofMinutes(5));
+                confirmations,
+                new InMemoryWorkoutSessionStartTransaction(repository, confirmations),
+                clock, Duration.ofMinutes(5));
         WorkoutSessionController controller = new WorkoutSessionController(
                 sessions, starts, mock(WorkoutCompletionService.class),
                 mock(ExerciseReplacementService.class), clock);

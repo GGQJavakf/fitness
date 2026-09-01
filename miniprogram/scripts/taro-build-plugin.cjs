@@ -1,5 +1,84 @@
 const path = require('node:path')
 
+const StartupBoundaryWebpackPlugin = require('./startup-boundary-webpack-plugin.cjs')
+const WeappNativeAsyncChunkWebpackPlugin = require('./weapp-native-async-chunk-webpack-plugin.cjs')
+const {
+  decorateWeappNativeFirstPaintAssets,
+} = require('./weapp-native-first-paint-assets.cjs')
+
+const CORE_JS_GLOBAL_ADAPTER = path.resolve(
+  __dirname,
+  '../src/platform/weapp/coreJsWeappGlobal.cjs',
+)
+
+function installStartupBoundaryPlugin(chain) {
+  chain
+    .plugin('fitness-startup-boundary')
+    .use(StartupBoundaryWebpackPlugin)
+}
+
+function installCoreJsWeappGlobalAdapter(chain, webpack) {
+  if (typeof webpack?.NormalModuleReplacementPlugin !== 'function') {
+    throw new Error('Webpack NormalModuleReplacementPlugin is required for the core-js WeChat adapter')
+  }
+  chain
+    .plugin('fitness-core-js-weapp-global')
+    .use(webpack.NormalModuleReplacementPlugin, [
+      /(?:^|[\\/])global-this(?:\.js)?$/,
+      (resource) => {
+        const context = String(resource.context ?? '').replace(/\\/g, '/')
+        const request = String(resource.request ?? '').replace(/\\/g, '/')
+        const isInternalSelfReference = context.endsWith('/node_modules/core-js-pure/internals')
+          && request === './global-this'
+        const isInternalParentReference = context.includes('/node_modules/core-js-pure/')
+          && request.endsWith('/internals/global-this')
+        if (!isInternalSelfReference && !isInternalParentReference) return
+        resource.request = CORE_JS_GLOBAL_ADAPTER
+      },
+    ])
+}
+
+function configurePhysicalAsyncChunks(chain) {
+  const splitChunks = chain.optimization.get('splitChunks') || {}
+  const cacheGroups = splitChunks.cacheGroups || {}
+  const initialCacheGroups = Object.fromEntries(
+    Object.entries(cacheGroups).map(([name, group]) => [
+      name,
+      typeof group === 'object' && group !== null
+        ? { ...group, chunks: 'initial' }
+        : group,
+    ]),
+  )
+  chain.optimization.splitChunks({
+    ...splitChunks,
+    chunks: 'initial',
+    cacheGroups: {
+      ...initialCacheGroups,
+      common: {
+        ...(initialCacheGroups.common || {}),
+        chunks: 'initial',
+        // Taro references the root `common` chunk from the main package. Keep
+        // project source out of it so subpackage shells/styles are not pulled
+        // into the app startup closure merely because two pages share them.
+        test(module) {
+          const resource = typeof module?.resource === 'string'
+            ? module.resource.replace(/\\/g, '/')
+            : ''
+          return Boolean(resource) && !resource.includes('/src/')
+        },
+      },
+    },
+  })
+  chain.output.set(
+    'chunkLoading',
+    WeappNativeAsyncChunkWebpackPlugin.CHUNK_LOADING_TYPE,
+  )
+  chain.output.set('chunkFilename', '[name].js')
+  chain
+    .plugin('fitness-weapp-native-async-chunks')
+    .use(WeappNativeAsyncChunkWebpackPlugin)
+}
+
 const BUILD_HOOKS = [
   'modifyAppConfig',
   'modifyWebpackChain',
@@ -100,6 +179,9 @@ module.exports = (ctx) => {
                 initialVal: chain,
                 opts: { chain, webpack, data },
               })
+              installCoreJsWeappGlobalAdapter(chain, webpack)
+              configurePhysicalAsyncChunks(chain)
+              installStartupBoundaryPlugin(chain)
             },
             async modifyViteConfig(viteConfig, data, viteCompilerContext) {
               await ctx.applyPlugins({
@@ -114,6 +196,7 @@ module.exports = (ctx) => {
                 initialVal: assets,
                 opts: { assets, miniPlugin },
               })
+              decorateWeappNativeFirstPaintAssets(assets)
             },
             async modifyMiniConfigs(configMap) {
               await ctx.applyPlugins({
@@ -153,3 +236,8 @@ module.exports = (ctx) => {
     },
   })
 }
+
+module.exports.installStartupBoundaryPlugin = installStartupBoundaryPlugin
+module.exports.installCoreJsWeappGlobalAdapter = installCoreJsWeappGlobalAdapter
+module.exports.configurePhysicalAsyncChunks = configurePhysicalAsyncChunks
+module.exports.decorateWeappNativeFirstPaintAssets = decorateWeappNativeFirstPaintAssets

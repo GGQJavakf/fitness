@@ -199,6 +199,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/candidate-commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description 将候选编辑结果直接创建为唯一的新活动版本；首次提交创建 v1，已有活动计划时创建 N+1，中间状态不可见。 */
+        post: operations["commitPlanCandidate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans/presets": {
         parameters: {
             query?: never;
@@ -1002,7 +1019,7 @@ export interface components {
             meta: components["schemas"]["ResponseMeta"];
         };
         /** @enum {string} */
-        TrainingSplit: "UPPER_LOWER" | "PUSH_PULL_LEGS" | "BODY_PART_FIVE_DAY";
+        TrainingSplit: "FULL_BODY" | "UPPER_LOWER" | "PUSH_PULL_LEGS" | "BODY_PART_FIVE_DAY";
         AiPlanProposalExercise: {
             exerciseCode: string;
             workSets: number;
@@ -1087,6 +1104,8 @@ export interface components {
             presetVersion?: string;
             executionRules?: string[];
             progressionRules?: string[];
+            /** @enum {string} */
+            movementImpactConstraint?: "NO_JUMP";
         };
         ValidationIssue: {
             severity: components["schemas"]["ValidationSeverity"];
@@ -1122,6 +1141,77 @@ export interface components {
             data: components["schemas"]["PlanCandidateGenerationData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        PlanValidationDraft: {
+            templateCode: string;
+            trainingSplit?: components["schemas"]["TrainingSplit"];
+            name: string;
+            presetCode?: string;
+            presetVersion?: string;
+            executionRules?: string[];
+            progressionRules?: string[];
+            days: components["schemas"]["PlanDay"][];
+        };
+        /** @enum {string} */
+        LockCommandStatus: "USER_LOCKED" | "UNLOCKED";
+        CandidateCommitRequest: {
+            /** Format: uuid */
+            candidateId: string;
+            expectedActiveVersionNumber: number;
+            plan: components["schemas"]["PlanValidationDraft"];
+            locks: {
+                [key: string]: components["schemas"]["LockCommandStatus"];
+            };
+            warningConfirmationToken?: string;
+        };
+        /** @enum {string} */
+        PlanVersionStatus: "PREVIEW" | "WARNING_CONFIRMATION_REQUIRED" | "VALIDATION_ERROR" | "CREATED";
+        PlanVersionData: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            planId: string;
+            versionNumber: number;
+            /** @enum {string} */
+            sourceType: "INITIAL" | "USER_EDIT" | "REBALANCE" | "PROGRESSION";
+            plan: components["schemas"]["PlanDraft"];
+            ruleReference: components["schemas"]["RuleReference"];
+            confirmedWarningCodes: string[];
+            createdAt: components["schemas"]["UtcDateTime"];
+        };
+        PlanVersionResultData: {
+            status: components["schemas"]["PlanVersionStatus"];
+            plan: components["schemas"]["PlanDraft"];
+            validationIssues: components["schemas"]["ValidationIssue"][];
+            warningConfirmationToken?: string;
+            version?: components["schemas"]["PlanVersionData"];
+        };
+        PlanVersionResultResponse: {
+            data: components["schemas"]["PlanVersionResultData"];
+            meta: components["schemas"]["ResponseMeta"];
+        };
+        /** @enum {string} */
+        PlanPresetContentStatus: "AI_DRAFT" | "AI_VALIDATED" | "PUBLIC_RELEASE_APPROVED" | "RETIRED";
+        /** @enum {string} */
+        PlanPresetProfessionalReviewStatus: "PENDING" | "APPROVED";
+        /** @enum {string} */
+        PlanPresetAvailabilityStatus: "AVAILABLE" | "BLOCKED_CAPABILITY";
+        PlanPresetIntroductoryPhase: {
+            weeks: number;
+            workSets: number;
+            targetRirMin: number;
+            targetRirMax: number;
+            transitionCondition: string;
+        };
+        /** @enum {string} */
+        PlanPresetSourceKind: "PEER_REVIEWED_POSITION_STAND" | "PEER_REVIEWED_CONSENSUS_STATEMENT" | "PROFESSIONAL_ORGANIZATION_SUMMARY" | "GOVERNMENT_GUIDELINE" | "GOVERNMENT_PUBLIC_HEALTH_GUIDANCE" | "INTERNAL_USER_PLAN";
+        PlanPresetSourceSummary: {
+            id: string;
+            title: string;
+            /** Format: uri */
+            url?: string;
+            usageBoundary: string;
+            sourceKind: components["schemas"]["PlanPresetSourceKind"];
+        };
         PlanPresetDaySummary: {
             /** @enum {string} */
             weekday: "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
@@ -1135,10 +1225,22 @@ export interface components {
             code: string;
             version: string;
             name: string;
+            experience: components["schemas"]["ExperienceLevel"];
             goal: components["schemas"]["FitnessGoal"];
             weeklyFrequency: number;
             sessionMinutes: number;
             location: components["schemas"]["TrainingLocation"];
+            contentStatus: components["schemas"]["PlanPresetContentStatus"];
+            professionalReviewStatus: components["schemas"]["PlanPresetProfessionalReviewStatus"];
+            availabilityStatus: components["schemas"]["PlanPresetAvailabilityStatus"];
+            unavailableReason?: string;
+            introductoryPhase?: components["schemas"]["PlanPresetIntroductoryPhase"];
+            sources: components["schemas"]["PlanPresetSourceSummary"][];
+            explanationSources: components["schemas"]["PlanPresetSourceSummary"][];
+            /** @enum {string} */
+            matchStatus: "EXACT" | "PARTIAL";
+            recommended: boolean;
+            mismatchFields: ("EXPERIENCE" | "GOAL" | "WEEKLY_FREQUENCY" | "SESSION_MINUTES" | "LOCATION")[];
             days: components["schemas"]["PlanPresetDaySummary"][];
         };
         PlanPresetListData: {
@@ -1247,16 +1349,6 @@ export interface components {
             data: components["schemas"]["PlanDayOptionListData"];
             meta: components["schemas"]["ResponseMeta"];
         };
-        PlanValidationDraft: {
-            templateCode: string;
-            trainingSplit?: components["schemas"]["TrainingSplit"];
-            name: string;
-            presetCode?: string;
-            presetVersion?: string;
-            executionRules?: string[];
-            progressionRules?: string[];
-            days: components["schemas"]["PlanDay"][];
-        };
         ValidatePlanRequest: {
             plan: components["schemas"]["PlanValidationDraft"];
             ruleReference: components["schemas"]["RuleReference"];
@@ -1273,19 +1365,6 @@ export interface components {
             /** Format: uuid */
             candidateId: string;
         };
-        PlanVersionData: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            planId: string;
-            versionNumber: number;
-            /** @enum {string} */
-            sourceType: "INITIAL" | "USER_EDIT" | "REBALANCE" | "PROGRESSION";
-            plan: components["schemas"]["PlanDraft"];
-            ruleReference: components["schemas"]["RuleReference"];
-            confirmedWarningCodes: string[];
-            createdAt: components["schemas"]["UtcDateTime"];
-        };
         ActivePlanData: {
             /** Format: uuid */
             planId: string;
@@ -1299,8 +1378,6 @@ export interface components {
             data: components["schemas"]["PlanVersionData"];
             meta: components["schemas"]["ResponseMeta"];
         };
-        /** @enum {string} */
-        LockCommandStatus: "USER_LOCKED" | "UNLOCKED";
         CreatePlanVersionRequest: {
             plan: components["schemas"]["PlanValidationDraft"];
             baseVersionNumber: number;
@@ -1308,19 +1385,6 @@ export interface components {
                 [key: string]: components["schemas"]["LockCommandStatus"];
             };
             warningConfirmationToken?: string;
-        };
-        /** @enum {string} */
-        PlanVersionStatus: "PREVIEW" | "WARNING_CONFIRMATION_REQUIRED" | "VALIDATION_ERROR" | "CREATED";
-        PlanVersionResultData: {
-            status: components["schemas"]["PlanVersionStatus"];
-            plan: components["schemas"]["PlanDraft"];
-            validationIssues: components["schemas"]["ValidationIssue"][];
-            warningConfirmationToken?: string;
-            version?: components["schemas"]["PlanVersionData"];
-        };
-        PlanVersionResultResponse: {
-            data: components["schemas"]["PlanVersionResultData"];
-            meta: components["schemas"]["ResponseMeta"];
         };
         RebalancePlanRequest: {
             plan: components["schemas"]["PlanValidationDraft"];
@@ -1373,6 +1437,12 @@ export interface components {
             data: components["schemas"]["WorkoutHistoryData"];
             meta: components["schemas"]["ResponseMeta"];
         };
+        /** @description 在同一事务内提前结束指定活动训练、创建并激活本次新训练；失败时两者均不变。 */
+        ActiveWorkoutReplacementRequest: {
+            /** Format: uuid */
+            sessionId: string;
+            expectedVersion: components["schemas"]["ExpectedVersion"];
+        };
         StartWorkoutSessionRequest: {
             clientSessionKey: string;
             /** Format: uuid */
@@ -1384,6 +1454,7 @@ export interface components {
             trainingDayCode?: string;
             /** @description 仅在服务端返回 RECOVERY_CONFIRMATION_REQUIRED 后由用户明确确认继续时原样回传。 */
             recoveryConfirmationToken?: string;
+            activeWorkoutReplacement?: components["schemas"]["ActiveWorkoutReplacementRequest"];
         };
         WorkoutOptionalSetRule: {
             conditionCode: string;
@@ -2053,9 +2124,9 @@ export interface components {
         /** @description PUT 兼容路径参数，值为客户端生成的 clientSetKey。 */
         ClientSetKeyAsSetIdPath: string;
         SetIdPath: string;
-        Cursor: string;
         /** @description 在已认证用户和操作类型范围内唯一；同键不同 payload 将被拒绝。 */
         IdempotencyKey: string;
+        Cursor: string;
     };
     requestBodies: {
         WechatLogin: {
@@ -2086,6 +2157,11 @@ export interface components {
         PlanCandidates: {
             content: {
                 "application/json": components["schemas"]["PlanCandidateRequest"];
+            };
+        };
+        PlanCandidateCommit: {
+            content: {
+                "application/json": components["schemas"]["CandidateCommitRequest"];
             };
         };
         PlanValidation: {
@@ -2494,6 +2570,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlanCandidateGenerationResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["VersionConflict"];
+            default: components["responses"]["DefaultError"];
+        };
+    };
+    commitPlanCandidate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 在已认证用户和操作类型范围内唯一；同键不同 payload 将被拒绝。 */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: components["requestBodies"]["PlanCandidateCommit"];
+        responses: {
+            /** @description 存在警告，必须以同一 Idempotency-Key 携带 warningConfirmationToken 再次确认 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResultResponse"];
+                };
+            };
+            /** @description 候选编辑结果已原子创建并切换为活动版本 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVersionResultResponse"];
                 };
             };
             400: components["responses"]["BadRequest"];

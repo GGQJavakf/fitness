@@ -22,7 +22,7 @@ describe('professional content review pack', () => {
     expect(pack).toContain('审核人：________________')
     expect(pack).toContain('专业资质及编号：________________')
     expect(pack).toContain('当前状态：待专业人员填写；此文件本身不构成批准')
-    expect(pack).toContain('动作内容 `1.8.0`')
+    expect(pack).toContain('动作内容 `1.9.0`')
     expect(pack).toContain('共 63 个启用动作、78 条替代关系')
     expect(pack.match(/\| EXERCISE \|/g)).toHaveLength(63)
     expect(pack.match(/\| ALTERNATIVE \|/g)).toHaveLength(78)

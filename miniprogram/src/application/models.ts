@@ -1,5 +1,5 @@
 export type ExperienceLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
-export type TrainingSplit = 'UPPER_LOWER' | 'PUSH_PULL_LEGS' | 'BODY_PART_FIVE_DAY'
+export type TrainingSplit = 'FULL_BODY' | 'UPPER_LOWER' | 'PUSH_PULL_LEGS' | 'BODY_PART_FIVE_DAY'
 export type FitnessGoal = 'STRENGTH' | 'HYPERTROPHY' | 'FAT_LOSS' | 'GENERAL_FITNESS'
 export type TrainingLocation = 'HOME' | 'GYM' | 'OTHER'
 export type SessionMinutes = 30 | 45 | 60 | 75 | 90
@@ -119,6 +119,7 @@ export interface PlanDraft {
   presetVersion?: string
   executionRules?: string[]
   progressionRules?: string[]
+  movementImpactConstraint?: 'NO_JUMP'
   days: PlanDay[]
   locks: Record<string, LockStatus>
 }
@@ -131,6 +132,7 @@ export interface PlanValidationDraft {
   presetVersion?: string
   executionRules?: string[]
   progressionRules?: string[]
+  movementImpactConstraint?: 'NO_JUMP'
   days: PlanDay[]
 }
 
@@ -143,14 +145,61 @@ export interface PlanPresetDaySummary {
   exerciseCount: number
 }
 
+export type PlanPresetContentStatus =
+  | 'AI_DRAFT'
+  | 'AI_VALIDATED'
+  | 'PUBLIC_RELEASE_APPROVED'
+  | 'RETIRED'
+
+export type PlanPresetProfessionalReviewStatus = 'PENDING' | 'APPROVED'
+
+export type PlanPresetAvailabilityStatus = 'AVAILABLE' | 'BLOCKED_CAPABILITY'
+
+export interface PlanPresetIntroductoryPhase {
+  weeks: number
+  workSets: number
+  targetRirMin: number
+  targetRirMax: number
+  transitionCondition: string
+}
+
+export type PlanPresetSourceKind =
+  | 'PEER_REVIEWED_POSITION_STAND'
+  | 'PEER_REVIEWED_CONSENSUS_STATEMENT'
+  | 'PROFESSIONAL_ORGANIZATION_SUMMARY'
+  | 'GOVERNMENT_GUIDELINE'
+  | 'GOVERNMENT_PUBLIC_HEALTH_GUIDANCE'
+  | 'INTERNAL_USER_PLAN'
+
+export interface PlanPresetSourceSummary {
+  id: string
+  title: string
+  url?: string
+  usageBoundary: string
+  sourceKind: PlanPresetSourceKind
+}
+
 export interface PlanPresetSummary {
   code: string
   version: string
   name: string
+  experience: ExperienceLevel
   goal: FitnessGoal
   weeklyFrequency: number
   sessionMinutes: number
   location: TrainingLocation
+  contentStatus: PlanPresetContentStatus
+  professionalReviewStatus: PlanPresetProfessionalReviewStatus
+  availabilityStatus: PlanPresetAvailabilityStatus
+  unavailableReason?: string
+  introductoryPhase?: PlanPresetIntroductoryPhase
+  sources: PlanPresetSourceSummary[]
+  explanationSources: PlanPresetSourceSummary[]
+  matchStatus: 'EXACT' | 'PARTIAL'
+  recommended: boolean
+  mismatchFields: Array<
+    'EXPERIENCE' | 'GOAL' | 'WEEKLY_FREQUENCY' | 'SESSION_MINUTES' | 'LOCATION'
+  >
   days: PlanPresetDaySummary[]
 }
 
@@ -268,6 +317,14 @@ export interface ActivePlanData {
 export interface CreatePlanVersionRequest {
   plan: PlanValidationDraft
   baseVersionNumber: number
+  locks: Record<string, LockCommandStatus>
+  warningConfirmationToken?: string
+}
+
+export interface CandidateCommitRequest {
+  candidateId: string
+  expectedActiveVersionNumber: number
+  plan: PlanValidationDraft
   locks: Record<string, LockCommandStatus>
   warningConfirmationToken?: string
 }

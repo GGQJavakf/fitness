@@ -271,6 +271,44 @@ describe('workout execution state', () => {
     expect(recorded.exercises[0].sets[0].actualWeightKg).toBe(17.5)
   })
 
+  it('applies an adjusted exercise weight to every unfinished set without rewriting completed facts', () => {
+    const work = beginWorkSets(completeGeneralWarmup(createWorkoutFlow({
+      ...baseInput,
+      exercises: [{
+        ...baseInput.exercises[0],
+        targetWorkSets: 3,
+        weightStatus: 'KNOWN' as const,
+        targetWeightKg: 20,
+      }],
+    })))
+    const firstRecorded = recordWorkoutSet(work, {
+      clientSetKey: 'work-before-adjustment',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualReps: 10,
+    })
+    const adjusted = setWorkoutExerciseWeight(firstRecorded, 0, 17.5)
+    const secondRecorded = recordWorkoutSet(adjusted, {
+      clientSetKey: 'work-after-adjustment-1',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualReps: 10,
+    })
+    const completed = recordWorkoutSet(secondRecorded, {
+      clientSetKey: 'work-after-adjustment-2',
+      exerciseIndex: 0,
+      setType: 'WORK',
+      status: 'COMPLETED',
+      actualReps: 10,
+    })
+
+    expect(completed.exercises[0].sets.map((set) => set.actualWeightKg))
+      .toEqual([20, 17.5, 17.5])
+    expect(completed.exercises[0].sessionWeightKg).toBe(17.5)
+  })
+
   it('preserves pending and conflict evidence when the session weight is adjusted', () => {
     const pending = markWorkoutSyncPending(createWorkoutFlow(baseInput))
     const conflict = { ...createWorkoutFlow(baseInput), syncStatus: 'CONFLICT' as const }

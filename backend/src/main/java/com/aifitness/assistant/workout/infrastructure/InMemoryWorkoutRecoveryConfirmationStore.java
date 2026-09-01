@@ -70,12 +70,27 @@ public final class InMemoryWorkoutRecoveryConfirmationStore implements WorkoutRe
         return Base64.getUrlEncoder().withoutPadding().encodeToString(value);
     }
 
+    synchronized Snapshot snapshot() {
+        return new Snapshot(new HashMap<>(entries));
+    }
+
+    synchronized void restore(Snapshot snapshot) {
+        entries.clear();
+        entries.putAll(snapshot.entries());
+    }
+
     private static String digestHex(String value) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                     .digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 is unavailable", exception);
+        }
+    }
+
+    record Snapshot(Map<String, PendingConfirmation> entries) {
+        Snapshot {
+            entries = Map.copyOf(entries);
         }
     }
 

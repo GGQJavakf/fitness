@@ -5,6 +5,7 @@ import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.domain.TrainingPlan;
 import com.aifitness.assistant.plan.domain.TrainingPlanVersion;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,5 +51,23 @@ public final class InMemoryPlanRepository implements PlanRepository {
         TrainingPlan updated = current.append(version);
         plans.put(planId, updated);
         return updated;
+    }
+
+    synchronized Snapshot snapshot() {
+        return new Snapshot(plans, activePlanByUser);
+    }
+
+    synchronized void restore(Snapshot snapshot) {
+        plans.clear();
+        plans.putAll(snapshot.plans());
+        activePlanByUser.clear();
+        activePlanByUser.putAll(snapshot.activePlanByUser());
+    }
+
+    record Snapshot(Map<UUID, TrainingPlan> plans, Map<UUID, UUID> activePlanByUser) {
+        Snapshot {
+            plans = new LinkedHashMap<>(plans);
+            activePlanByUser = new LinkedHashMap<>(activePlanByUser);
+        }
     }
 }

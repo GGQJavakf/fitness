@@ -55,10 +55,6 @@ export function createWechatWorkoutDraftStore(
 
     async save(input: WorkoutDraft, expectedRevision?: number | null): Promise<void> {
       const draft = validateDraft(input)
-      const payloadJson = JSON.stringify(draft)
-      const checksum = integrityChecksum(payloadJson)
-      const recordKey = `${recordKeyPrefix}${encodeURIComponent(draft.draftId)}.${draft.revision}.${checksum}`
-      const envelope: StoredEnvelope = { schemaVersion: workoutDraftSchemaVersion, payloadJson, checksum }
       const previousPointer = await readOptional(activePointerKey)
       const previousRecordKey = isPointer(previousPointer) ? previousPointer.recordKey : null
       if (expectedRevision !== undefined) {
@@ -74,25 +70,16 @@ export function createWechatWorkoutDraftStore(
             && draft.revision === expectedRevision + 1
         if (!revisionMatches) throw new WorkoutDraftRevisionConflictError()
       }
-      try {
-        await Taro.setStorage({ key: recordKey, data: envelope })
-        const verified = await readRequired(recordKey)
-        decodeEnvelope(verified)
-        await Taro.setStorage({
-          key: activePointerKey,
-          data: { recordKey, schemaVersion: workoutDraftSchemaVersion } satisfies ActivePointer,
-        })
-        if (previousRecordKey && previousRecordKey !== recordKey) {
-          try {
-            await removeOptional(previousRecordKey)
-          } catch {
-            // The new pointer is already durable. A stale revision is safe and can be cleaned later.
-          }
-        }
-      } catch (error) {
-        if (isStorageFull(error)) throw new WorkoutDraftStorageFullError()
-        throw error
-      }
+      await persistAndSwapActiveDraft(draft, previousRecordKey)
+    },
+
+    async replaceActive(expectedDraftId: string, input: WorkoutDraft): Promise<void> {
+      const replacement = validateDraft(input)
+      const previousPointer = await readOptional(activePointerKey)
+      if (!isPointer(previousPointer)) throw new WorkoutDraftRevisionConflictError()
+      const current = decodeEnvelope(await readRequired(previousPointer.recordKey))
+      if (current.draftId !== expectedDraftId) throw new WorkoutDraftRevisionConflictError()
+      await persistAndSwapActiveDraft(replacement, previousPointer.recordKey)
     },
 
     async clearActive(expectedDraftId: string): Promise<void> {
@@ -126,10 +113,41 @@ export function createWechatWorkoutDraftStore(
     save: (draft, expectedRevision) => lifecycle.runUserOperation(
       () => store.save(draft, expectedRevision),
     ),
+    replaceActive: (expectedDraftId, replacement) => lifecycle.runUserOperation(
+      () => store.replaceActive!(expectedDraftId, replacement),
+    ),
     clearActive: (expectedDraftId) => lifecycle.runUserOperation(
       () => store.clearActive(expectedDraftId),
     ),
     discardCorrupted: () => lifecycle.runUserOperation(() => store.discardCorrupted()),
+  }
+}
+
+async function persistAndSwapActiveDraft(
+  draft: WorkoutDraft,
+  previousRecordKey: string | null,
+): Promise<void> {
+  const payloadJson = JSON.stringify(draft)
+  const checksum = integrityChecksum(payloadJson)
+  const recordKey = `${recordKeyPrefix}${encodeURIComponent(draft.draftId)}.${draft.revision}.${checksum}`
+  const envelope: StoredEnvelope = { schemaVersion: workoutDraftSchemaVersion, payloadJson, checksum }
+  try {
+    await Taro.setStorage({ key: recordKey, data: envelope })
+    decodeEnvelope(await readRequired(recordKey))
+    await Taro.setStorage({
+      key: activePointerKey,
+      data: { recordKey, schemaVersion: workoutDraftSchemaVersion } satisfies ActivePointer,
+    })
+    if (previousRecordKey && previousRecordKey !== recordKey) {
+      try {
+        await removeOptional(previousRecordKey)
+      } catch {
+        // The new pointer is already durable. A stale revision is safe and can be cleaned later.
+      }
+    }
+  } catch (error) {
+    if (isStorageFull(error)) throw new WorkoutDraftStorageFullError()
+    throw error
   }
 }
 

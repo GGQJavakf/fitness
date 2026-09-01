@@ -8,6 +8,9 @@ const application = vi.hoisted(() => ({
   getCandidate: vi.fn(),
   requestPlanExplanation: vi.fn(),
   activateCandidate: vi.fn(),
+  activateCandidateAndOpenWorkoutPreparation: vi.fn(),
+  activateCandidateAndOpenEditor: vi.fn(),
+  openCandidateEditor: vi.fn(),
   resumeOnboarding: vi.fn(),
   openPlanEditor: vi.fn(),
   getActivePlan: vi.fn(),
@@ -27,8 +30,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/planningCompositionRoot', () => ({
+  getPlanningApplication: () => application,
 }))
 
 const { default: PlanCandidatesPage } = await import(
@@ -42,6 +45,10 @@ const candidate = {
   canContinue: true,
   generationSource: 'FALLBACK_RULE_PLAN' as const,
   generationLabel: '规则生成计划 · 已通过安全校验',
+  name: '全身基础训练候选',
+  trainingSplit: 'FULL_BODY' as const,
+  executionRules: ['动作按计划顺序完成。'],
+  progressionRules: ['达到目标次数上限后再增加重量。'],
   explanationMessage: '依据训练目标、频率和器械条件生成。',
   notices: [],
   days: [{
@@ -68,7 +75,7 @@ const activePlan = {
     sourceType: 'INITIAL',
     plan: {
       templateCode: 'FULL_BODY_3_DAY_V1',
-      trainingSplit: 'PUSH_PULL_LEGS' as const,
+      trainingSplit: 'FULL_BODY' as const,
       name: '全身基础训练',
       days: [{
         code: 'DAY_A',
@@ -124,6 +131,19 @@ describe('plan pages runtime interactions', () => {
     application.requestPlanExplanation.mockResolvedValue({ content: 'AI explanation' })
     application.getActivePlan.mockReturnValue(activePlan)
     application.loadActivePlan.mockResolvedValue(activePlan)
+    application.activateCandidateAndOpenWorkoutPreparation.mockImplementation(async () => {
+      const activated = await application.activateCandidate()
+      application.telemetry.track('plan_confirmed', {
+        versionNumber: activated.activeVersion.versionNumber,
+      })
+      await application.navigation.replace('WORKOUT_PREPARE')
+      return activated
+    })
+    application.activateCandidateAndOpenEditor.mockImplementation(async () => {
+      const editor = application.openCandidateEditor()
+      await application.navigation.open('PLAN_EDITOR')
+      return editor
+    })
   })
 
   it('activates the rule-generated candidate and routes the first workout exactly once', async () => {
@@ -139,10 +159,20 @@ describe('plan pages runtime interactions', () => {
     expect(renderedText(renderer)).toContain('动作提示')
     expect(renderedText(renderer)).toContain('候选训练日提示')
     expect(renderedText(renderer)).toContain('候选动作提示')
+    expect(renderedText(renderer)).toContain('全身基础训练候选')
+    expect(renderedText(renderer)).toContain('执行规则')
+    expect(renderedText(renderer)).toContain('动作按计划顺序完成。')
+    expect(renderedText(renderer)).toContain('进阶规则')
+    expect(renderedText(renderer)).toContain('达到目标次数上限后再增加重量。')
+    expect(renderedText(renderer)).toContain('确认启用并准备训练')
+    expect(renderedText(renderer)).toContain('选择系统预设')
+    expect(renderedText(renderer)).toContain('修改期间不会启用计划')
+    expect(renderedText(renderer)).toContain('取消返回不会创建计划')
+    expect(renderedText(renderer)).not.toContain('进入修改时会先保存初始版本')
     expect(application.requestPlanExplanation).not.toHaveBeenCalled()
 
     await act(async () => {
-      button(renderer!, '开始第一次训练').props.onClick()
+      button(renderer!, '确认启用并准备训练').props.onClick()
       await flushPage()
     })
 
@@ -151,6 +181,27 @@ describe('plan pages runtime interactions', () => {
       versionNumber: 1,
     })
     expect(application.navigation.replace).toHaveBeenCalledWith('WORKOUT_PREPARE')
+
+    button(renderer, '选择系统预设').props.onClick()
+    expect(application.navigation.open).toHaveBeenCalledWith('PLAN_PRESETS')
+  })
+
+  it('does not label every system preset as a five-day hypertrophy plan', async () => {
+    application.getCandidate.mockReturnValue({
+      ...candidate,
+      generationSource: 'SYSTEM_PRESET',
+      generationLabel: '系统个人预设 · 完整处方已载入',
+    })
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(PlanCandidatesPage))
+    })
+    if (!renderer) throw new Error('system preset candidate page did not render')
+
+    const copy = renderedText(renderer)
+    expect(copy).toContain('你的系统预制训练方案')
+    expect(copy).not.toContain('你的五日增肌个人预设')
   })
 
   it('coalesces rapid candidate activation clicks before React disables the action', async () => {
@@ -162,7 +213,7 @@ describe('plan pages runtime interactions', () => {
     })
     if (!renderer) throw new Error('candidate page did not render')
 
-    const start = button(renderer, '开始第一次训练')
+    const start = button(renderer, '确认启用并准备训练')
     act(() => {
       start.props.onClick()
       start.props.onClick()
@@ -206,7 +257,7 @@ describe('plan pages runtime interactions', () => {
     expect(application.navigation.replace).toHaveBeenCalledWith('ONBOARDING')
   })
 
-  it('activates before opening the candidate editor and routes exercise guidance with its code', async () => {
+  it('opens the candidate editor without activation and routes exercise guidance with its code', async () => {
     let renderer: ReactTestRenderer | undefined
     await act(async () => {
       renderer = TestRenderer.create(createElement(PlanCandidatesPage))
@@ -223,11 +274,10 @@ describe('plan pages runtime interactions', () => {
       await flushPage()
     })
 
-    expect(application.activateCandidate).toHaveBeenCalledOnce()
-    expect(application.openPlanEditor).toHaveBeenCalledOnce()
+    expect(application.activateCandidate).not.toHaveBeenCalled()
+    expect(application.openCandidateEditor).toHaveBeenCalledOnce()
+    expect(application.openPlanEditor).not.toHaveBeenCalled()
     expect(application.navigation.open).toHaveBeenCalledWith('PLAN_EDITOR')
-    expect(application.activateCandidate.mock.invocationCallOrder[0])
-      .toBeLessThan(application.openPlanEditor.mock.invocationCallOrder[0])
   })
 
   it('opens the active plan editor, guidance, workout, and feedback destinations', async () => {
@@ -241,7 +291,7 @@ describe('plan pages runtime interactions', () => {
     const copy = renderedText(renderer)
     expect(copy).toContain('规则生成计划 · 已通过安全校验')
     expect(copy).toContain('确定性规则引擎生成')
-    expect(copy).toContain('推拉腿')
+    expect(copy).toContain('全身训练')
     expect(copy).toContain('训练分化')
     expect(copy).toContain('训练提示')
     expect(copy).toContain('动作提示')
@@ -267,7 +317,7 @@ describe('plan pages runtime interactions', () => {
     expect(application.navigation.open).toHaveBeenCalledWith('PLAN_EDITOR')
   })
 
-  it('keeps an activated system preset editable while showing its traceable source', async () => {
+  it('keeps an activated system preset editable without claiming source endorsement', async () => {
     const presetPlan = {
       ...activePlan,
       activeVersion: {
@@ -290,7 +340,8 @@ describe('plan pages runtime interactions', () => {
     if (!renderer) throw new Error('preset plan page did not render')
 
     const copy = renderedText(renderer)
-    expect(copy).toContain('系统个人预设 · 来源可追溯')
+    expect(copy).toContain('系统个人预设 · 已按确认版本启用')
+    expect(copy).not.toContain('来源可追溯')
     expect(copy).not.toContain('处方已锁定')
 
     await act(async () => {
@@ -326,7 +377,7 @@ describe('plan pages runtime interactions', () => {
     expect(renderedText(renderer)).toContain('全身基础训练')
   })
 
-  it('redirects an authentication failure without exposing it as a network error', async () => {
+  it('leaves authentication-failure navigation to the shared handler without exposing a network error', async () => {
     application.getActivePlan.mockReturnValue(null)
     application.loadActivePlan.mockRejectedValue(
       new ApplicationError('AUTHENTICATION_REQUIRED', '登录状态已失效，请重新登录'),
@@ -339,7 +390,7 @@ describe('plan pages runtime interactions', () => {
     })
     if (!renderer) throw new Error('plan page did not render')
 
-    expect(application.navigation.replace).toHaveBeenCalledWith('HOME')
+    expect(application.navigation.replace).not.toHaveBeenCalled()
     expect(renderedText(renderer)).not.toContain('网络连接失败')
     expect(renderedText(renderer)).not.toContain('登录状态已失效')
   })

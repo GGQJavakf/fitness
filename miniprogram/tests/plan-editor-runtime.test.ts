@@ -29,6 +29,7 @@ const application = vi.hoisted(() => ({
   validateEditor: vi.fn(),
   previewRebalance: vi.fn(),
   saveEditor: vi.fn(),
+  saveEditorAndOpenPlan: vi.fn(),
   confirmEditorWarnings: vi.fn(),
   navigation: { replace: vi.fn() },
 }))
@@ -41,8 +42,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/planningCompositionRoot', () => ({
+  getPlanningApplication: () => application,
 }))
 
 const { default: PlanEditorPage } = await import('../src/presentation/pages/plan-editor')
@@ -137,6 +138,19 @@ describe('live plan editor number input', () => {
     )
     application.loadActivePlan.mockResolvedValue({})
     application.openPlanEditor.mockReturnValue(editor)
+    application.saveEditorAndOpenPlan.mockImplementation(async (previousVersion) => {
+      const current = await application.saveEditor()
+      if (current.baseVersion > previousVersion) {
+        application.telemetry.track('plan_confirmed', { versionNumber: current.baseVersion })
+      }
+      if (current.baseVersion > previousVersion
+        && !current.warningConfirmationToken
+        && !current.conflict
+        && !current.validationResult.validationIssues.some((issue: { severity: string }) => issue.severity === 'ERROR')) {
+        await application.navigation.replace('PLAN')
+      }
+      return current
+    })
   })
 
   it('keeps a cleared value visible, blocks the invalid edit, and accepts the retyped number', () => {
@@ -164,6 +178,27 @@ describe('live plan editor number input', () => {
       4,
     )
     expect(JSON.stringify(renderer.toJSON())).not.toContain('请输入工作组')
+  })
+
+  it('keeps a candidate editor explicitly unactivated until the user saves', () => {
+    const candidate = {
+      ...initialEditor(),
+      planId: '',
+      baseVersion: 0,
+    }
+    application.getPlanEditor.mockReturnValue(candidate)
+    let renderer: ReactTestRenderer | undefined
+
+    act(() => {
+      renderer = TestRenderer.create(createElement(PlanEditorPage))
+    })
+    if (!renderer) throw new Error('candidate editor page did not render')
+
+    const copy = JSON.stringify(renderer.toJSON())
+    expect(copy).toContain('这是启用前的候选方案')
+    expect(copy).toContain('保存后会生成第一版计划')
+    act(() => renderer!.unmount())
+    expect(application.saveEditorAndOpenPlan).not.toHaveBeenCalled()
   })
 
   it('retries the initial active-plan load without forcing the user to leave the editor', async () => {

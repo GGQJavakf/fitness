@@ -235,7 +235,12 @@ describe('AI plan selection boundary', () => {
     ] as const
     const gymContext = {
       ...context,
-      profile: { ...context.profile, weeklyFrequency: 3, location: 'GYM' },
+      profile: {
+        ...context.profile,
+        weeklyFrequency: 3,
+        trainingSplit: 'FULL_BODY',
+        location: 'GYM',
+      },
       exercises: gymPatterns.map(([code, movementPattern]) => ({
         code,
         name: '不得发送的动作名称',
@@ -262,6 +267,8 @@ describe('AI plan selection boundary', () => {
 
     const request = vi.mocked(provider.generate).mock.calls[0][0]
     const facts = JSON.parse(request.factsJson) as {
+      profile: { trainingSplit: string }
+      professionalSessionStructure: Array<{ focus: string }>
       professionalWeeklyStructure: {
         requiredMovementPatterns: string[]
         movementPatternSessionTargets: Array<{
@@ -271,6 +278,9 @@ describe('AI plan selection boundary', () => {
         }>
       }
     }
+    expect(facts.profile.trainingSplit).toBe('FULL_BODY')
+    expect(facts.professionalSessionStructure).toHaveLength(3)
+    expect(facts.professionalSessionStructure.every((session) => session.focus === 'FULL_BODY')).toBe(true)
     expect(facts.professionalWeeklyStructure.requiredMovementPatterns)
       .toEqual(['ELBOW_FLEXION', 'ELBOW_EXTENSION'])
     expect(facts.professionalWeeklyStructure.movementPatternSessionTargets).toEqual(

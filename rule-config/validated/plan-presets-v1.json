@@ -2,9 +2,68 @@
   "metadata": {
     "schemaVersion": "1.0.0",
     "kind": "SYSTEM_PLAN_PRESET",
-    "version": "1.0.0",
+    "version": "1.3.0",
     "status": "AI_VALIDATED",
-    "sourceReferences": ["USER_PROVIDED_PERSONAL_PLAN_2026_08_21"],
+    "sourceReferences": [
+      "USER_PROVIDED_PERSONAL_PLAN_2026_08_21",
+      "https://pubmed.ncbi.nlm.nih.gov/41843416/",
+      "https://acsm.org/resistance-training-guidelines-update-2026/",
+      "https://pubmed.ncbi.nlm.nih.gov/39277776/",
+      "https://www.cdc.gov/healthy-weight-growth/physical-activity/",
+      "https://www.cdc.gov/physical-activity-basics/guidelines/adults.html",
+      "https://odphp.health.gov/sites/default/files/2019-09/Physical_Activity_Guidelines_2nd_edition.pdf"
+    ],
+    "sources": [
+      {
+        "id": "INTERNAL_USER_PLAN_20260821",
+        "title": "用户提供的个人五日增肌训练计划",
+        "internalSource": "用户于 2026-08-21 提供的个人训练计划",
+        "usageBoundary": "仅记录该预设的输入来源，不能证明计划有效性、安全性或对其他用户画像的适配性",
+        "sourceKind": "INTERNAL_USER_PLAN"
+      },
+      {
+        "id": "ACSM_RT_POSITION_2026",
+        "title": "American College of Sports Medicine Position Stand. Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/41843416/",
+        "usageBoundary": "支持健康成人阻力训练的高努力、主要肌群覆盖、渐进与个体化原则；不背书本系统的具体分化、动作表、性别化部位偏重、精确 RIR 或时长",
+        "sourceKind": "PEER_REVIEWED_POSITION_STAND"
+      },
+      {
+        "id": "ACSM_RT_SUMMARY_20260317",
+        "title": "ACSM Unveils Landmark 2026 Resistance Training Guidelines — First Update in 17 Years",
+        "url": "https://acsm.org/resistance-training-guidelines-update-2026/",
+        "usageBoundary": "仅作为 ACSM 2026 阻力训练立场声明的公众解释，不作为第二份独立科学验证，也不背书具体动作处方",
+        "sourceKind": "PROFESSIONAL_ORGANIZATION_SUMMARY"
+      },
+      {
+        "id": "ACSM_WEIGHT_CONSENSUS_2024",
+        "title": "Physical Activity and Excess Body Weight and Adiposity for Adults. American College of Sports Medicine Consensus Statement",
+        "url": "https://pubmed.ncbi.nlm.nih.gov/39277776/",
+        "usageBoundary": "支持逐步增加总体活动、多模式与个体化原则；不证明具体三日或四日动作表、步行起点、每周加量数字或减重结果",
+        "sourceKind": "PEER_REVIEWED_CONSENSUS_STATEMENT"
+      },
+      {
+        "id": "CDC_WEIGHT_ACTIVITY_20260407",
+        "title": "Physical Activity and Your Weight and Health",
+        "url": "https://www.cdc.gov/healthy-weight-growth/physical-activity/",
+        "usageBoundary": "支持活动与饮食共同影响能量缺口及成人通用活动建议；不保证单靠本计划减重，也不背书具体动作和进阶步长",
+        "sourceKind": "GOVERNMENT_PUBLIC_HEALTH_GUIDANCE"
+      },
+      {
+        "id": "CDC_ADULT_ACTIVITY_20231220",
+        "title": "Adult Activity: An Overview",
+        "url": "https://www.cdc.gov/physical-activity-basics/guidelines/adults.html",
+        "usageBoundary": "支持成人通用有氧与主要肌群强化建议、活动可分散完成及少量活动优于没有；不背书本系统具体动作组合",
+        "sourceKind": "GOVERNMENT_PUBLIC_HEALTH_GUIDANCE"
+      },
+      {
+        "id": "HHS_PAG2_2018",
+        "title": "Physical Activity Guidelines for Americans, 2nd edition",
+        "url": "https://odphp.health.gov/sites/default/files/2019-09/Physical_Activity_Guidelines_2nd_edition.pdf",
+        "usageBoundary": "支持成人每周总体活动、主要肌群强化及从少量开始逐步增加的原则；不支持固定起始分钟数、每周增量或具体动作表",
+        "sourceKind": "GOVERNMENT_GUIDELINE"
+      }
+    ],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] }
   },
   "presets": [
@@ -13,11 +72,17 @@
       "version": "1.0.0",
       "templateCode": "PERSONAL_5_DAY_HYPERTROPHY_V1",
       "name": "一周完整增肌训练",
+      "experience": "INTERMEDIATE",
       "goal": "HYPERTROPHY",
       "weeklyFrequency": 5,
       "sessionMinutes": 45,
       "location": "GYM",
       "trainingSplit": "BODY_PART_FIVE_DAY",
+      "contentStatus": "AI_VALIDATED",
+      "professionalReviewStatus": "PENDING",
+      "availabilityStatus": "AVAILABLE",
+      "sourceIds": ["INTERNAL_USER_PLAN_20260821"],
+      "explanationSourceIds": [],
       "executionRules": [
         "复合动作保留约 2 次余力；孤立动作前面正式组保留约 2 次余力，仅最后一组可保留 1 次余力并接近力竭",
         "复合动作下放约 2 秒并稳定控制，向上正常发力",
@@ -35,7 +100,7 @@
       "days": [
         {
           "code": "MONDAY_PUSH", "weekday": "MONDAY", "name": "周一｜推", "focus": "胸＋肩＋三头",
-          "estimatedMinutes": { "min": 44, "max": 46 },
+          "estimatedMinutes": { "min": 44, "max": 45 },
           "warmup": [
             { "instruction": "跑步机快走或慢跑", "prescription": "1 分钟" },
             { "instruction": "肩、肘、腕环绕", "prescription": "每方向 10 次" },
@@ -55,7 +120,7 @@
         },
         {
           "code": "TUESDAY_PULL", "weekday": "TUESDAY", "name": "周二｜拉", "focus": "背＋肩后束＋二头",
-          "estimatedMinutes": { "min": 43, "max": 46 },
+          "estimatedMinutes": { "min": 43, "max": 45 },
           "warmup": [
             { "instruction": "跑步机摆臂快走", "prescription": "1 分钟" },
             { "instruction": "肩关节环绕及肩胛后缩", "prescription": "各 10 次" },
@@ -74,7 +139,7 @@
         },
         {
           "code": "WEDNESDAY_QUADS", "weekday": "WEDNESDAY", "name": "周三｜股四头主导", "focus": "股四头＋单腿稳定＋核心",
-          "estimatedMinutes": { "min": 44, "max": 46 },
+          "estimatedMinutes": { "min": 44, "max": 45 },
           "warmup": [
             { "instruction": "跑步机快走", "prescription": "1 分钟" },
             { "instruction": "髋、膝、踝活动", "prescription": "约 1 分钟" },
@@ -114,7 +179,7 @@
         },
         {
           "code": "FRIDAY_POSTERIOR", "weekday": "FRIDAY", "name": "周五｜后链主导", "focus": "腘绳肌＋臀大肌＋臀中肌＋小腿",
-          "estimatedMinutes": { "min": 43, "max": 46 },
+          "estimatedMinutes": { "min": 43, "max": 45 },
           "warmup": [
             { "instruction": "跑步机快走", "prescription": "1 分钟" },
             { "instruction": "徒手髋铰链", "prescription": "10 次" },
@@ -130,6 +195,374 @@
             { "exerciseCode": "MACHINE_LEG_CURL", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "notes": ["收缩位置停顿约 1 秒，回程保持控制"] },
             { "exerciseCode": "MACHINE_HIP_ABDUCTION", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "FRIDAY_CALVES", "executionOrder": 1 },
             { "exerciseCode": "STANDING_CALF_RAISE", "workSets": 3, "repRange": { "min": 15, "max": 20 }, "restSeconds": 60, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 2, "executionGroup": "FRIDAY_CALVES", "executionOrder": 2, "notes": ["底部充分下降，顶部停顿约 1 秒，不快速弹动"] }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1",
+      "version": "2.0.0",
+      "templateCode": "INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1",
+      "name": "中级四日增肌",
+      "experience": "INTERMEDIATE",
+      "goal": "HYPERTROPHY",
+      "weeklyFrequency": 4,
+      "sessionMinutes": 60,
+      "location": "GYM",
+      "trainingSplit": "UPPER_LOWER",
+      "contentStatus": "AI_VALIDATED",
+      "professionalReviewStatus": "PENDING",
+      "availabilityStatus": "AVAILABLE",
+      "sourceIds": ["ACSM_RT_POSITION_2026", "HHS_PAG2_2018"],
+      "explanationSourceIds": ["ACSM_RT_SUMMARY_20260317"],
+      "executionRules": [
+        "本预制的训练剂量依据增肌目标、中级经验、每周四练和健身房条件制定，不因性别自动增减组数或强度",
+        "主要肌群分散为每周两次刺激；正式组默认保留 1～3 次余力，不要求练到瞬时力竭",
+        "复合动作优先完成并保留完整休息；单侧动作完成两侧后再休息，不以缩短休息掩盖时长",
+        "出现胸痛、眩晕、异常气短或持续加重的关节痛时立即停止训练并寻求专业评估"
+      ],
+      "progressionRules": [
+        "采用双进阶：所有正式组达到次数上限且仍在目标余力范围内，连续两次训练达标后再增加最小重量",
+        "上肢动作通常增加约 2.5%，下肢动作通常增加约 5%；器械档位不支持时选择最小可用增量",
+        "第一组低于次数下限或技术明显下降时保持或降低 5%～10% 重量",
+        "连续两周表现下降并伴随恢复困难时，下一周减少约三分之一工作组，不自动继续加量"
+      ],
+      "days": [
+        {
+          "code": "UPPER_A", "weekday": "MONDAY", "name": "周一｜上肢 A", "focus": "水平推拉＋背阔＋肩臂",
+          "estimatedMinutes": { "min": 56, "max": 58 },
+          "warmup": [
+            { "instruction": "快走或划船机轻松活动", "prescription": "3 分钟" },
+            { "instruction": "肩胛控制与轻重量推拉", "prescription": "各 10 次" },
+            { "instruction": "首个推、拉动作递增预热", "prescription": "各 1～2 组，不计正式组" }
+          ],
+          "notes": ["先完成大肌群复合动作", "组间休息不足时主动延长，不删减复合动作休息"],
+          "exercises": [
+            { "exerciseCode": "DUMBBELL_BENCH_PRESS", "workSets": 4, "repRange": { "min": 6, "max": 10 }, "restSeconds": 150, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3, "eccentricSeconds": 2 },
+            { "exerciseCode": "SEATED_CABLE_ROW", "workSets": 4, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "LAT_PULLDOWN", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DUMBBELL_LATERAL_RAISE", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "CABLE_TRICEPS_PUSHDOWN", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DUMBBELL_BICEPS_CURL", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 }
+          ]
+        },
+        {
+          "code": "LOWER_A", "weekday": "TUESDAY", "name": "周二｜下肢 A", "focus": "深蹲＋髋铰链＋小腿核心",
+          "estimatedMinutes": { "min": 54, "max": 56 },
+          "warmup": [
+            { "instruction": "快走或单车轻松活动", "prescription": "3 分钟" },
+            { "instruction": "自重深蹲与髋铰链", "prescription": "各 10 次" },
+            { "instruction": "首个深蹲动作递增预热", "prescription": "2～3 组，不计正式组" }
+          ],
+          "notes": ["全程保持可控活动范围", "呼吸尚未恢复时延长休息，不以压缩休息追求出汗"],
+          "exercises": [
+            { "exerciseCode": "SMITH_SQUAT", "workSets": 4, "repRange": { "min": 6, "max": 10 }, "restSeconds": 180, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3, "eccentricSeconds": 2 },
+            { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "workSets": 4, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3, "eccentricSeconds": 2 },
+            { "exerciseCode": "MACHINE_LEG_CURL", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "STANDING_CALF_RAISE", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4, "perSide": true }
+          ]
+        },
+        {
+          "code": "UPPER_B", "weekday": "THURSDAY", "name": "周四｜上肢 B", "focus": "上胸＋水平拉＋肩＋背阔＋手臂",
+          "estimatedMinutes": { "min": 58, "max": 60 },
+          "warmup": [
+            { "instruction": "快走或划船机轻松活动", "prescription": "3 分钟" },
+            { "instruction": "肩关节环绕与肩胛后缩", "prescription": "各 10 次" },
+            { "instruction": "首个推、拉动作递增预热", "prescription": "各 1～2 组，不计正式组" }
+          ],
+          "notes": ["与周一使用不同角度分散疲劳", "不需要在孤立动作默认练到力竭"],
+          "exercises": [
+            { "exerciseCode": "INCLINE_DUMBBELL_BENCH_PRESS_30", "workSets": 4, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "SEATED_CABLE_ROW", "workSets": 4, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "SEATED_DUMBBELL_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "NEUTRAL_GRIP_PULLDOWN", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DUMBBELL_OVERHEAD_TRICEPS_EXTENSION", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DUMBBELL_HAMMER_CURL", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 }
+          ]
+        },
+        {
+          "code": "LOWER_B", "weekday": "FRIDAY", "name": "周五｜下肢 B", "focus": "腿举＋臀部＋单腿＋股四头＋核心",
+          "estimatedMinutes": { "min": 50, "max": 52 },
+          "warmup": [
+            { "instruction": "快走或单车轻松活动", "prescription": "3 分钟" },
+            { "instruction": "自重髋铰链与反向箭步", "prescription": "各 8 次" },
+            { "instruction": "首个下肢动作递增预热", "prescription": "2 组，不计正式组" }
+          ],
+          "notes": ["先稳定动作幅度再增加重量", "单腿动作完成两侧后再计一次组间休息"],
+          "exercises": [
+            { "exerciseCode": "SEATED_LEG_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 150, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "MACHINE_HIP_THRUST", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DUMBBELL_REVERSE_LUNGE", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3, "perSide": true },
+            { "exerciseCode": "SEATED_LEG_EXTENSION", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "STANDING_CALF_RAISE", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 1, "targetRirMax": 3 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4, "perSide": true }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1",
+      "version": "2.0.0",
+      "templateCode": "BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1",
+      "name": "新手三日全身增肌",
+      "experience": "BEGINNER",
+      "goal": "HYPERTROPHY",
+      "weeklyFrequency": 3,
+      "sessionMinutes": 45,
+      "location": "GYM",
+      "trainingSplit": "FULL_BODY",
+      "contentStatus": "AI_VALIDATED",
+      "professionalReviewStatus": "PENDING",
+      "availabilityStatus": "AVAILABLE",
+      "introductoryPhase": {
+        "weeks": 2, "workSets": 2, "targetRirMin": 3, "targetRirMax": 4,
+        "transitionCondition": "动作技术稳定且两次训练后恢复良好，再进入目标组数"
+      },
+      "sourceIds": ["ACSM_RT_POSITION_2026", "HHS_PAG2_2018"],
+      "explanationSourceIds": ["ACSM_RT_SUMMARY_20260317"],
+      "executionRules": [
+        "本预制依据新手经验、增肌目标和健身房条件制定，不因性别自动改变动作重点、组数或努力程度",
+        "每次只安排四个动作并重复已学习的动作模式，覆盖下蹲或髋铰链、推、拉与核心",
+        "前两周每个动作执行 2 个正式组、保留 3～4 次余力；动作技术稳定且恢复良好后再进入预制目标组数",
+        "出现胸痛、眩晕、异常气短或持续加重的关节痛时立即停止训练并寻求专业评估"
+      ],
+      "progressionRules": [
+        "先增加次数：所有组达到次数上限且仍保留至少 2 次余力，连续两次训练达标后再增加最小重量",
+        "外部负荷每次只增加最小可用档位，增加后回到次数区间下限",
+        "无法达到次数下限或动作失控时降低 5%～10% 重量或改用更容易动作",
+        "前四周不自动增加额外训练日；稳定完成后再评估是否增加单个动作的一组"
+      ],
+      "days": [
+        {
+          "code": "FULL_BODY_A", "weekday": "MONDAY", "name": "周一｜全身 A", "focus": "下蹲＋水平推拉＋核心",
+          "estimatedMinutes": { "min": 37, "max": 39 },
+          "warmup": [
+            { "instruction": "快走或单车轻松活动", "prescription": "3 分钟" },
+            { "instruction": "自重深蹲与肩胛控制", "prescription": "各 8 次" },
+            { "instruction": "首个下肢动作轻重量预热", "prescription": "1～2 组，不计正式组" }
+          ],
+          "notes": ["优先学习稳定动作幅度", "推、拉和核心动作均不省略"],
+          "exercises": [
+            { "exerciseCode": "GOBLET_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "DUMBBELL_BENCH_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "SEATED_CABLE_ROW", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
+          ]
+        },
+        {
+          "code": "FULL_BODY_B", "weekday": "WEDNESDAY", "name": "周三｜全身 B", "focus": "髋铰链＋垂直推拉＋臀部",
+          "estimatedMinutes": { "min": 36, "max": 38 },
+          "warmup": [
+            { "instruction": "快走或单车轻松活动", "prescription": "3 分钟" },
+            { "instruction": "髋铰链与肩关节环绕", "prescription": "各 8～10 次" },
+            { "instruction": "首个髋铰链动作轻重量预热", "prescription": "1～2 组，不计正式组" }
+          ],
+          "notes": ["罗马尼亚硬拉保持腰背自然稳定", "臀桥顶部收紧臀部，不用腰部过伸"],
+          "exercises": [
+            { "exerciseCode": "DUMBBELL_ROMANIAN_DEADLIFT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "DUMBBELL_OVERHEAD_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "LAT_PULLDOWN", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "GLUTE_BRIDGE_EXERCISE", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4 }
+          ]
+        },
+        {
+          "code": "FULL_BODY_C", "weekday": "FRIDAY", "name": "周五｜全身 C", "focus": "下蹲复习＋水平推拉＋核心",
+          "estimatedMinutes": { "min": 37, "max": 39 },
+          "warmup": [
+            { "instruction": "快走或单车轻松活动", "prescription": "3 分钟" },
+            { "instruction": "自重深蹲与肩胛控制", "prescription": "各 8 次" },
+            { "instruction": "首个下肢动作轻重量预热", "prescription": "1～2 组，不计正式组" }
+          ],
+          "notes": ["重复周一动作模式巩固技术", "周末以恢复为主，不补做失败组"],
+          "exercises": [
+            { "exerciseCode": "GOBLET_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "DUMBBELL_FLOOR_PRESS", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "SEATED_CABLE_ROW", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 120, "weightStatus": "NEEDS_CALIBRATION", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "BIRD_DOG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BEGINNER_3_DAY_FAT_LOSS_HOME_V1",
+      "version": "1.1.0",
+      "templateCode": "BEGINNER_3_DAY_FAT_LOSS_HOME_V1",
+      "name": "新手三日弹力带推拉腿（能力待补齐）",
+      "experience": "BEGINNER",
+      "goal": "FAT_LOSS",
+      "weeklyFrequency": 3,
+      "sessionMinutes": 45,
+      "location": "HOME",
+      "trainingSplit": "FULL_BODY",
+      "contentStatus": "AI_DRAFT",
+      "professionalReviewStatus": "PENDING",
+      "availabilityStatus": "BLOCKED_CAPABILITY",
+      "unavailableReason": "当前 Equipment Inventory V1 无法表达 BANDS 可用性与安全固定锚点；完成 Equipment Inventory V2 前禁止推荐或生成",
+      "introductoryPhase": {
+        "weeks": 2, "workSets": 2, "targetRirMin": 3, "targetRirMax": 4,
+        "transitionCondition": "动作技术稳定且两次训练后恢复良好，再进入目标组数"
+      },
+      "sourceIds": ["ACSM_RT_POSITION_2026", "ACSM_WEIGHT_CONSENSUS_2024", "HHS_PAG2_2018"],
+      "explanationSourceIds": ["CDC_WEIGHT_ACTIVITY_20260407", "CDC_ADULT_ACTIVITY_20231220", "ACSM_RT_SUMMARY_20260317"],
+      "executionRules": [
+        "本预制只覆盖减脂方案中的阻力训练部分，不等同于完整减脂方案，也不承诺仅靠训练必然减重",
+        "活动与饮食共同影响能量缺口；本系统不处方热量缺口、菜单、药物或补剂",
+        "另行从可耐受的步行量开始，逐步累计至每周至少 150 分钟中等强度活动；阻力训练时长不自动计入有氧分钟",
+        "中等强度以能说话但不能唱歌为参考，新手默认平地快走，不安排跑跳、波比跳或 HIIT",
+        "正式组保留 2～4 次余力，动作变形、锐痛或关节不适逐组加重时立即停止或降阶",
+        "出现胸痛、晕厥、异常气短或新发心悸时立即停止并寻求医疗帮助"
+      ],
+      "progressionRules": [
+        "前两周可每个动作先做 2 组；恢复良好后再执行预制中的 2～3 组",
+        "连续两次训练达到次数上限、仍有至少 2 次余力且动作稳定时，增加动作幅度或选择难一级变式",
+        "俯卧撑先降低支撑高度，深蹲和髋铰链先增加可控幅度；每次只调整一个变量",
+        "步行从每周 75～100 分钟起步，每 1～2 周逐步增加，先达到每周 150 分钟"
+      ],
+      "days": [
+        {
+          "code": "HOME_FULL_BODY_A", "weekday": "MONDAY", "name": "周一｜居家全身 A", "focus": "下蹲＋推＋后链＋核心",
+          "estimatedMinutes": { "min": 35, "max": 45 },
+          "warmup": [
+            { "instruction": "室内慢走或原地踏步", "prescription": "3 分钟" },
+            { "instruction": "髋、膝、踝活动", "prescription": "各 8 次" },
+            { "instruction": "空动作练习", "prescription": "深蹲与墙面俯卧撑各 5 次" }
+          ],
+          "notes": ["使用防滑地面与稳定支撑", "以动作质量为先，不用缩短休息追求心率"],
+          "exercises": [
+            { "exerciseCode": "BODYWEIGHT_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "INCLINE_PUSH_UP", "workSets": 3, "repRange": { "min": 6, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "GLUTE_BRIDGE_EXERCISE", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "FLOOR_PRONE_COBRA", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 5 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 5, "perSide": true }
+          ]
+        },
+        {
+          "code": "HOME_FULL_BODY_B", "weekday": "WEDNESDAY", "name": "周三｜居家全身 B", "focus": "髋铰链＋推＋背部控制＋核心",
+          "estimatedMinutes": { "min": 35, "max": 45 },
+          "warmup": [
+            { "instruction": "室内慢走或原地踏步", "prescription": "3 分钟" },
+            { "instruction": "肩、髋环绕", "prescription": "各 8 次" },
+            { "instruction": "空动作练习", "prescription": "髋铰链与墙面俯卧撑各 5 次" }
+          ],
+          "notes": ["俯卧动作只作为无器械条件下的背部控制练习，不能等同于可持续加阻的划船", "保持呼吸，不憋气硬顶"],
+          "exercises": [
+            { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "PRISONER_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "WALL_PUSH_UP", "workSets": 3, "repRange": { "min": 8, "max": 15 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "FLOOR_PRONE_COBRA", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 5 },
+            { "exerciseCode": "BIRD_DOG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 5, "perSide": true }
+          ]
+        },
+        {
+          "code": "HOME_FULL_BODY_C", "weekday": "FRIDAY", "name": "周五｜居家全身 C", "focus": "全身复习＋小腿核心",
+          "estimatedMinutes": { "min": 35, "max": 45 },
+          "warmup": [
+            { "instruction": "室内慢走或原地踏步", "prescription": "3 分钟" },
+            { "instruction": "髋、膝、踝和肩活动", "prescription": "各 6 次" },
+            { "instruction": "空动作练习", "prescription": "深蹲与俯卧撑变式各 5 次" }
+          ],
+          "notes": ["若本周酸痛或疲劳仍明显，每个动作减少 1 组", "周末可安排轻松步行，不补做失败训练"],
+          "exercises": [
+            { "exerciseCode": "BODYWEIGHT_SQUAT", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "BENT_KNEE_PUSH_UP", "workSets": 3, "repRange": { "min": 6, "max": 12 }, "restSeconds": 90, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "CONTRALATERAL_LIMB_RAISE", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 5, "perSide": true },
+            { "exerciseCode": "STANDING_WALL_CALF_RAISE", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1",
+      "version": "2.0.0",
+      "templateCode": "BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1",
+      "name": "新手四日无跳跃居家基础体能",
+      "experience": "BEGINNER",
+      "goal": "FAT_LOSS",
+      "weeklyFrequency": 4,
+      "sessionMinutes": 30,
+      "location": "HOME",
+      "trainingSplit": "UPPER_LOWER",
+      "contentStatus": "AI_VALIDATED",
+      "professionalReviewStatus": "PENDING",
+      "availabilityStatus": "AVAILABLE",
+      "movementImpactConstraint": "NO_JUMP",
+      "introductoryPhase": {
+        "weeks": 2, "workSets": 2, "targetRirMin": 3, "targetRirMax": 4,
+        "transitionCondition": "动作技术稳定且两次训练后恢复良好，再进入目标组数"
+      },
+      "sourceIds": ["ACSM_RT_POSITION_2026", "ACSM_WEIGHT_CONSENSUS_2024", "HHS_PAG2_2018"],
+      "explanationSourceIds": ["CDC_WEIGHT_ACTIVITY_20260407", "CDC_ADULT_ACTIVITY_20231220", "ACSM_RT_SUMMARY_20260317"],
+      "executionRules": [
+        "本预制是无跳跃居家基础体能训练，只覆盖减脂方案中的阻力训练部分，不宣称胸背均衡或完整增肌",
+        "日常活动与饮食共同影响能量缺口；本系统不提供具体饮食处方、热量数字、菜单、药物或补剂建议",
+        "本预制依据新手经验、居家条件和恢复需求制定，不因性别自动降低训练努力程度",
+        "全程不安排跳跃、冲刺或波比跳；动作冲击分类缺失或不符合 NO_JUMP 时拒绝加入或替换",
+        "前两周每个动作执行 2 个正式组、保留 3～4 次余力；动作技术稳定且恢复良好后再进入预制目标组数",
+        "出现胸痛、晕厥、异常气短、新发心悸或持续加重的关节痛时立即停止并寻求专业评估"
+      ],
+      "progressionRules": [
+        "连续两次训练达到次数上限、仍有至少 3 次余力且动作稳定时，再降低俯卧撑支撑高度或增加动作幅度",
+        "一次只改变次数、动作难度、活动范围或组数中的一个变量",
+        "另行从可耐受步行量开始并逐步累计；阻力训练时长不自动计入有氧分钟"
+      ],
+      "days": [
+        {
+          "code": "LOWER_LOW_IMPACT_A", "weekday": "MONDAY", "name": "周一｜下肢与核心 A", "focus": "下蹲＋臀部＋核心",
+          "estimatedMinutes": { "min": 22, "max": 24 },
+          "warmup": [
+            { "instruction": "室内慢走", "prescription": "2 分钟" },
+            { "instruction": "踝活动、髋铰链与浅蹲", "prescription": "各 6～8 次" }
+          ],
+          "notes": ["使用防滑地面", "膝或腰部出现锐痛时立即停止并缩小幅度"],
+          "exercises": [
+            { "exerciseCode": "BODYWEIGHT_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "GLUTE_BRIDGE_EXERCISE", "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
+          ]
+        },
+        {
+          "code": "UPPER_LOW_IMPACT_A", "weekday": "TUESDAY", "name": "周二｜上肢与躯干控制 A", "focus": "推＋背部控制＋核心",
+          "estimatedMinutes": { "min": 21, "max": 23 },
+          "warmup": [
+            { "instruction": "室内慢走", "prescription": "2 分钟" },
+            { "instruction": "肩关节环绕与肩胛后缩", "prescription": "各 8 次" }
+          ],
+          "notes": ["使用稳定墙面", "俯卧背部控制不能替代可持续加阻的划船或下拉"],
+          "exercises": [
+            { "exerciseCode": "WALL_PUSH_UP", "workSets": 3, "repRange": { "min": 8, "max": 15 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "FLOOR_PRONE_COBRA", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4 },
+            { "exerciseCode": "BIRD_DOG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
+          ]
+        },
+        {
+          "code": "LOWER_LOW_IMPACT_B", "weekday": "THURSDAY", "name": "周四｜下肢与核心 B", "focus": "髋铰链＋下蹲＋小腿核心",
+          "estimatedMinutes": { "min": 27, "max": 29 },
+          "warmup": [
+            { "instruction": "室内慢走", "prescription": "2 分钟" },
+            { "instruction": "髋、膝、踝活动与浅蹲", "prescription": "各 6～8 次" }
+          ],
+          "notes": ["与周一间隔至少 72 小时", "保持呼吸和可控动作幅度"],
+          "exercises": [
+            { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "PRISONER_SQUAT", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "STANDING_WALL_CALF_RAISE", "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "CONTRALATERAL_LIMB_RAISE", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
+          ]
+        },
+        {
+          "code": "UPPER_LOW_IMPACT_B", "weekday": "SATURDAY", "name": "周六｜上肢与躯干控制 B", "focus": "推＋背部控制＋核心",
+          "estimatedMinutes": { "min": 21, "max": 23 },
+          "warmup": [
+            { "instruction": "室内慢走", "prescription": "2 分钟" },
+            { "instruction": "肩关节环绕与墙面推练习", "prescription": "各 8 次" }
+          ],
+          "notes": ["与周二间隔充分恢复", "支撑面必须稳定、防滑且无滚轮"],
+          "exercises": [
+            { "exerciseCode": "INCLINE_PUSH_UP", "workSets": 3, "repRange": { "min": 6, "max": 12 }, "restSeconds": 75, "weightStatus": "BODYWEIGHT", "targetRirMin": 2, "targetRirMax": 4 },
+            { "exerciseCode": "FLOOR_PRONE_COBRA", "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4 },
+            { "exerciseCode": "DEAD_BUG", "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "weightStatus": "BODYWEIGHT", "targetRirMin": 3, "targetRirMax": 4, "perSide": true }
           ]
         }
       ]

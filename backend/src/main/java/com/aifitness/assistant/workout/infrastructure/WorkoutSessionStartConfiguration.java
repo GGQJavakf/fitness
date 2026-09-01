@@ -2,6 +2,7 @@ package com.aifitness.assistant.workout.infrastructure;
 
 import com.aifitness.assistant.workout.application.WorkoutRecoveryAssessmentQuery;
 import com.aifitness.assistant.workout.application.WorkoutRecoveryConfirmationStore;
+import com.aifitness.assistant.workout.application.WorkoutCompletionService;
 import com.aifitness.assistant.workout.application.WorkoutSessionRepository;
 import com.aifitness.assistant.workout.application.WorkoutSessionService;
 import com.aifitness.assistant.workout.application.WorkoutSessionStartService;
@@ -23,7 +24,7 @@ public class WorkoutSessionStartConfiguration {
     @Bean
     @ConditionalOnProperty(
             prefix = "fitness.workout", name = "repository", havingValue = "memory", matchIfMissing = true)
-    WorkoutRecoveryConfirmationStore inMemoryWorkoutRecoveryConfirmationStore() {
+    InMemoryWorkoutRecoveryConfirmationStore inMemoryWorkoutRecoveryConfirmationStore() {
         return new InMemoryWorkoutRecoveryConfirmationStore();
     }
 
@@ -36,8 +37,10 @@ public class WorkoutSessionStartConfiguration {
     @Bean
     @ConditionalOnProperty(
             prefix = "fitness.workout", name = "repository", havingValue = "memory", matchIfMissing = true)
-    WorkoutSessionStartTransaction inMemoryWorkoutSessionStartTransaction() {
-        return new InMemoryWorkoutSessionStartTransaction();
+    WorkoutSessionStartTransaction inMemoryWorkoutSessionStartTransaction(
+            InMemoryWorkoutSessionRepository sessions,
+            InMemoryWorkoutRecoveryConfirmationStore confirmations) {
+        return new InMemoryWorkoutSessionStartTransaction(sessions, confirmations);
     }
 
     @Bean
@@ -54,10 +57,11 @@ public class WorkoutSessionStartConfiguration {
             WorkoutRecoveryAssessmentQuery recovery,
             WorkoutRecoveryConfirmationStore confirmations,
             WorkoutSessionStartTransaction transactions,
+            WorkoutCompletionService completion,
             Clock clock,
             @Value("${fitness.workout.recovery.confirmation-ttl-seconds:300}") long confirmationTtlSeconds) {
         return new WorkoutSessionStartService(
                 sessions, repository, sets, recovery, confirmations, transactions, clock,
-                Duration.ofSeconds(confirmationTtlSeconds));
+                Duration.ofSeconds(confirmationTtlSeconds), completion);
     }
 }

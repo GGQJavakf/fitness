@@ -1,19 +1,15 @@
 import { Button, Text, View } from '@tarojs/components'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import type { ActivePlanData, TrainingSplit } from '../../../application/models'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import type { ActivePlanData } from '../../../application/models'
+import { getPlanningApplication } from '../../../platform/weapp/featureRoots/planningCompositionRoot'
 import { resolveActivePlanLoadFailure } from '../../activePlanLoadFailure'
 import MainNavigation from '../../components/main-navigation'
-import { exerciseDisplayName, weekdayDisplayName, weightStatusDisplayName } from '../../copy'
-
-import './index.scss'
-
-const application = getWeappApplication()
+import { exerciseDisplayName, trainingSplitDisplayName, weekdayDisplayName, weightStatusDisplayName } from '../../copy'
 
 function planSourceEyebrow(aiPersonalized: boolean, systemPreset: boolean): string {
   if (aiPersonalized) return 'AI 个性化计划 · 规则已校验'
-  if (systemPreset) return '系统个人预设 · 来源可追溯'
+  if (systemPreset) return '系统个人预设 · 已按确认版本启用'
   return '规则生成计划 · 已通过安全校验'
 }
 
@@ -27,14 +23,8 @@ function planSourceDescription(aiPersonalized: boolean, systemPreset: boolean): 
   return '已按你的档案、训练目标和可用器械由确定性规则引擎生成；训练后的真实反馈会帮助下一次调整更准确。'
 }
 
-function trainingSplitLabel(split: TrainingSplit | undefined): string {
-  if (split === 'UPPER_LOWER') return '上下肢'
-  if (split === 'PUSH_PULL_LEGS') return '推拉腿'
-  if (split === 'BODY_PART_FIVE_DAY') return '五分化'
-  return '未记录'
-}
-
 export default function PlanPage() {
+  const application = getPlanningApplication()
   const [plan, setPlan] = useState<ActivePlanData | null>(() => application.getActivePlan())
   const [loading, setLoading] = useState(() => application.getActivePlan() === null)
   const [error, setError] = useState('')
@@ -54,12 +44,8 @@ export default function PlanPage() {
     } catch (error: unknown) {
       const failure = resolveActivePlanLoadFailure(error)
       if (failure.kind === 'AUTHENTICATION_REQUIRED') {
-        if (!mounted.current) return
-        try {
-          await application.navigation.replace('HOME')
-        } catch {
-          if (mounted.current) setError('登录状态已失效，请返回首页重新登录')
-        }
+        // The shared authentication handler already blocks, purges, and returns
+        // to LOGIN. A page-level redirect would capture a newer account lease.
         return
       }
       if (mounted.current && requestId === loadRequestId.current) setError(failure.message)
@@ -161,7 +147,7 @@ export default function PlanPage() {
           </View>
           <View className='plan-overview__metric-divider' />
           <View className='plan-overview__metric'>
-            <Text className='plan-overview__metric-value'>{trainingSplitLabel(activeVersion.plan.trainingSplit)}</Text>
+            <Text className='plan-overview__metric-value'>{trainingSplitDisplayName(activeVersion.plan.trainingSplit)}</Text>
             <Text className='plan-overview__metric-label'>训练分化</Text>
           </View>
         </View>

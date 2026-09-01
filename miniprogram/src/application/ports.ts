@@ -1,5 +1,6 @@
 import type {
   ActivePlanData,
+  CandidateCommitRequest,
   CreatePlanVersionRequest,
   PlanValidationData,
   PlanValidationDraft,
@@ -14,6 +15,10 @@ export interface PlanPersistencePort {
   validatePlan(plan: PlanValidationDraft, ruleReference: RuleReference): Promise<PlanValidationData>
   createInitialPlan(candidateId: string): Promise<ActivePlanData>
   getActivePlan(): Promise<ActivePlanData | null>
+  commitCandidate(
+    request: CandidateCommitRequest,
+    idempotencyKey: string,
+  ): Promise<PlanVersionResultData>
   createPlanVersion(planId: string, request: CreatePlanVersionRequest): Promise<PlanVersionResultData>
   previewRebalance(
     planId: string,

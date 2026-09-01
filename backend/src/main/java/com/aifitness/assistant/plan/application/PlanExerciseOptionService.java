@@ -87,6 +87,7 @@ public final class PlanExerciseOptionService {
         return eligible.values().stream()
                 .filter(exercise -> !existingCodes.contains(exercise.code()))
                 .filter(exercise -> targetFocus.allows(exercise.movementPattern()))
+                .filter(exercise -> allowedByImpactConstraint(draft, exercise))
                 .map(exercise -> {
                     PlanTemplateCatalog.ExerciseSlot prescription = prescriptionsByCode.get(exercise.code());
                     if (prescription == null) {
@@ -146,6 +147,7 @@ public final class PlanExerciseOptionService {
                 .filter(Objects::nonNull)
                 .filter(candidate -> equivalent(source, candidate))
                 .filter(candidate -> targetFocus.allows(candidate.movementPattern()))
+                .filter(candidate -> allowedByImpactConstraint(draft, candidate))
                 .limit(4)
                 .map(candidate -> toReplacementOption(sourcePrescription, source, candidate))
                 .toList();
@@ -187,6 +189,14 @@ public final class PlanExerciseOptionService {
 
     private static boolean validLoadMode(Set<String> equipment) {
         return !equipment.isEmpty() && (isBodyweight(equipment) || !equipment.contains("BODYWEIGHT"));
+    }
+
+    private static boolean allowedByImpactConstraint(
+            PlanDraft draft,
+            ExerciseCatalog.Exercise exercise) {
+        return draft.movementImpactConstraint() == null
+                || draft.movementImpactConstraint() == PlanDraft.MovementImpactConstraint.NO_JUMP
+                && exercise.impactClass() == ExerciseCatalog.ImpactClass.NO_JUMP;
     }
 
     private static boolean isBodyweight(Set<String> equipment) {
@@ -231,7 +241,10 @@ public final class PlanExerciseOptionService {
                 .filter(exercise -> !excluded.contains(exercise.stableId()))
                 .collect(Collectors.toUnmodifiableMap(ExerciseCatalog.Exercise::code, Function.identity()));
         return template.days().stream()
-                .filter(day -> day.exercises().stream().allMatch(slot -> eligible.containsKey(slot.exerciseCode())))
+                .filter(day -> day.exercises().stream().allMatch(slot -> {
+                    ExerciseCatalog.Exercise exercise = eligible.get(slot.exerciseCode());
+                    return exercise != null && allowedByImpactConstraint(draft, exercise);
+                }))
                 .map(day -> new DayOption(
                         day.code(), day.name(), day.exercises().stream()
                                 .sorted(java.util.Comparator.comparingInt(PlanTemplateCatalog.ExerciseSlot::order))
@@ -248,6 +261,7 @@ public final class PlanExerciseOptionService {
                 .findFirst();
         if (draft.trainingSplit() == null) return exact.orElse(null);
         String prefix = switch (draft.trainingSplit()) {
+            case FULL_BODY -> "FULL_BODY_";
             case UPPER_LOWER -> "UPPER_LOWER_";
             case PUSH_PULL_LEGS -> "PUSH_PULL_LEGS_";
             case BODY_PART_FIVE_DAY -> "BODY_PART_";

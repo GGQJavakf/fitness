@@ -7,6 +7,10 @@ export interface StartWorkoutSessionRequest {
   planVersionNo: number
   planDayId: string
   recoveryConfirmationToken?: string
+  activeWorkoutReplacement?: {
+    sessionId: string
+    expectedVersion: number
+  }
 }
 
 export interface StartedWorkoutSession {

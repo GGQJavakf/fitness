@@ -124,12 +124,12 @@ describe('original golden-cat static exercise breakdown pack', () => {
     }
   })
 
-  it('keeps generated exercise images within 1.75 MiB to reserve about 0.25 MiB for subpackage code', () => {
+  it('keeps generated exercise images within 1.40 MiB for code and shared dependency headroom', () => {
     const totalBytes = manifest().assets
       .flatMap((entry) => entry.stages)
       .reduce((sum, stage) => sum + statSync(resolve(assetRoot, stage.file)).size, 0)
 
-    expect(totalBytes).toBeLessThanOrEqual(1.75 * 1024 * 1024)
+    expect(totalBytes).toBeLessThanOrEqual(1.40 * 1024 * 1024)
   })
 
   it('locks every stage to the approved character and excludes dynamic or third-party runtime media', () => {

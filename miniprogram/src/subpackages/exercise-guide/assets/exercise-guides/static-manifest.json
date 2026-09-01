@@ -25,8 +25,8 @@
           "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
-          "sha256": "c2270b59cf0da0bbd7a894a01858880b5ec57a3921af12be5f43ebd17d0684aa",
-          "sizeBytes": 11987
+          "sha256": "86f678da31244378fe47478ed5296ce45732cf82327b7c02529e42e6a3dc2b95",
+          "sizeBytes": 8579
         },
         {
           "id": "drive",
@@ -37,8 +37,8 @@
           "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
-          "sha256": "260e42cbf6631df8cb01cb9db74360b80c55c5e12c3d0d1f8eb49f05acc3cbbe",
-          "sizeBytes": 12932
+          "sha256": "60d099dc8582ce3ba00e706934ea814f16f0e2b09acd336c0581732767dd2055",
+          "sizeBytes": 9181
         },
         {
           "id": "finish",
@@ -49,8 +49,8 @@
           "sourceFile": "assets-source/exercise-guides/goblet-squat-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "5c696b49a2ec8d774ebb0c97113fab2ae7834863d2281fea6d8cd8d44c356c3c",
-          "sha256": "86221cd91a68cfe742f94f088acc4728916e5ce8c711d496ef6aae96302536b0",
-          "sizeBytes": 13948
+          "sha256": "383fddaa4885029bcea834835e5a89cc690287592aed81a060becb48055133f7",
+          "sizeBytes": 9986
         }
       ]
     },
@@ -67,8 +67,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
-          "sha256": "666d82b2c53688f965931d2f1709570ae7282fe373a75750ff4b9eec0663e985",
-          "sizeBytes": 11942
+          "sha256": "3503a00afba5c0d3061d0fff1bc44f068b42925742c23817627112e33cc97c6f",
+          "sizeBytes": 8519
         },
         {
           "id": "drive",
@@ -79,8 +79,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
-          "sha256": "bb4644964f1ee6738a1bbd9343931ceee416dbaa1e81d7f3755cd56bfd1133c5",
-          "sizeBytes": 13997
+          "sha256": "b67d80e7df59fb7446bbb3786245581bc8ba1c13c4ca1451a45f2e57ad8b6e56",
+          "sizeBytes": 9980
         },
         {
           "id": "finish",
@@ -91,8 +91,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-front-squat-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "eb3e6605709774da9f0fd71dcbb38d903da8db89ac5498f64cad2180932cb65a",
-          "sha256": "6d7166bfd1b561601452214864628aaa3128d41893f0763f984f00f2ff0dd8ac",
-          "sizeBytes": 13602
+          "sha256": "410b1229fb950ba71560368127dd943d1cf0ca8e16a325c44af49e065859ac64",
+          "sizeBytes": 9759
         }
       ]
     },
@@ -109,8 +109,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
-          "sha256": "681271a18ca64748ba3736e5e16530f09e1f4d8d30fc75f2942ab1c724f9773c",
-          "sizeBytes": 11301
+          "sha256": "8baf846d83b8e38879a64adac5dba0deac93191125e918ee55abe96ae521c1a3",
+          "sizeBytes": 8070
         },
         {
           "id": "drive",
@@ -121,8 +121,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
-          "sha256": "bb4e6524c4aaeda1646a7f0b1e45e700d74cadc480dbbda6073592ad90133d62",
-          "sizeBytes": 11875
+          "sha256": "e480ede8de392f0fc24a7de96e5f92a04cf09891aaf45ab5267e18eb3ad981b9",
+          "sizeBytes": 8538
         },
         {
           "id": "finish",
@@ -133,8 +133,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-squat-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "103f401a50b64af9d68999f5dfaf0e7607d7bc73dd889fd2afce4091e512cadd",
-          "sha256": "8c17599eb6257d2d5ca35f2a96a703020a9afb2c3a55463189d78d4236e946b0",
-          "sizeBytes": 12863
+          "sha256": "d69e7261fbbaf2aea68bb07564e9800519959a54e2803a53d92bdc0c24883bc2",
+          "sizeBytes": 9195
         }
       ]
     },
@@ -151,8 +151,8 @@
           "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
-          "sha256": "70481fa619191601c227e5eb9735273aef70748e85c04b912fff1f85ab2dc4e5",
-          "sizeBytes": 11449
+          "sha256": "5ac8a40f99115dad953e110f86724f1bd6735d1f37f31dd197f0d533f4511bd2",
+          "sizeBytes": 8061
         },
         {
           "id": "drive",
@@ -163,8 +163,8 @@
           "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
-          "sha256": "29c52043313c4a20b78c40078faa596f3c13242a63b503c90f9a7c8baf8fe4ad",
-          "sizeBytes": 13609
+          "sha256": "7bee41e24bcf4c465ffeeb8c37e0f88d4cec2256f8be739b7c1a0c433c11785d",
+          "sizeBytes": 9541
         },
         {
           "id": "finish",
@@ -175,8 +175,8 @@
           "sourceFile": "assets-source/exercise-guides/prisoner-squat-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "61f33eadd847b58517739dcea56a164bfc17d31d869fd72ca3e660ca6acf627e",
-          "sha256": "25d783c329612d19918a941a7c404a788c831c2493c4d380ba9bff7638a0ff97",
-          "sizeBytes": 13861
+          "sha256": "dc0bb7aea49c3f1df6d3b19a14756f5c3c24f620025c238359a8cd46ad5bd741",
+          "sizeBytes": 9837
         }
       ]
     },
@@ -193,8 +193,8 @@
           "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
           "sourceGridIndex": 0,
           "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
-          "sha256": "a8fd8e718e360171940ebf0f3279867b96669c51f17204f12dc983afa62e9419",
-          "sizeBytes": 10598
+          "sha256": "3ec7a1166bdfa4e3b62260e6893942160ca92b939f3b2bbb2669684706f9d0ba",
+          "sizeBytes": 7576
         },
         {
           "id": "drive",
@@ -205,8 +205,8 @@
           "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
           "sourceGridIndex": 1,
           "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
-          "sha256": "dbcb994473b0ce65dfaf90d04cf0fab7157bdb99df0dc64849cc2fcd11f36d65",
-          "sizeBytes": 10197
+          "sha256": "ab4b20a885d57766626181b3a0c9eb9fc18872bc8b57bbb65855f19adb5a4dda",
+          "sizeBytes": 7311
         },
         {
           "id": "finish",
@@ -217,8 +217,8 @@
           "sourceFile": "assets-source/exercise-guides/standing-wall-calf-raise-sprite-v4.png",
           "sourceGridIndex": 2,
           "sourceSha256": "cdc69c13aaedf3c05e72849c080ff9ff5c8310bd0cf65b8e26ee3e0e872b5b20",
-          "sha256": "d497bd5c7e33345bb9d7687e7ab615b56ac6f40da7d1f1ae93beade3eccb53b8",
-          "sizeBytes": 9914
+          "sha256": "0513874f77c4c63efbc3bca47cd77477f65f4cc87327506fade46f07205fd028",
+          "sizeBytes": 7161
         }
       ]
     },
@@ -235,8 +235,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
-          "sha256": "44e1d779e8fb54b35a134ef0186f25776ab14f48ed42d061b4b7cdb85b412886",
-          "sizeBytes": 11587
+          "sha256": "51e46336788c131f0dfea6cca19250c0ef00ee1273f5098f287c137b34dbacf6",
+          "sizeBytes": 8337
         },
         {
           "id": "drive",
@@ -247,8 +247,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
-          "sha256": "86602cc7c4e1fdbff027253bf34cc9d90a3e577d32d204586e16f9c396518c8f",
-          "sizeBytes": 13439
+          "sha256": "f83dd4ebd4974fac1119724aaf7ff91f68ab7be5db6e772cdf61587e965f24c3",
+          "sizeBytes": 9600
         },
         {
           "id": "finish",
@@ -259,8 +259,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-romanian-deadlift-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "9781a5574901a710c302a10ab74419e91e10167842fdab884bc71b7e3812358a",
-          "sha256": "ffc5b87c8a5f3f779209cdc1e71c01955a41a11f30027e905ab04d9a3d7fc4e6",
-          "sizeBytes": 13739
+          "sha256": "44fbed9e7755d8f41c106a962f71c9c5a45aa1c5cfbad104726851af9a66f37a",
+          "sizeBytes": 9781
         }
       ]
     },
@@ -277,8 +277,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
-          "sha256": "2db8290bbe18f271a561228057117b554156d2c335afa2627b7e870bd4cf8edc",
-          "sizeBytes": 14708
+          "sha256": "6a43af80d7d69eb5b04349c4babc1c3d1698f9b06c510f461e2688917ecbd73b",
+          "sizeBytes": 10507
         },
         {
           "id": "drive",
@@ -289,8 +289,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
-          "sha256": "4379532373aab7354871d4e1840d3b5889b73ef5d23752a185c2c93016864079",
-          "sizeBytes": 13447
+          "sha256": "bb1b405a0b5ef36086b065c6b5437d67f8f5debc71e2008dcc69a0b4a3006616",
+          "sizeBytes": 9576
         },
         {
           "id": "finish",
@@ -301,8 +301,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-deadlift-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "5888275f152b7565ba455b24147755d1b08f062ecb96179ee452d476d9b0667d",
-          "sha256": "c8f92f0d80564bd3a089c6e3c234af3117c0ee28bb4ac9cc55464b1520cba94b",
-          "sizeBytes": 11312
+          "sha256": "c55b26bf11d3ea2bf0cafe0e377885badf30f802a2e8922240f58cf2c15dcdbf",
+          "sizeBytes": 8045
         }
       ]
     },
@@ -319,8 +319,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
-          "sha256": "fda2071a54034a360ad5d011ba995f307ccc88a1d714454523b6cb14a1ef1b29",
-          "sizeBytes": 11330
+          "sha256": "b096128f8f8bd969af7fb3ecbb5ebf78ad56801c45cd5c1c1a98558e0ba1e25f",
+          "sizeBytes": 8027
         },
         {
           "id": "drive",
@@ -331,8 +331,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
-          "sha256": "a3d7753fe2b2eac22052425dfb8bb21ff378606f8ace80037664a6f3325bc13b",
-          "sizeBytes": 11818
+          "sha256": "f5244864feac8dff8fa8c2f9f35ebb141f874b1f7754d532ae19c30e29bf7aa4",
+          "sizeBytes": 8421
         },
         {
           "id": "finish",
@@ -343,8 +343,8 @@
           "sourceFile": "assets-source/exercise-guides/bodyweight-hip-hinge-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "0d06232ca00765b99b3562b5bc6e2b003789d08b46288427930c01aefc80a278",
-          "sha256": "40490726022c85e0dba6029001398ed56207adc83e97157da4dc9b3c9480570b",
-          "sizeBytes": 11554
+          "sha256": "e41b0c7dafa40f89cba53fc3b763a4d6b15c323088cce81a25be7acf4f9a949a",
+          "sizeBytes": 8250
         }
       ]
     },
@@ -360,8 +360,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/glute-bridge-exercise-keyframe-01.png",
           "sourceSha256": "c6a166386ee1edba61c58499365bd84757afc65b0dd9aff96da75f5c770edc65",
-          "sha256": "945143e71cd2daa0ef788fbf2a7ad5fe7adcc2dfab4c55f6f2991ae4e77cba86",
-          "sizeBytes": 8119
+          "sha256": "656d4ac7dec4287e72e23be0cf1e7757706b6ad61e9c4202ff2bc65eab685861",
+          "sizeBytes": 5906
         },
         {
           "id": "lift",
@@ -371,8 +371,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/glute-bridge-exercise-keyframe-02.png",
           "sourceSha256": "e078a852acf38eb9de21129e83491d25f19b2a2aa5a7952d80e58f0037f2e7c3",
-          "sha256": "21ac0f332e63f6781b746ea19dac9c65473fa17e11162e3d836e31e69e1861e1",
-          "sizeBytes": 8414
+          "sha256": "bc63d27360952293bb3bf8987677152af835895e5a0fafb4c11fcae31d81ca25",
+          "sizeBytes": 6148
         }
       ]
     },
@@ -388,8 +388,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-00-bottom.png",
           "sourceSha256": "4418699e835041676e5b0802d919d9ff86148c6282e985583c36a4034a4c5941",
-          "sha256": "c7a4aabb8bc7ba1ab2bd1334b882d5b763958959ea2b7ab3d39280cd83d938d4",
-          "sizeBytes": 9934
+          "sha256": "d51ec2ca9c2e15512c220f76549e1cc965a76704566984c381a87ca7e01e0b54",
+          "sizeBytes": 7032
         },
         {
           "id": "drive",
@@ -399,8 +399,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-50-middle.png",
           "sourceSha256": "1e852483d8a9795fd1ba96e3d449231930b9f090d56478ab21596f4913608fb1",
-          "sha256": "fa67a1f103fb46b9543fdf26fcb64f8f6c67f27403cd0eb3f72dd641048a687f",
-          "sizeBytes": 10766
+          "sha256": "77a5d3d93daf4afdbb1629385173f6a1d76cb6d88ab7fd6f60861ea9115eefaa",
+          "sizeBytes": 7704
         },
         {
           "id": "finish",
@@ -410,8 +410,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/bench-press-v8-v7based/frame-100-top.png",
           "sourceSha256": "e3b053b7552254b0b4c713b4b7681d7be3837b0c6766af9f4fe22e6efb113aff",
-          "sha256": "06d6858507dcdcbebaab6779d29f13a2a7c2ff545ae661ef52f8884a61560e87",
-          "sizeBytes": 11233
+          "sha256": "c518521e55173a63cb47c0ae2dff2ea5709137bb6c5a27dd1214794849ca0eeb",
+          "sizeBytes": 8000
         }
       ]
     },
@@ -428,8 +428,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
-          "sha256": "a62fde84d9396a30c3e9b787b7a081aef1700710d02d7dd665bec71c91b830f9",
-          "sizeBytes": 12223
+          "sha256": "d29c8cadd8fd4b240799f89809190f7a72a42cf4ddba879abae5d1e77a9261e0",
+          "sizeBytes": 8738
         },
         {
           "id": "drive",
@@ -440,8 +440,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
-          "sha256": "3be0f51a8ba42597220d93bf227172c5ef791ad3483efd539353aeb7b77bdaff",
-          "sizeBytes": 12195
+          "sha256": "670954fb6e0a0b737e2ba9c7ac929a71c04ade3102ea83f9eba8fd53db68c4a1",
+          "sizeBytes": 8652
         },
         {
           "id": "finish",
@@ -452,8 +452,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-floor-press-sprite-v3.png",
           "sourceGridIndex": 3,
           "sourceSha256": "426d9bc00c00015f531683526078b16c8fa2f212916b7aaac5461188b8033c4c",
-          "sha256": "dcb127af08bee7340368b4c5745c935c0d46f7d62d84d890c2e735864eeacd41",
-          "sizeBytes": 15006
+          "sha256": "626b597cb8358f847fe1b1513e91994b465d5dde7371ea419de762799129deba",
+          "sizeBytes": 10676
         }
       ]
     },
@@ -470,8 +470,8 @@
           "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
-          "sha256": "24012384e393f6fad98d049c79f1b72b7a1820480a6a2df1289e4c84a98b24f5",
-          "sizeBytes": 13476
+          "sha256": "c6a7e898e8390983c242703167e648bb2138f1c88481c9d187d765a7ac8b7834",
+          "sizeBytes": 9675
         },
         {
           "id": "drive",
@@ -482,8 +482,8 @@
           "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
-          "sha256": "59fc73b67cb9db2a8a4f3e2569169f409fa65c8e389ae0dc1361920c98795669",
-          "sizeBytes": 11852
+          "sha256": "59d603548b51d18ad107d91e2a98b09a7d8344284e67f855e206d5d7816bc10c",
+          "sizeBytes": 8495
         },
         {
           "id": "finish",
@@ -494,8 +494,8 @@
           "sourceFile": "assets-source/exercise-guides/incline-push-up-sprite-v3.png",
           "sourceGridIndex": 4,
           "sourceSha256": "fb8d25257518bbe025a01e39948754b0549e23a601b6171dfbcc3d228df77ede",
-          "sha256": "e4ae6e0953c6a35ace82c90751aa48541262d1d8751aa88a96d4cb699579d750",
-          "sizeBytes": 11503
+          "sha256": "005a6cd6956b2be5215936e6f703fca09f9078bcb9e9e08dc1353aa28425d233",
+          "sizeBytes": 8160
         }
       ]
     },
@@ -511,8 +511,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/bent-knee-push-up-keyframe-01.png",
           "sourceSha256": "0e6b1bbebf4f408cceeea8cfce7e26465e5856151fea7501623670736cc15d38",
-          "sha256": "50e5f0255fbe47cce5990aa547b67a0419d3cd0304d55c2d2e5a312e304b04ef",
-          "sizeBytes": 9468
+          "sha256": "fe5de8368a6f3ad5eecc84c93bc2018036dd5a9a17e199271c95d536348579ce",
+          "sizeBytes": 6804
         },
         {
           "id": "lower",
@@ -522,8 +522,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/bent-knee-push-up-keyframe-02.png",
           "sourceSha256": "2150be0432be1e9ee015afdf2e0b1274b2143ccadfb6dab5c4402b69d8063ec4",
-          "sha256": "9aa456e69124a13b30da9af36b7389517c3b63d4d4ab5918a3467210f6400420",
-          "sizeBytes": 8652
+          "sha256": "77c41df53bd161e4da8f3d4aa68ba6bb7d6f977c893f691930f149c7b4f61fab",
+          "sizeBytes": 6315
         }
       ]
     },
@@ -540,8 +540,8 @@
           "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
-          "sha256": "b03f22ec7181fdef01b35bc2fb87328b2fd2df295846585b48cb7026bfb9f1ae",
-          "sizeBytes": 11413
+          "sha256": "d4b09f477bf27725c3dd9b61da1540c3c1c4237f76fc10b9f0a7e6e6446374f7",
+          "sizeBytes": 8095
         },
         {
           "id": "drive",
@@ -552,8 +552,8 @@
           "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
-          "sha256": "6bf1bc4175ec727808a99acf66432167a4785d10501a48aabfc993ecfceb1249",
-          "sizeBytes": 9597
+          "sha256": "0fcfb0144dd63a59f3234bb19a13969fa2bb27df4525b0cfd21a13ed1e71de51",
+          "sizeBytes": 6846
         },
         {
           "id": "finish",
@@ -564,8 +564,8 @@
           "sourceFile": "assets-source/exercise-guides/push-up-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "f84b6b99d7f656dbdca7acaf90ffb352b4f28ba95580d94f64bb7e8e21279292",
-          "sha256": "33218ea1c9ee7c13c672b7a087aa5a87f34b798854568be531727eb96dde5250",
-          "sizeBytes": 8696
+          "sha256": "099c1b45fb221351081a816477e34177e3c56fdbb876b2c0869ae5b14b5274cf",
+          "sizeBytes": 6250
         }
       ]
     },
@@ -582,8 +582,8 @@
           "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
-          "sha256": "a450745e121bec56ea0b6c6c9d31394a9a713d22c783ae4503ea9803f5db56e0",
-          "sizeBytes": 10650
+          "sha256": "13279bfcfb1651f8203d10c21baf9912e5589b4e1afccaba495e82a5fe1eec73",
+          "sizeBytes": 7474
         },
         {
           "id": "drive",
@@ -594,8 +594,8 @@
           "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
-          "sha256": "6eea84843a14728f22ed8437bf7cdf35ee8c29105600058b153c591d4045882d",
-          "sizeBytes": 10229
+          "sha256": "76fef336b56741755afff452d88445b2c6a774c0d8650192e7639f3ef76316d1",
+          "sizeBytes": 7162
         },
         {
           "id": "finish",
@@ -606,8 +606,8 @@
           "sourceFile": "assets-source/exercise-guides/wall-push-up-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "41203802fae74c1261cf73ef0477ffbedbcc6b922467ea595c11a4e3d36a30bd",
-          "sha256": "0ada372989c3749796cde2dced3e7f27c680ecd161854e3fb554138ece8bc4dc",
-          "sizeBytes": 10273
+          "sha256": "94a46dfe93565bda76d99c9d4ec729f0bf50b8d1bb0c5111bc9350b55892e290",
+          "sizeBytes": 7225
         }
       ]
     },
@@ -624,8 +624,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
-          "sha256": "e9e0cb4a2bfd6d34216b3c666c76c6ef1b948be4b24c55b2286a49903920f877",
-          "sizeBytes": 16228
+          "sha256": "daa66d49d356cf3dbb359adec0ddca0cc4024bdc5318547dd7f77be4185ea007",
+          "sizeBytes": 11725
         },
         {
           "id": "drive",
@@ -636,8 +636,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
-          "sha256": "649ad06b626da070141c9b7f4105acb0b0ea1598039c9b9bfd5ba9a1a87b3e82",
-          "sizeBytes": 15776
+          "sha256": "3a950d53f6eb382afa59f1fd7a4ea6bbcadb1571cded9eeb1b480bbe7e1358b6",
+          "sizeBytes": 11382
         },
         {
           "id": "finish",
@@ -648,8 +648,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-cable-row-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "129854b0503270ad4fb8e071acba8dada9c85307edaa267e1538ec15e57251fc",
-          "sha256": "2085a5b00e57c966dc71ecd9edf8afa4755817a463b45f9e1e4dfbe77fbf713d",
-          "sizeBytes": 15769
+          "sha256": "76075f88bd0688cdc7214e5f4ded6857b9d647871cb10546b381848840cecd6d",
+          "sizeBytes": 11522
         }
       ]
     },
@@ -666,8 +666,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
-          "sha256": "b81dc2fc845edfeace1ed7e7d3829fc35d1050603f8e77d11d1b591fc2bd3e59",
-          "sizeBytes": 14521
+          "sha256": "8e395aa91fa5e34b18daa0a505bc57008876dbb3f4e43f10e7eb052d86fdd233",
+          "sizeBytes": 10671
         },
         {
           "id": "drive",
@@ -678,8 +678,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
-          "sha256": "f220b22299c8c3052482d292ade8566d5a7c0a3fc4d623a7ca722f93c1014265",
-          "sizeBytes": 14139
+          "sha256": "20f1a2e31693ec4badee294ad5e66d9deb6a279532e593c5847123c4589f3779",
+          "sizeBytes": 10243
         },
         {
           "id": "finish",
@@ -690,8 +690,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-high-row-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "a7538586d543da4bb3e91c84c773c018eb6af6635491c10f3994d6a723a9f8d0",
-          "sha256": "41ee3781189cb7432c5df7cfef4e4ae0bb39db278cc5502dc0b198ceea47896c",
-          "sizeBytes": 14080
+          "sha256": "bec6eae4b8eab388e2609e9c73bf35501aaf2e00136228060490984395f14a5a",
+          "sizeBytes": 10271
         }
       ]
     },
@@ -708,8 +708,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
-          "sha256": "2b387cffb491268dc2cb23870b841ef1dd9b3be97f5171c17b2fafb6c705595e",
-          "sizeBytes": 11918
+          "sha256": "f7a8c3c2b681fd647c5e51af25eecf9cedb73f2fc1c030e9ff7493f59320e534",
+          "sizeBytes": 8578
         },
         {
           "id": "drive",
@@ -720,8 +720,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
-          "sha256": "800e309e12670f7fdbf81386495e1259eb42992d5618049b016e73ff8e9d7416",
-          "sizeBytes": 11499
+          "sha256": "f38e90102864df234a0f8fd439a67378f249b8aeb203e0d376670f47a07e09d9",
+          "sizeBytes": 8354
         },
         {
           "id": "finish",
@@ -732,8 +732,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-single-arm-row-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "939d0fd32421e553987bc06bdbe621e945e26c4d7517cccab7d07cf706e029c0",
-          "sha256": "122f9158d69da2f4b689727df88fa96c139fb8150f03d6ea9eed17aff935f46a",
-          "sizeBytes": 11405
+          "sha256": "7223b83f76f11733411250f02a9ba107edb8e8d05cd7e792e3ee7f8d1f0d9071",
+          "sizeBytes": 8267
         }
       ]
     },
@@ -749,8 +749,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "68ebbb67159d70fc8e5d7e2486ffcd6459a9b2a5f402dd3095628e952ba3ca11",
-          "sizeBytes": 9963
+          "sha256": "4a7868b29612641ccb927506131e5d0a908d83f01878ce3fdbcbc9df0816995d",
+          "sizeBytes": 7150
         },
         {
           "id": "drive",
@@ -760,8 +760,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "590bcb87acef99fd04861a851647ba052408af57d35d4f57c4f6526185c61c4e",
-          "sizeBytes": 10145
+          "sha256": "865912707e38e6b4736bd3583faab20d3677b93c685991904361f90bc0583171",
+          "sizeBytes": 7309
         },
         {
           "id": "finish",
@@ -771,8 +771,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "8fd24b42c50298a1194ee940eb80a9f192023668023020a7a19b14505317e150",
-          "sizeBytes": 10089
+          "sha256": "1ccbbd68c39e4f8b903dca462ca35f832fb6866d0a9f1d71840246ec92ac2631",
+          "sizeBytes": 7244
         }
       ]
     },
@@ -789,8 +789,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
-          "sha256": "074b21f6ff0e3738dea84d9a2579310cde9bcc001bb02a361a145acf2196aa28",
-          "sizeBytes": 13965
+          "sha256": "bb223a93863291349dfd233f960efdcacd7e24384aa376b78092214c81a65178",
+          "sizeBytes": 9910
         },
         {
           "id": "drive",
@@ -801,8 +801,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
-          "sha256": "7010225a36802d32ee22aad182396a646428a213744caae5b365da01be0b7d81",
-          "sizeBytes": 13429
+          "sha256": "ad650a43963a59251cfaf165ce89166cdfeed99a6a7a6804a923d3f5d3bafcfc",
+          "sizeBytes": 9539
         },
         {
           "id": "finish",
@@ -813,8 +813,8 @@
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-press-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "f8efb53c81615ea93b4f47d51497d2cec1d81639d067531c5e617726d7d1cb62",
-          "sha256": "23b75794f2157f531f33b1d86030b51bc88941102060751740b408ff06b8b6c8",
-          "sizeBytes": 12331
+          "sha256": "336e9b18349f4080b219b7831fbc3a0f0280a3e3d0b338d0157cd8594effa2aa",
+          "sizeBytes": 8764
         }
       ]
     },
@@ -831,8 +831,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
-          "sha256": "0f7e9048fc391a76967149f7c175f1d61f6edb8391285398f3e123cf340e2a4a",
-          "sizeBytes": 15095
+          "sha256": "2026f92abf21d5d200582f4eb49da1194c22f895dda316d18fd383e174717522",
+          "sizeBytes": 10768
         },
         {
           "id": "drive",
@@ -843,8 +843,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
-          "sha256": "0988ad13cc7e1ca8fc668ba076dd628a8c2625f674a142c3b364957ca2a60b83",
-          "sizeBytes": 14562
+          "sha256": "f0a898dc2bf9edeedbacbfdce490e81c3e7883d09a615cb5f259860ca8bfc2e2",
+          "sizeBytes": 10339
         },
         {
           "id": "finish",
@@ -855,8 +855,8 @@
           "sourceFile": "assets-source/exercise-guides/seated-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "c8976e79c4522afb111d53c0d46fa8cb57f80a33af804d8849f1fb3f9deec78f",
-          "sha256": "8f77d6dbbceed1f458bd1d0d1c18b42c4c279baf4c89aa218d0370c86250da9c",
-          "sizeBytes": 13478
+          "sha256": "44c6fc7bd2c53cc631a5a999f9c0a417ddc09b76503000cadd0af2f5778a44e4",
+          "sizeBytes": 9594
         }
       ]
     },
@@ -873,8 +873,8 @@
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
-          "sha256": "5c769bd13762b5b2e1b0e0c0965a66ee1a3eea85606b3178ac3bbad4de92f212",
-          "sizeBytes": 12071
+          "sha256": "4935da566c83cb5fe3ba877ff0b568ae69c2f53e6635cc9548aad51ec000f2c3",
+          "sizeBytes": 8524
         },
         {
           "id": "drive",
@@ -885,8 +885,8 @@
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 8,
           "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
-          "sha256": "07fc7d754dc7ccb95c8b6ca7366bb497c5a0eebbaa10af0527163762090f5bec",
-          "sizeBytes": 11933
+          "sha256": "5d4c4e0b31e445b43f53a6641db355e42d7cfc463a463a91eee39fa2a7c72b85",
+          "sizeBytes": 8432
         },
         {
           "id": "finish",
@@ -897,8 +897,8 @@
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-press-sprite-v3.png",
           "sourceGridIndex": 3,
           "sourceSha256": "93946edfb495d94533b02c5a838534dcd0e0c89c38b1a0544032dd5bc82898e9",
-          "sha256": "23c86de1c1ad56b9a478d867b1aa23ae45d8ad70a168117ab518e656c9cc41b3",
-          "sizeBytes": 11059
+          "sha256": "44c8917507a7240a027fdd5a206c0279de45164a3f386906589c306009df9bd0",
+          "sizeBytes": 7809
         }
       ]
     },
@@ -914,8 +914,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
-          "sha256": "618fee2f501c7b659c61edcd7843d0a77bbdb1fa5b5fb4cbbc7a60f93badf9f9",
-          "sizeBytes": 6183
+          "sha256": "2c1e401d558fef1819ecb637c8c2274b147fe310aab11b4092d00858ca8aa378",
+          "sizeBytes": 4541
         },
         {
           "id": "drive",
@@ -925,8 +925,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
-          "sha256": "8367e15158f5c21294b9a2ef5e0d4d9219102d9459b3a746d7a83fabe8401aeb",
-          "sizeBytes": 7192
+          "sha256": "a9ddd785707ef6f3948a2ae45444d33176d03aba2e78405b27a45876dfd831cd",
+          "sizeBytes": 5233
         },
         {
           "id": "finish",
@@ -936,8 +936,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "0e192ae10ab244e4ad8fa6c353bbde43dfee1115b07fc80b806d93e5fab53212",
-          "sha256": "d61bc54e0efa29b802acab1fb744c1d6af755fb978fafb59482b17db24cce390",
-          "sizeBytes": 6715
+          "sha256": "d0d7db83f5b961b058901455afc80e114c5fe92e210b9d3dd3fc41d2326e08f1",
+          "sizeBytes": 4861
         }
       ]
     },
@@ -953,8 +953,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
-          "sha256": "bc6547e5093b5c1e1cf9f10f118e8af35647d6711229760c6ccc6479c73c8a97",
-          "sizeBytes": 7436
+          "sha256": "45b5838b90d072c9ff091b54036a72b11e511835ca47a5e87354cf77dc5c69ed",
+          "sizeBytes": 5329
         },
         {
           "id": "drive",
@@ -964,8 +964,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
-          "sha256": "3b908be229421782738d683f99466932888e8de5bea83d7044eabe8c4e6fbbde",
-          "sizeBytes": 7695
+          "sha256": "d0b99bc2b30417469b98bc98a5b4231e0e9c970ea6fb01ea285ba3fe2d163647",
+          "sizeBytes": 5464
         },
         {
           "id": "finish",
@@ -975,8 +975,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/single-arm-dumbbell-lateral-raise-sprite-v4.png",
           "sourceSha256": "dde3272cd201d5963ebce63ae8dfcde7cab0373c2aedab9b4d715b47e3b7c235",
-          "sha256": "8207872d4555c11b5a348d15e8a91a12cbb8c965e753a5036541f8b6b5db9e7d",
-          "sizeBytes": 7581
+          "sha256": "de6160c3a2ec745efffd182092fbbc4ce159179388d02413230ff3fdffd44df3",
+          "sizeBytes": 5426
         }
       ]
     },
@@ -992,8 +992,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
           "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
-          "sha256": "6f9131e111b37ed8cc55f710e0a673290c69eaa3b770da2a3d0f29ac17784325",
-          "sizeBytes": 8789
+          "sha256": "43eca34fd4310e2df1e67358ea0f0cd441738880413a27fb44b0547303eb8806",
+          "sizeBytes": 6437
         },
         {
           "id": "drive",
@@ -1003,8 +1003,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
           "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
-          "sha256": "8a50f006c438bec0558a96c1c852af91c90e788cabab70014ab01a7708dc1a67",
-          "sizeBytes": 8973
+          "sha256": "131ff80fbfbc9a3796e7d0c9c44ef7b85309ef2c2a4f8e052666138374d2c13e",
+          "sizeBytes": 6556
         },
         {
           "id": "finish",
@@ -1014,8 +1014,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/cable-lateral-raise-sprite-v4.png",
           "sourceSha256": "9d7d0dfdeb63c6ac357a45dc5bd4c595573eaa43be32c8ca112962d512dbb0a2",
-          "sha256": "2774e9d0cf2c7851be2d136e753b901e727b1a9d327c68105551a9faf5f439ae",
-          "sizeBytes": 9346
+          "sha256": "49c7ab2e636b0e7bca3bc98f4af4d791b9d997e0c077be19fec6d81c41f4c967",
+          "sizeBytes": 6805
         }
       ]
     },
@@ -1031,8 +1031,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
-          "sizeBytes": 9374
+          "sha256": "9f9286ea75d9a2c5915db34f13144804493afd400b1b3d55d8a12a95ee86c140",
+          "sizeBytes": 6731
         },
         {
           "id": "drive",
@@ -1042,8 +1042,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "00a3cbe7635c4d1ab3dfc1b1312134da2dc291297aaaa84072ab4adbba328fab",
-          "sizeBytes": 9378
+          "sha256": "9b6c55b849fc093513819bc6efe34d18869bd1ed02c146ec67ee5ceaf0e5200e",
+          "sizeBytes": 6750
         },
         {
           "id": "finish",
@@ -1053,8 +1053,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "a714f49c0e8007a65f1b19aa7646393e72c6b6f1e5c161597f1c33014fcb5745",
-          "sizeBytes": 9286
+          "sha256": "e6d0162b97fb0abfe4fb86afba7d98194388072a2ed386bff3f6eacec01a08ac",
+          "sizeBytes": 6682
         }
       ]
     },
@@ -1070,8 +1070,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "c13f3ed6e9c878bb45dffb4f7639d3444e434b2e76feaafb6646bedc1b23d29d",
-          "sizeBytes": 9277
+          "sha256": "0ff9622550d74259ca4fade1416fe83525c9a8dff333df3c673c0b9253d1c4f8",
+          "sizeBytes": 6656
         },
         {
           "id": "drive",
@@ -1081,8 +1081,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "9bbe7c584be92ef596a4e03cef5af539eeb119269d6c0709a3fd478c9fbfc07a",
-          "sizeBytes": 9366
+          "sha256": "61ffc996b7b17cdc0534948b551ed6a54a6e384b2d56b2cdac7e8036fcb48ec5",
+          "sizeBytes": 6727
         },
         {
           "id": "finish",
@@ -1092,8 +1092,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "1826b693cdb54e3e3b44919cd1943053b0f2cf8195fc5ee007ff052f1e047162",
-          "sizeBytes": 9281
+          "sha256": "dc5088465f9083c14b0c15e850314fb62574492d2f5cfdfe55c30a9630b0b0af",
+          "sizeBytes": 6669
         }
       ]
     },
@@ -1109,8 +1109,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "c6759ccf69463b9ba3994c3084981d8768154cdf7f769ef694657ffa23eb5491",
-          "sizeBytes": 10553
+          "sha256": "b0b8d01b5cb8f8927eb8fbdd757983b0a32bd3c2f5d9d90f00dcafc3c7bead3f",
+          "sizeBytes": 7575
         },
         {
           "id": "drive",
@@ -1120,8 +1120,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "b5c7fcb08a8ed732ec2528174ef86c627aacaf547019487529d4f9d0974f7708",
-          "sizeBytes": 10511
+          "sha256": "26ba9bbf3007bcf8542b582d09b481512bd064d8036e6bddff7de6071ddefc3e",
+          "sizeBytes": 7572
         },
         {
           "id": "finish",
@@ -1131,8 +1131,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "859c8eaf7ab991f544efe88af3b0926742270dc719b1a8fc37ac2ee10696d075",
-          "sizeBytes": 10446
+          "sha256": "a5dfd4dd7bfef819ff4ba325f5e8b91be44aef8e9529cc80c18dd3c6517ef964",
+          "sizeBytes": 7499
         }
       ]
     },
@@ -1148,8 +1148,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
           "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
-          "sha256": "f7bf34554934c50123299e6f5d20318e58b75ea29605e60930fcc472e587214b",
-          "sizeBytes": 11435
+          "sha256": "b9da1574fd5d6d407859f1e3dbbb7ec61fd5c3c70154a4b05d60390418189439",
+          "sizeBytes": 8249
         },
         {
           "id": "drive",
@@ -1159,8 +1159,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
           "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
-          "sha256": "08c1aa1932e3def13babd4a0e28af07db20000c39388d2ea8a130204e78a413a",
-          "sizeBytes": 11657
+          "sha256": "4ca6e1fa0b92e1a7b57839682f817e10b550d603986cd6c3c23ebd78d0c8dcf9",
+          "sizeBytes": 8374
         },
         {
           "id": "finish",
@@ -1170,8 +1170,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/cable-triceps-pushdown-sprite-v4.png",
           "sourceSha256": "381c9e913dfe23a076337ea39ffaecc13d57983571409047c824d9363336d8a4",
-          "sha256": "a27ac614471b8034968ff27e525dd61486e5c447734eb73ea012fe1ac5f0d00d",
-          "sizeBytes": 11632
+          "sha256": "3baeabaf91f8a53bf0ca2b1b7f74f8c3b8367a528124b1028c42031a045ff861",
+          "sizeBytes": 8380
         }
       ]
     },
@@ -1187,8 +1187,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
           "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
-          "sha256": "1031462d2f8f5c1765283d719daf68a04296e587549e47e910605446fb0e94ac",
-          "sizeBytes": 7804
+          "sha256": "1dadb8d099d97c2e18395d60b0ff6062142f9483f551383b249d6b2e30d416f9",
+          "sizeBytes": 5612
         },
         {
           "id": "drive",
@@ -1198,8 +1198,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
           "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
-          "sha256": "c306358d74d3300fe0f99563470a45e2b9624fc109a18c9455fbe6b718902637",
-          "sizeBytes": 8138
+          "sha256": "f66f7b960834d8370b2f391e7c4295dbe0c9edb1d90d366bf847170f37c72763",
+          "sizeBytes": 5808
         },
         {
           "id": "finish",
@@ -1209,8 +1209,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-overhead-triceps-extension-sprite-v4.png",
           "sourceSha256": "43749de304b3723ea45679e48f5fd10ee1108adba5d0b086cd74185e6a32ec82",
-          "sha256": "6bb896a94a53ce319f30a0415e4b311c5931d0226a4df0ca42150f328606bdc9",
-          "sizeBytes": 8368
+          "sha256": "1b7f5326c12ef63fc9306a7424530553acd1845b63c8874bab13bf0b97e4d0aa",
+          "sizeBytes": 6014
         }
       ]
     },
@@ -1226,8 +1226,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
           "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
-          "sha256": "ee52d2eb2ef2fb5b016adae4c55e47c8cae1533b2443c5706b4c5d573c17c0f0",
-          "sizeBytes": 10139
+          "sha256": "49a5cc89516fe1ea322f6092560692454accf56fda4b009b42fbe0235170d455",
+          "sizeBytes": 7171
         },
         {
           "id": "drive",
@@ -1237,8 +1237,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
           "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
-          "sha256": "452e474ec2827d7f441d66ba475afb8634d63d6ed42644b8d2eb19a1215665bc",
-          "sizeBytes": 10466
+          "sha256": "894371af905331fba4c067eae731d726b7484a1c0715a2ef54d4520cc2f9f6bb",
+          "sizeBytes": 7410
         },
         {
           "id": "finish",
@@ -1248,8 +1248,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/dumbbell-lying-triceps-extension-sprite-v4.png",
           "sourceSha256": "84e611f4c6b87075be9b39a6c71581e34f944f1df5506b3edd936fcabf4f38c2",
-          "sha256": "41be2e9a24b1df4848b9e35ced3430659996093a585670202fb993b3bdb33491",
-          "sizeBytes": 11266
+          "sha256": "3c229deea96362f6a7bac2d108182bfda43dcfa42b006c74501d6f5a07e5267a",
+          "sizeBytes": 8013
         }
       ]
     },
@@ -1265,8 +1265,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "f99bd0dd58fa8c455b316ce989a9c9fd71be9be12977684af7ee9cc2621b4f5c",
-          "sizeBytes": 8164
+          "sha256": "4369d799b0201739b995269c2b977d31fab67666193d9698fbeb61e77de58ef3",
+          "sizeBytes": 5922
         },
         {
           "id": "drive",
@@ -1276,8 +1276,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "1d63fb7f0e2c2992de4d32d91414f04f6267ae30e436b405b7ec39391dba7230",
-          "sizeBytes": 8716
+          "sha256": "e3ce3ec3cb28d1697e8366c684e0b1b54a25ba763ba12eaadd2f283a6538c9f9",
+          "sizeBytes": 6318
         },
         {
           "id": "finish",
@@ -1287,8 +1287,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "486af66e4e7a6c81483cdac9c731252bb3d86646712daa03398a94a7a308dbf0",
-          "sizeBytes": 8121
+          "sha256": "86673695f9028fb33861b9715164a0cdffe4984f3e151e4683250a20c9a9a604",
+          "sizeBytes": 5941
         }
       ]
     },
@@ -1304,8 +1304,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
           "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
-          "sha256": "c05fea1cc524814de8e587ba816679e32c08fc8b959f0b5dde6e72c8377869cb",
-          "sizeBytes": 13762
+          "sha256": "4e450f2ec9837e5c756e4ed35756c62a275bce6b43c5ac9b6aa955e7f534d651",
+          "sizeBytes": 9960
         },
         {
           "id": "drive",
@@ -1315,8 +1315,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
           "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
-          "sha256": "c7f2a502a63907ef9c53b88e54f7801565b928c7c71bbf1e09254f027de5a6a1",
-          "sizeBytes": 14027
+          "sha256": "0bd3e374747c6f27b742c2f9d8356d5b72e4054813c2f163b0ccaf319b63574d",
+          "sizeBytes": 10195
         },
         {
           "id": "finish",
@@ -1326,8 +1326,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/cable-reverse-fly-sprite-v4.png",
           "sourceSha256": "3455f57610399a3ef43842313bc24cdff658d2564e70613b306a03f4f9ef069f",
-          "sha256": "a44abb761b2a634636b7dd1c61fc87bbbac5afe6d7d57db68a89d28cebd979a8",
-          "sizeBytes": 13799
+          "sha256": "0136edf7ae72b5d19fd7505d2df334ad040331b41127d180f944c8dadfa9e33d",
+          "sizeBytes": 10010
         }
       ]
     },
@@ -1343,8 +1343,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "7cc049abf7b12d5448b577ae515a315068da9b40837c02863da745a0b6753e4e",
-          "sizeBytes": 9873
+          "sha256": "2fa481353f04cc8693d8169a30d911a0752cf30d1f143b7969c8c488ee629ae3",
+          "sizeBytes": 7073
         },
         {
           "id": "drive",
@@ -1354,8 +1354,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "c2fdea05fec8f474d2588cd1025bc779d050ca3e9e7dc41db44c7087bd8394a5",
-          "sizeBytes": 9646
+          "sha256": "31971b8cef2d6b5988f5e43af18a7309fa6e3b9e00b5423aef18566005f0bd08",
+          "sizeBytes": 6931
         },
         {
           "id": "finish",
@@ -1365,8 +1365,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "d7396e5716d512943767b62eec724828274107e0dd1565776bd4b7929d1f5401",
-          "sizeBytes": 9119
+          "sha256": "1a0702f3a1934a0efec67b51be2f3ad5d21dff2e4a175c35f7e4baa4776ddfef",
+          "sizeBytes": 6546
         }
       ]
     },
@@ -1382,8 +1382,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "ecead995cd0e226ca82f1eea1100daa8c0d46501aec8af7d6533014d8f451658",
-          "sizeBytes": 9374
+          "sha256": "9f9286ea75d9a2c5915db34f13144804493afd400b1b3d55d8a12a95ee86c140",
+          "sizeBytes": 6731
         },
         {
           "id": "drive",
@@ -1393,8 +1393,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "8c2499b6369222c98738bb190fd1adf1d4edd54bc84d72a279297bc08cabfaa7",
-          "sizeBytes": 9363
+          "sha256": "b9883be8f70bc6846003a39bbb0b8b80701ad82abd8eaf9135ce75a19334d9fd",
+          "sizeBytes": 6738
         },
         {
           "id": "finish",
@@ -1404,8 +1404,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "512019e644858903a6e2d3fbb473fc31ccadedb2dc7ff831bb96be9eef24b7a1",
-          "sizeBytes": 9514
+          "sha256": "4ecebd0014447c28dd20bdfbb733c231fe962f55bcc280ab906d06a8ad8bbdd1",
+          "sizeBytes": 6854
         }
       ]
     },
@@ -1421,8 +1421,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "7bfa4d398c96d2c294e3fe6d2f7469ef948f9675af9202ea3ecd001e86161c89",
-          "sizeBytes": 10540
+          "sha256": "7580880c6b10551cddd4cf79f8e598de628bd2e6e02e331483f4b0d51904b427",
+          "sizeBytes": 7546
         },
         {
           "id": "drive",
@@ -1432,8 +1432,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "5fc5407c9aca95d700b4cc52e667e844977aabe36aa80d5279bade7d8d8b2bf3",
-          "sizeBytes": 10587
+          "sha256": "368238afbe510566497e4bddb105e8d96f7b32a261236447a4f579c4365a355c",
+          "sizeBytes": 7590
         },
         {
           "id": "finish",
@@ -1443,8 +1443,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/golden-cat-coach-rig-parts-v4.png",
           "sourceSha256": "dd3b069ef32efc6f85e41352263c1cc3a773902de52d7e2593caa46195f20555",
-          "sha256": "253b18ddd09f7d9d26f00f697245696d64cc379ef7390a8c8ef72a84c10fba1e",
-          "sizeBytes": 10635
+          "sha256": "07fe49028bddac4866d4dcf2ebec0fa558c9beae1f1b0e27f2897820440d7dd6",
+          "sizeBytes": 7634
         }
       ]
     },
@@ -1460,8 +1460,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
           "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
-          "sha256": "3f065e59297898e622bd75d67e4ddcccabac5dd222bd0da211f5243fee9fa92a",
-          "sizeBytes": 10976
+          "sha256": "c0a1217c0e3bf12cde4262f2da18d3b06af9cef6cee08b709b17e4f412897e51",
+          "sizeBytes": 7867
         },
         {
           "id": "drive",
@@ -1471,8 +1471,8 @@
           "phase": 0.5,
           "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
           "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
-          "sha256": "e557f7d75eded57ff25a7d6cf71a1f6aa569ab4530722df99df46c3b271e567d",
-          "sizeBytes": 11105
+          "sha256": "430c0a807f4e9abf2c5c16a1dfb17ff95a3a0be0d552c74e52424d7d4430f517",
+          "sizeBytes": 7905
         },
         {
           "id": "finish",
@@ -1482,8 +1482,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/machine-shrug-sprite-v4.png",
           "sourceSha256": "c4bee1923955c9587b48903b59205b1d68a64be5680b183511289a32b01d6075",
-          "sha256": "74fa0695240223b8d44715f102d2a073b8aece627fcf1346d64e9dab1780d6d3",
-          "sizeBytes": 11319
+          "sha256": "5ccbe4ab8782127eeb1cadf8779f357ba33d0465da07e552605f3ab4116a5365",
+          "sizeBytes": 8192
         }
       ]
     },
@@ -1500,8 +1500,8 @@
           "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
-          "sha256": "e739ef63d8d289324d42e4f25f3d3ed7f88dd6828af65eebd805337d18cc8dfe",
-          "sizeBytes": 14268
+          "sha256": "146b4c8a351cb1077c2e52e8b12439e0b4b3483132e3864acfb5b5fbf9a4ef3a",
+          "sizeBytes": 10354
         },
         {
           "id": "drive",
@@ -1512,8 +1512,8 @@
           "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
-          "sha256": "b69f22a78c37fadbccbe3c76f88340c9bc3039c45185b25594c7b8539b77a0a1",
-          "sizeBytes": 13801
+          "sha256": "39b78142ac351c3f4d5a7e809e7b78ca9055795a78f07d2e7c2f91bae45d24ad",
+          "sizeBytes": 9980
         },
         {
           "id": "finish",
@@ -1524,8 +1524,8 @@
           "sourceFile": "assets-source/exercise-guides/lat-pulldown-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "2044604ca6eb66c62769aed6d754caa3420244c4fba80cfab54ee3044c7e04b7",
-          "sha256": "716bdc128fc783a0b51fff4d1cb446a08fc8528e5b2877e7f19c43ced60b4941",
-          "sizeBytes": 13597
+          "sha256": "1253ea660151d472401e9a766de3f6c87721991bb296ce6ae7ab3dadbca7a41b",
+          "sizeBytes": 9875
         }
       ]
     },
@@ -1542,8 +1542,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
-          "sha256": "18e540dc43007bd2afae6816e7088ee004824dbe04999a00fc212435e061b34c",
-          "sizeBytes": 14169
+          "sha256": "c87b05557ec8a30df293d5af9a3e6e5993e16ce27adfb22908378c2b52749e6b",
+          "sizeBytes": 10288
         },
         {
           "id": "drive",
@@ -1554,8 +1554,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
-          "sha256": "e17f651a8eee358719f22bea62f1d74caeadc0791251f9553552e66d1cde1e1f",
-          "sizeBytes": 13987
+          "sha256": "33da79ef6ef11d2857a67c5f4495311bcd98df03445dd57ae047a4ea336e682b",
+          "sizeBytes": 10106
         },
         {
           "id": "finish",
@@ -1566,8 +1566,8 @@
           "sourceFile": "assets-source/exercise-guides/cable-straight-arm-pulldown-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "877a84e156a149884bc00d390d2e4e26ffc58d64876329783fc513d79d655058",
-          "sha256": "a135acdca794e2d33703c3aa2c364b9d54419673355cf436635cc64019d966f0",
-          "sizeBytes": 13677
+          "sha256": "d5072c8b56105a55db32806e04b1b18b1ce7cbe18e1c57136431e6b15e14c37a",
+          "sizeBytes": 9949
         }
       ]
     },
@@ -1584,8 +1584,8 @@
           "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
-          "sha256": "9c83abd76db22a472523d1ab0088e705b228c1f15cc95c222b58819520bfaa29",
-          "sizeBytes": 11937
+          "sha256": "f0bb894ea884d7fa4d0ab9848d0bb3f4a2a67259e8b931961060b98645362b62",
+          "sizeBytes": 8720
         },
         {
           "id": "drive",
@@ -1596,8 +1596,8 @@
           "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
-          "sha256": "4d21cabb291e7715a937b44e625100b4e270b38cd4047bc998a1280bfc31ab62",
-          "sizeBytes": 11461
+          "sha256": "4536a60b88680b7165f83cf7c38ac5c3926f9348b927c07f385d1cdcacb1619f",
+          "sizeBytes": 8445
         },
         {
           "id": "finish",
@@ -1608,8 +1608,8 @@
           "sourceFile": "assets-source/exercise-guides/neutral-grip-pulldown-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "66ed2db00886184fd57379a8de86bec76163e40508a796fb588f1988b5538dfd",
-          "sha256": "b5bca6472ceab692fdf597635a910ed4eced452bdfa12a4e3f99cf33e8d1862c",
-          "sizeBytes": 11135
+          "sha256": "5d7be227bd4d7f5b748f484950aeb05dce3fbf1caae54d47f1087b223cc9db5a",
+          "sizeBytes": 8241
         }
       ]
     },
@@ -1626,8 +1626,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
-          "sha256": "b352950460a5693d450893408c78e5311ad9685a03729be7d5c7d4732a91c9f9",
-          "sizeBytes": 9192
+          "sha256": "0f21b92d3346222ff804379336eae56dc135e1bb40ae3165dadaa4d5c14439bb",
+          "sizeBytes": 6661
         },
         {
           "id": "drive",
@@ -1638,8 +1638,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
-          "sha256": "bec47c1a860db40fcbcc6133d3d256e2517ffa177039818dd29805096adba69b",
-          "sizeBytes": 9687
+          "sha256": "f1545028a1d451010883bbca76af26cc4d13f95de1630b34bc862b6f81512f3e",
+          "sizeBytes": 6995
         },
         {
           "id": "finish",
@@ -1650,8 +1650,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-w-raise-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "88dfa51309d4bf2ef1ec814576a5819aaf37cecdb511ab554de4f43647948a25",
-          "sha256": "708863a29ffd354dc4459653434e16c5c5e611d6cb55674a6a49d6a7b4b9fa95",
-          "sizeBytes": 9719
+          "sha256": "98abeeeddf2091072995ef31d48766a4d2116d7817138511484b0ec036d0d156",
+          "sizeBytes": 6982
         }
       ]
     },
@@ -1668,8 +1668,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
-          "sha256": "4333426e6ad2fd7d6deddf52b888d2e8c4d5af084fa9c6e9778b6612bd0f6678",
-          "sizeBytes": 11105
+          "sha256": "bedaba9ac4b0ed9d3f67527979e8cc1b6718e5dbaaeb8942c2f48744c9c36a22",
+          "sizeBytes": 7853
         },
         {
           "id": "drive",
@@ -1680,8 +1680,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
-          "sha256": "0bf800adb3c4c0a54822cbe22ad4727b6cb0efacbd61b83884386da387eee19c",
-          "sizeBytes": 11420
+          "sha256": "96f39d083a590dcdea556873dfc187e5bd77b08722a5aacc70944b588ab47453",
+          "sizeBytes": 8104
         },
         {
           "id": "finish",
@@ -1692,8 +1692,8 @@
           "sourceFile": "assets-source/exercise-guides/prone-y-raise-sprite-v3.png",
           "sourceGridIndex": 5,
           "sourceSha256": "43f9782ce2a7d624219f8d460d4bf2ec723e3a286c8fddd5b23bd2b6bb39acf1",
-          "sha256": "e51a349e2fb2b89e4d24b2a5d91f4af0deeb775973bf40b380bc81b7d54b2981",
-          "sizeBytes": 11368
+          "sha256": "9a835a749d5c98ba05022185b858915e43ddc5582f92bd96936e771517c17c61",
+          "sizeBytes": 8136
         }
       ]
     },
@@ -1709,8 +1709,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/floor-prone-cobra-keyframe-01.png",
           "sourceSha256": "d2a20dc01d3bad7398d2691ad8c6e6372a2d5509d61cb38b159ce98b199071d2",
-          "sha256": "8d035c8fc0cccd89278a30c9c85701ddbf8a6c65d6fbd295ccf0cfcfd040e061",
-          "sizeBytes": 6372
+          "sha256": "9588987d8b442648063aaf6727eec9f6384d5b4ef9859dae65a09ef2ccefc9a7",
+          "sizeBytes": 4628
         },
         {
           "id": "lift",
@@ -1720,8 +1720,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/floor-prone-cobra-keyframe-02.png",
           "sourceSha256": "39f80256c822704dd3392d6cf5b8875f9f7807357a2a335ac7fee7bf0ae15d88",
-          "sha256": "4e80d64709c9f4ba8ec1b3483d803744c6040a5d82e1e2619586fd1782d2f341",
-          "sizeBytes": 6488
+          "sha256": "9a1b2474987a550b4152ee0182046d9efdc1d41497caf33a3dcdac54206b01b7",
+          "sizeBytes": 4730
         }
       ]
     },
@@ -1737,8 +1737,8 @@
           "phase": 0.0,
           "sourceFile": "assets-source/exercise-guides/contralateral-limb-raise-keyframe-01.png",
           "sourceSha256": "562da7e157d33bfcad35dc25751681ac1a902eb73fe3d9996877cb4bbd64fa7f",
-          "sha256": "31cdff496bd3845ceb9bcf0f6da527294d341d9802b38d2a18bef48e55132a50",
-          "sizeBytes": 5952
+          "sha256": "50b072b4bef818742a4bce9e1be7a2d52e59a35af18e9db3eaa09fc82f4594b4",
+          "sizeBytes": 4363
         },
         {
           "id": "raise",
@@ -1748,8 +1748,8 @@
           "phase": 1.0,
           "sourceFile": "assets-source/exercise-guides/contralateral-limb-raise-keyframe-02.png",
           "sourceSha256": "da6e448b2aafc3071ce86bcc8211e4e9b78f9c6c6c68a53b647df93f942fa009",
-          "sha256": "cd02b490a00555a967162e93fd9393499b340aef8b53d0b58058fd0d0f129961",
-          "sizeBytes": 7678
+          "sha256": "17cfabfd013fd57a56983675b65a6f31fee3ef9f0ae4c15508912d8b31f99a6c",
+          "sizeBytes": 5573
         }
       ]
     },
@@ -1766,8 +1766,8 @@
           "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
-          "sha256": "6423dda93a623d9ba6e53179f37f414eb2ffdd7691a71ad949868c76d875b216",
-          "sizeBytes": 10343
+          "sha256": "49cf512b933641e0a443f286875814ee0909fe6b78196c2163b9ff6be72e4882",
+          "sizeBytes": 7370
         },
         {
           "id": "extend",
@@ -1778,8 +1778,8 @@
           "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
           "sourceGridIndex": 1,
           "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
-          "sha256": "a0ea3862d2d3414d2db6ff18046da935cdae2b9a128a7c98bef7743f2e4abaeb",
-          "sizeBytes": 9842
+          "sha256": "b6588bdad08cbe309fa1fc463caf88a863b490106fb8f03e81591d8c851bd2e3",
+          "sizeBytes": 7004
         },
         {
           "id": "control",
@@ -1790,8 +1790,8 @@
           "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
-          "sha256": "cefdf874edf187da6eb801ccee3af47dce739b6cd7c0d360d81c2ca41a48dcda",
-          "sizeBytes": 8829
+          "sha256": "a1e9baa7b113cf695a3f501dfff04579b4b60f8308b9295458d437337c01c932",
+          "sizeBytes": 6347
         },
         {
           "id": "finish",
@@ -1802,8 +1802,8 @@
           "sourceFile": "assets-source/exercise-guides/dead-bug-sprite-v3.png",
           "sourceGridIndex": 3,
           "sourceSha256": "4a71a4276e87762d0df515ba663fcb27bdc0b9245d8df4f3967419c1b235e565",
-          "sha256": "78e356468f3ce36d97c2b8c92c3edf543e9b3c44015f6bc0b76bbdff16744a4d",
-          "sizeBytes": 8482
+          "sha256": "f2f9d9713fa59325129af0dab128e4ddba9ede750acc67cc6f4c2792dfb88069",
+          "sizeBytes": 6121
         }
       ]
     },
@@ -1820,8 +1820,8 @@
           "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
-          "sha256": "8d4a3a09d08ac317399fc0344e05c8835edff62d624b9d96401ed4a749ec4149",
-          "sizeBytes": 9508
+          "sha256": "f9a24ac62530c793f1b5a27ae2f652241017f9fa1f9b665b6add36e782eb3468",
+          "sizeBytes": 6877
         },
         {
           "id": "extend",
@@ -1832,8 +1832,8 @@
           "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
           "sourceGridIndex": 1,
           "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
-          "sha256": "76c9e6a8f96c8abda0bacdfbae271fc5ca24fbc6ae3173c2487b88e9f2829f3e",
-          "sizeBytes": 10114
+          "sha256": "affcc475807ab54de9242d2d553579cd14782ff5d6d912301142331b7db6e007",
+          "sizeBytes": 7288
         },
         {
           "id": "control",
@@ -1844,8 +1844,8 @@
           "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
           "sourceGridIndex": 2,
           "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
-          "sha256": "91dccebf8ef10ea08818b8588746264e674c6dabcb993974cf1bb22be1b16f82",
-          "sizeBytes": 9079
+          "sha256": "f7762b6541bc6e0ae8129c98f5e48d6d5319d15c9fd8881cd88b104b908eec95",
+          "sizeBytes": 6621
         },
         {
           "id": "finish",
@@ -1856,8 +1856,8 @@
           "sourceFile": "assets-source/exercise-guides/bird-dog-sprite-v3.png",
           "sourceGridIndex": 3,
           "sourceSha256": "a5d37eae668558b150addf1004fb504270fa0d13ea6ccd743fc6c5f2c6bed674",
-          "sha256": "ffa171be99192381dc8df3a238611b9726159f16b5b657c5627b90f9faf3baf5",
-          "sizeBytes": 9287
+          "sha256": "85fddddecc97f5eb89c2548ed7e74517c26d307acf4a594e3702c0f451b06e0a",
+          "sizeBytes": 6741
         }
       ]
     },
@@ -1874,8 +1874,8 @@
           "sourceFile": "assets-source/exercise-guides/plank-sprite-v3.png",
           "sourceGridIndex": 0,
           "sourceSha256": "4d2c40e91ab7a14af4c32023cce02a5b1ab076b85ac0e7c0299096577aff2db4",
-          "sha256": "22313cdfb9aac746fb4066c088f40c99cb93331a27cba6eee12bd410e2084adf",
-          "sizeBytes": 10059
+          "sha256": "ccf60d33a7eeedf6b1ec068bdb9273cdae40d2c2798ae9ab29a84b83f72a9623",
+          "sizeBytes": 7261
         },
         {
           "id": "hold",
@@ -1886,8 +1886,8 @@
           "sourceFile": "assets-source/exercise-guides/plank-sprite-v3.png",
           "sourceGridIndex": 3,
           "sourceSha256": "4d2c40e91ab7a14af4c32023cce02a5b1ab076b85ac0e7c0299096577aff2db4",
-          "sha256": "72d89580eb486fb34ddc5a23890bf5204c08860850c621a4ecf21b8a2b46ac18",
-          "sizeBytes": 10475
+          "sha256": "5ee8fbbb3dad94a42a84cae51804608a3d3ed38694655ed94c129f1f3722550a",
+          "sizeBytes": 7548
         }
       ]
     },

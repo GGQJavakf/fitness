@@ -6,8 +6,10 @@ import {
   completeGeneralWarmup,
   createWorkoutFlow,
   recordWorkoutSet,
+  summarizeWorkout,
 } from '../src/application/workoutFlow'
 import { ApplicationError } from '../src/application/errors'
+import { selectNextTrainingDayCode } from '../src/application/selectNextTrainingDay'
 
 const application = vi.hoisted(() => ({
   routeParameter: vi.fn(),
@@ -15,6 +17,10 @@ const application = vi.hoisted(() => ({
   getWorkoutSessionSummary: vi.fn(),
   loadActivePlan: vi.fn(),
   listWorkoutHistory: vi.fn(),
+  loadAndSettleWorkout: vi.fn(),
+  loadNextTrainingDay: vi.fn(),
+  prepareNextTrainingDay: vi.fn(),
+  discardOrphanedWorkout: vi.fn(),
   workouts: {
     load: vi.fn(),
     complete: vi.fn(),
@@ -37,8 +43,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/workoutCompositionRoot', () => ({
+  getWorkoutApplication: () => application,
 }))
 
 const { default: WorkoutSummaryPage } = await import(
@@ -145,6 +151,59 @@ describe('workout summary runtime interactions', () => {
         status: 'COMPLETED', startedAt: '2026-08-15T08:00:00Z', completedAt: '2026-08-15T09:00:00Z',
         completedWorkSets: 1, completedVolumeKg: 0, completedReps: 12, usesExternalLoad: false,
       }],
+    })
+    application.loadAndSettleWorkout.mockImplementation(async (completionType) => {
+      const state = await application.workouts.load()
+      if (!state) return { kind: 'EMPTY' }
+      const summary = summarizeWorkout(state)
+      const effectiveCompletionType = completionType ?? (summary.complete ? 'FULL' : undefined)
+      if (!effectiveCompletionType) return { kind: 'LOADED', state, summary }
+      let result
+      try {
+        result = await application.workouts.complete(state, effectiveCompletionType)
+      } catch (error) {
+        return { kind: 'SETTLEMENT_FAILED', state, summary, error }
+      }
+      let generatedSummary = null
+      try {
+        generatedSummary = await application.requestWorkoutSummary(result.session.id)
+      } catch {
+        // The workout completion remains successful when its optional summary fails.
+      }
+      return { kind: 'SETTLED', state, summary, completion: result, generatedSummary }
+    })
+    application.loadNextTrainingDay.mockImplementation(async (completedDayCode) => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const activePlan = await application.loadActivePlan()
+          if (!activePlan) throw new Error('active plan is not visible after workout completion')
+          const days = activePlan.activeVersion.plan.days
+          const completedIndex = completedDayCode
+            ? days.findIndex((day: { code: string }) => day.code === completedDayCode)
+            : -1
+          const nextCode = completedIndex >= 0
+            ? days[(completedIndex + 1) % days.length]?.code ?? ''
+            : selectNextTrainingDayCode(
+                days,
+                (await application.listWorkoutHistory(undefined, 50)).items,
+              )
+          return days.find((day: { code: string }) => day.code === nextCode) ?? null
+        } catch {
+          if (attempt >= 2) return null
+          await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)))
+        }
+      }
+      return null
+    })
+    application.prepareNextTrainingDay.mockImplementation(async (trainingDayCode) => {
+      await application.nextTrainingDaySelection.remember(trainingDayCode)
+      await application.navigation.replace('WORKOUT_PREPARE', { trainingDayCode })
+    })
+    application.discardOrphanedWorkout.mockImplementation(async () => {
+      const state = await application.workouts.load()
+      if (!state) throw new Error('the orphaned local workout is no longer active')
+      await application.workouts.discardOrphanedLocalWorkout(state)
+      await application.navigation.replace('PLAN')
     })
   })
 

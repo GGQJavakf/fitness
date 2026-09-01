@@ -24,6 +24,29 @@ class PlanGenerationFixtureTest {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     @Test
+    void fullBodySplitKeepsEverySessionFullBody() {
+        assertThat(IntStream.range(0, 3)
+                .mapToObj(index -> PlanGenerationEngine.SessionFocus.forSplitIndex(
+                        PlanGenerationEngine.TrainingSplit.FULL_BODY, 3, index)))
+                .containsOnly(PlanGenerationEngine.SessionFocus.FULL_BODY);
+    }
+
+    @Test
+    void bodyweightUpperRequiresPushAndPullWithoutWeakeningTheProfessionalUpperFocus() {
+        PlanGenerationEngine.SessionFocus bodyweightUpper =
+                PlanGenerationEngine.SessionFocus.BODYWEIGHT_UPPER;
+
+        assertThat(bodyweightUpper.requiredPatterns())
+                .containsExactlyInAnyOrder("HORIZONTAL_PUSH", "HORIZONTAL_PULL");
+        assertThat(bodyweightUpper.allows("HORIZONTAL_PUSH")).isTrue();
+        assertThat(bodyweightUpper.allows("HORIZONTAL_PULL")).isTrue();
+        assertThat(bodyweightUpper.allows("CORE")).isTrue();
+        assertThat(bodyweightUpper.allows("ELBOW_FLEXION")).isFalse();
+        assertThat(PlanGenerationEngine.SessionFocus.UPPER.requiredPatterns())
+                .contains("ELBOW_FLEXION", "ELBOW_EXTENSION");
+    }
+
+    @Test
     void validationEngineMatchesEveryM0PlanFixture() throws IOException {
         JsonNode document = JSON.readTree(Path.of(
                 "..", "test-fixtures", "rules", "plan-validation-v1.json").toFile());

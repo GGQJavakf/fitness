@@ -5,7 +5,7 @@
   "description": "AI 健身助手微信小程序",
   "scripts": {
     "prepare:project-config": "node ../scripts/prepare-wechat-project-config.mjs",
-    "build:weapp": "npm run prepare:project-config && node scripts/taro-weapp-build.mjs && node scripts/check-package-size.mjs",
+    "build:weapp": "npm run prepare:project-config && node scripts/taro-weapp-build.mjs && node scripts/check-preview-launch-conditions.mjs && node scripts/check-physical-async-boundaries.mjs && node scripts/check-package-size.mjs",
     "build:weapp:device": "node scripts/device-preflight.mjs --build",
     "preflight:device": "node scripts/device-preflight.mjs",
     "preflight:staging": "npm run prepare:project-config && node scripts/release-preflight.mjs --target staging-experience",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@babel/runtime": "7.27.6",
+    "@babel/runtime-corejs3": "7.29.7",
     "@tarojs/components": "4.2.1",
     "@tarojs/helper": "4.2.1",
     "@tarojs/plugin-framework-react": "4.2.1",
@@ -31,11 +32,13 @@
     "@tarojs/runtime": "4.2.1",
     "@tarojs/shared": "4.2.1",
     "@tarojs/taro": "4.2.1",
+    "core-js-pure": "3.49.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
+    "@babel/plugin-transform-modules-commonjs": "7.29.7",
     "@babel/preset-react": "7.27.1",
     "@tarojs/plugin-doctor": "0.0.13",
     "@tarojs/service": "4.2.1",
@@ -46,10 +49,10 @@
     "@types/react-dom": "18.3.5",
     "@types/react-test-renderer": "18.3.1",
     "babel-preset-taro": "4.2.1",
+    "less": "4.8.1",
     "openapi-typescript": "7.13.0",
     "react-refresh": "0.14.2",
     "react-test-renderer": "18.3.1",
-    "less": "4.8.1",
     "sass": "1.101.6",
     "typescript": "5.7.2",
     "vitest": "4.1.10",

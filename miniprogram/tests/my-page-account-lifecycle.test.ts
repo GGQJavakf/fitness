@@ -27,8 +27,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/accountCompositionRoot', () => ({
+  getAccountApplication: () => application,
 }))
 
 vi.mock('../src/presentation/components/main-navigation', () => ({

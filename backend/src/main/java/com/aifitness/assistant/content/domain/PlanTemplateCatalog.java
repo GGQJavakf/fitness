@@ -39,10 +39,17 @@ public record PlanTemplateCatalog(ReleaseMetadata metadata, String contentVersio
         }
     }
 
-    public record Day(String code, String name, List<ExerciseSlot> exercises) {
+    public record Day(String code, String name, String focus, List<ExerciseSlot> exercises) {
+        public Day(String code, String name, List<ExerciseSlot> exercises) {
+            this(code, name, null, exercises);
+        }
+
         public Day {
             if (code == null || code.isBlank() || name == null || name.isBlank()) {
                 throw new IllegalArgumentException("day code and name are required");
+            }
+            if (focus != null && focus.isBlank()) {
+                throw new IllegalArgumentException("day focus must not be blank");
             }
             exercises = List.copyOf(Objects.requireNonNull(exercises, "day exercises must not be null"));
             if (exercises.isEmpty()) {

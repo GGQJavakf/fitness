@@ -46,10 +46,15 @@ describe('P0 telemetry event contract', () => {
   })
 
   it('emits every P0 event from an explicit product boundary', () => {
-    const presentation = [
+    const presentationPages = [
       'onboarding', 'plan-editor', 'workout-prepare', 'workout-session',
       'workout-summary', 'history', 'sync-conflicts',
     ].map((page) => readFileSync(resolve(import.meta.dirname, `../src/presentation/pages/${page}/index.tsx`), 'utf8')).join('\n')
-    for (const eventName of expectedP0Events) expect(presentation).toContain(`'${eventName}'`)
+    const planningBoundary = readFileSync(resolve(
+      import.meta.dirname,
+      '../src/platform/weapp/featureRoots/planningCompositionRoot.ts',
+    ), 'utf8')
+    const productBoundaries = `${presentationPages}\n${planningBoundary}`
+    for (const eventName of expectedP0Events) expect(productBoundaries).toContain(`'${eventName}'`)
   })
 })

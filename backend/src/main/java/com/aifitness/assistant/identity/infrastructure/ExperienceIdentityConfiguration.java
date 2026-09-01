@@ -9,15 +9,17 @@ import com.aifitness.assistant.identity.application.WechatIdentityProvider;
 import com.aifitness.assistant.identity.application.WechatIdentityResolver;
 import com.aifitness.assistant.identity.application.WechatLoginService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.net.http.HttpClient;
+import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.time.Clock;
 import java.time.Duration;
 import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 @Configuration
@@ -28,17 +30,19 @@ public class ExperienceIdentityConfiguration {
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
 
     @Bean
+    RestClient experienceWechatRestClient() {
+        SimpleClientHttpRequestFactory requestFactory = new NoRedirectClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        return RestClient.builder().requestFactory(requestFactory).build();
+    }
+
+    @Bean
     WechatIdentityProvider experienceWechatIdentityProvider(
+            @Qualifier("experienceWechatRestClient") RestClient client,
             ObjectMapper objectMapper,
             @Value("${fitness.auth.wechat.app-id}") String appId,
             @Value("${fitness.auth.wechat.app-secret}") String appSecret) {
-        HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(CONNECT_TIMEOUT)
-                .followRedirects(HttpClient.Redirect.NEVER)
-                .build();
-        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(READ_TIMEOUT);
-        RestClient client = RestClient.builder().requestFactory(requestFactory).build();
         return new WechatCodeSessionIdentityProvider(client, objectMapper, appId, appSecret);
     }
 
@@ -92,5 +96,16 @@ public class ExperienceIdentityConfiguration {
             AuthenticationAttemptLimiter attemptLimiter) {
         return new WechatLoginService(
                 provider, protector, identities, sessions, experienceIdentityClock, attemptLimiter);
+    }
+
+    private static final class NoRedirectClientHttpRequestFactory
+            extends SimpleClientHttpRequestFactory {
+
+        @Override
+        protected void prepareConnection(HttpURLConnection connection, String httpMethod)
+                throws IOException {
+            super.prepareConnection(connection, httpMethod);
+            connection.setInstanceFollowRedirects(false);
+        }
     }
 }

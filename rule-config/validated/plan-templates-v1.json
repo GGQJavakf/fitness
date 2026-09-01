@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.8.0", "ruleVersion": "1.6.0", "contentVersion": "1.8.0", "status": "AI_VALIDATED",
+    "schemaVersion": "1.0.0", "kind": "PLAN_TEMPLATE", "version": "1.9.1", "ruleVersion": "1.6.0", "contentVersion": "1.9.0", "status": "AI_VALIDATED",
     "generatedAt": "2026-08-15T10:15:00Z",
     "promptConstraints": ["仅面向成年一般健身用户", "只引用版本化动作代码", "未知重量必须进入校准", "模板数字不得由运行时 AI 改写", "可用器械支持时整周必须包含直接二头和直接三头训练", "仅自重模板不得引用外部器械动作", "每周四至六练的自重模板必须交替肌群以满足恢复窗口", "每个可选训练频率和器械范围都必须存在不超过四十五分钟的有效模板", "内容不足时必须返回候选不足，不得放宽四十八小时恢复窗口或重复动作"],
     "sourceReferences": [{ "id": "ACSM_PTR_11", "title": "ACSM Position Stand for Healthy Adults", "url": "https://pubmed.ncbi.nlm.nih.gov/19204579/", "accessedAt": "2026-07-23", "usage": "用于模板频率和训练范围候选，不用于个体绝对重量" }],
     "activation": { "enabled": true, "environments": ["local", "test", "staging-experience"] },
-    "digestSha256": "e3b967fe3b4b7397c20c9aea8aad1e6cad21c0a65196c6de469d1457bc91f9e7"
+    "digestSha256": "58b74e0f72eec5a1d730453230f13c301bd6ac2a00b35585db2a333c19aaa244"
   },
   "templates": [
     {
@@ -273,25 +273,25 @@
     {
       "code": "BODYWEIGHT_4_DAY_V1", "name": "基础自重每周四练", "audience": "ADULT_GENERAL_FITNESS_NON_MEDICAL", "sessionsPerWeek": 4,
       "days": [
-        { "code": "BODYWEIGHT_A", "name": "自重下肢与髋部 A", "exercises": [
+        { "code": "BODYWEIGHT_A", "name": "自重下肢与髋部 A", "focus": "LOWER", "exercises": [
           { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "PRISONER_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_B", "name": "自重上肢与躯干 B", "exercises": [
+        { "code": "BODYWEIGHT_B", "name": "自重上肢与躯干 B", "focus": "BODYWEIGHT_UPPER", "exercises": [
           { "exerciseCode": "INCLINE_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BENT_KNEE_PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "DEAD_BUG", "order": 4, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_C", "name": "自重下肢与髋部 C", "exercises": [
+        { "code": "BODYWEIGHT_C", "name": "自重下肢与髋部 C", "focus": "LOWER", "exercises": [
           { "exerciseCode": "PRISONER_SQUAT", "order": 1, "workSets": 3, "repRange": { "min": 10, "max": 15 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_HIP_HINGE", "order": 2, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "BODYWEIGHT_SQUAT", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "STANDING_WALL_CALF_RAISE", "order": 4, "workSets": 2, "repRange": { "min": 10, "max": 15 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" }
         ]},
-        { "code": "BODYWEIGHT_D", "name": "自重上肢与躯干 D", "exercises": [
+        { "code": "BODYWEIGHT_D", "name": "自重上肢与躯干 D", "focus": "BODYWEIGHT_UPPER", "exercises": [
           { "exerciseCode": "WALL_PUSH_UP", "order": 1, "workSets": 3, "repRange": { "min": 8, "max": 12 }, "restSeconds": 90, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "FLOOR_PRONE_COBRA", "order": 2, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },
           { "exerciseCode": "PUSH_UP", "order": 3, "workSets": 2, "repRange": { "min": 8, "max": 12 }, "restSeconds": 60, "initialWeightState": "BODYWEIGHT" },

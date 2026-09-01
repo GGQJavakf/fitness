@@ -233,7 +233,8 @@ public final class PlanVersionService {
                 base.templateCode(), base.trainingSplit(), proposed.name(), proposed.days(), proposed.locks(),
                 base.presetCode(), base.presetVersion(),
                 fixedPreset ? base.executionRules() : proposed.executionRules(),
-                fixedPreset ? base.progressionRules() : proposed.progressionRules());
+                fixedPreset ? base.progressionRules() : proposed.progressionRules(),
+                fixedPreset ? base.movementImpactConstraint() : proposed.movementImpactConstraint());
     }
 
     private static String fingerprint(

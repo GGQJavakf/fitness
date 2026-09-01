@@ -9,17 +9,20 @@ function source(path: string): string {
 }
 
 describe('release readiness user surfaces', () => {
-  it('registers the exercise guide subpackage and both user-facing routes', () => {
+  it('registers exercise guidance and live workout routes in their owning feature packages', () => {
     const config = source('src/app.config.ts')
 
     expect(config).toContain("root: 'subpackages/exercise-guide'")
     expect(config).toContain("'pages/detail/index'")
+    expect(config).toContain("root: 'subpackages/workout'")
     expect(config).toContain("'pages/workout-session/index'")
   })
 
   it('registers the post-onboarding exclusion preference route', () => {
     const config = source('src/app.config.ts')
 
-    expect(config).toContain('presentation/pages/exercise-preferences/index')
+    expect(config).toContain("root: 'subpackages/account'")
+    expect(config).toContain("'pages/exercise-preferences/index'")
+    expect(config).not.toContain('presentation/pages/exercise-preferences/index')
   })
 })

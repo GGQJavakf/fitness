@@ -174,6 +174,16 @@ components:
           minLength: 32
           maxLength: 256
           description: 仅在服务端返回 RECOVERY_CONFIRMATION_REQUIRED 后由用户明确确认继续时原样回传。
+        activeWorkoutReplacement:
+          $ref: '#/components/schemas/ActiveWorkoutReplacementRequest'
+    ActiveWorkoutReplacementRequest:
+      type: object
+      additionalProperties: false
+      required: [sessionId, expectedVersion]
+      properties:
+        sessionId: {type: string, format: uuid}
+        expectedVersion: {$ref: './common.yaml#/components/schemas/ExpectedVersion'}
+      description: 在同一事务内提前结束指定活动训练、创建并激活本次新训练；失败时两者均不变。
     UpdateSessionStatusRequest:
       type: object
       additionalProperties: false

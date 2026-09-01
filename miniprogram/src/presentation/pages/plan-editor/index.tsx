@@ -8,12 +8,9 @@ import type {
 } from '../../../application/models'
 import { ApplicationError } from '../../../application/errors'
 import { numericFieldPath, type EditableNumericField, type PlanEditorState } from '../../../application/planEditor'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getPlanningApplication } from '../../../platform/weapp/featureRoots/planningCompositionRoot'
 import { exerciseDisplayName, planFieldDisplayName, planIssueDisplayMessage } from '../../copy'
 
-import './index.scss'
-
-const application = getWeappApplication()
 const fieldLabels: Record<EditableNumericField, string> = {
   workSets: '工作组',
   repMin: '最少次数',
@@ -98,6 +95,7 @@ function editableValueError(field: EditableNumericField, raw: string): string {
 }
 
 export default function PlanEditorPage() {
+  const application = getPlanningApplication()
   const [editor, setEditor] = useState<PlanEditorState | null>(() => application.getPlanEditor())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -205,19 +203,11 @@ export default function PlanEditorPage() {
     setBusy(true)
     setError('')
     try {
-      const current = await application.saveEditor()
+      const current = await application.saveEditorAndOpenPlan(previousVersion)
+      if (!current) return
       setEditor(current)
       setRawValues({})
       setFieldErrors({})
-      if (current.baseVersion > previousVersion
-        && !current.warningConfirmationToken
-        && !current.conflict
-        && !current.validationResult.validationIssues.some((issue) => issue.severity === 'ERROR')) {
-        await application.navigation.replace('PLAN')
-      }
-      if (current.baseVersion > previousVersion) {
-        application.telemetry.track('plan_confirmed', { versionNumber: current.baseVersion })
-      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '操作失败，请稍后重试')
     } finally {

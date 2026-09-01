@@ -471,6 +471,229 @@ describe('workout recovery', () => {
     expect(stored!.lastServerVersion).toBe(5)
   })
 
+  it('restores an offline-pending draft without waiting for or starting remote synchronization', async () => {
+    let stored: WorkoutDraft | null = null
+    let synchronizationAttempts = 0
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      {
+        syncWorkoutOperations: async () => {
+          synchronizationAttempts += 1
+          throw new Error('resumeLocal must not synchronize')
+        },
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'local-first-resume-session', planVersionId: 'plan-version',
+      serverSessionId: 'session-id', serverVersion: 2,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'local-first-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const recovered = await service.resumeLocal(state)
+
+    expect(synchronizationAttempts).toBe(0)
+    expect(recovered.state.syncStatus).toBe('OFFLINE_PENDING')
+    expect(stored!.queue.operations).toHaveLength(1)
+  })
+
+  it('keeps local interaction and explicit abandonment responsive while background synchronization is slow', async () => {
+    let stored: WorkoutDraft | null = null
+    let releaseSynchronization!: () => void
+    let reportSynchronizationStarted!: () => void
+    const synchronizationGate = new Promise<void>((resolve) => { releaseSynchronization = resolve })
+    const synchronizationStarted = new Promise<void>((resolve) => { reportSynchronizationStarted = resolve })
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      {
+        syncWorkoutOperations: async (operations) => {
+          reportSynchronizationStarted()
+          await synchronizationGate
+          return operations.map((operation) => ({
+            clientOperationSeq: operation.clientOperationSeq,
+            status: 'APPLIED' as const,
+          }))
+        },
+      },
+      {
+        completeWorkout: async (sessionId) => ({
+          session: { id: sessionId, status: 'ABORTED', version: 4 },
+          completedWorkSets: 1,
+          complete: false,
+          automaticProgressionEligible: false,
+        }),
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'non-blocking-background-sync', planVersionId: 'plan-version',
+      serverSessionId: 'session-id', serverVersion: 2,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'non-blocking-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const synchronization = service.flush(state)
+    await synchronizationStarted
+    const adjustment = service.adjustRest(state, 15)
+    const adjustmentOutcome = await Promise.race([
+      adjustment.then(() => 'LOCAL' as const),
+      new Promise<'BLOCKED'>((resolve) => setTimeout(() => resolve('BLOCKED'), 25)),
+    ])
+    const abandonment = service.abandonActive(state)
+    const abandonmentOutcome = await Promise.race([
+      abandonment.then(() => 'LOCAL' as const),
+      new Promise<'BLOCKED'>((resolve) => setTimeout(() => resolve('BLOCKED'), 25)),
+    ])
+
+    releaseSynchronization()
+    await Promise.all([synchronization, adjustment, abandonment])
+    expect(adjustmentOutcome).toBe('LOCAL')
+    expect(abandonmentOutcome).toBe('LOCAL')
+    expect(stored).toBeNull()
+  })
+
+  it('replaces an active workout with one authoritative start command and no legacy completion request', async () => {
+    let stored: WorkoutDraft | null = null
+    const requests: unknown[] = []
+    let legacyCompletions = 0
+    const service = new WorkoutFlowService(
+      {
+        loadActive: async () => stored,
+        save: async (draft) => { stored = draft },
+        replaceActive: async (draftId, replacement) => {
+          if (stored?.draftId !== draftId) throw new Error('stale draft')
+          stored = replacement
+        },
+        clearActive: async (draftId) => {
+          if (stored?.draftId === draftId) stored = null
+        },
+      },
+      { nowUtc: () => '2026-08-29T08:00:00.000Z' },
+      undefined,
+      {
+        completeWorkout: async () => {
+          legacyCompletions += 1
+          throw new Error('legacy completion must not run')
+        },
+      },
+      undefined,
+      {
+        startWorkoutSession: async (request) => {
+          requests.push(request)
+          return {
+            id: 'replacement-server-session',
+            planVersionId: 'replacement-plan-version',
+            version: 1,
+            startedAt: '2026-08-29T08:00:01.000Z',
+            exercises: [{
+              id: 'replacement-exercise',
+              exerciseCode: 'ROW',
+              exerciseName: '划船',
+              prescription: {
+                workSets: 2,
+                repMin: 8,
+                repMax: 10,
+                restSeconds: 60,
+                weightStatus: 'NEEDS_CALIBRATION' as const,
+              },
+            }],
+          }
+        },
+      },
+    )
+    const active = await service.start({
+      clientSessionKey: 'active-local-session',
+      planVersionId: 'active-plan-version',
+      serverSessionId: 'active-server-session',
+      serverVersion: 4,
+      exercises: [{
+        snapshotExerciseKey: 'active-exercise', exerciseCode: 'SQUAT', name: '深蹲',
+        targetWorkSets: 2, targetReps: 8, restSeconds: 60,
+      }],
+    })
+
+    const result = await service.replaceActiveAndStart(active, {
+      clientSessionKey: 'replacement-local-session',
+      planId: 'plan-id',
+      planVersionNo: 2,
+      planDayId: 'DAY_B',
+    })
+
+    expect(result).toMatchObject({
+      kind: 'STARTED',
+      state: { clientSessionKey: 'replacement-local-session' },
+    })
+    expect(requests).toEqual([{
+      clientSessionKey: 'replacement-local-session',
+      planId: 'plan-id',
+      planVersionNo: 2,
+      planDayId: 'DAY_B',
+      recoveryConfirmationToken: undefined,
+      activeWorkoutReplacement: {
+        sessionId: 'active-server-session',
+        expectedVersion: 4,
+      },
+    }])
+    expect(legacyCompletions).toBe(0)
+    expect(stored).toMatchObject({
+      clientSessionKey: 'replacement-local-session',
+      sessionId: 'replacement-server-session',
+      lastServerVersion: 1,
+    })
+  })
+
+  it('preserves the active local draft when the atomic replacement request fails', async () => {
+    let stored: WorkoutDraft | null = null
+    const service = new WorkoutFlowService(
+      {
+        loadActive: async () => stored,
+        save: async (draft) => { stored = draft },
+        replaceActive: async (draftId, replacement) => {
+          if (stored?.draftId !== draftId) throw new Error('stale draft')
+          stored = replacement
+        },
+        clearActive: async () => { stored = null },
+      },
+      { nowUtc: () => '2026-08-29T08:00:00.000Z' },
+      undefined,
+      undefined,
+      undefined,
+      { startWorkoutSession: async () => { throw new Error('offline') } },
+    )
+    const active = await service.start({
+      clientSessionKey: 'preserved-active-session',
+      planVersionId: 'active-plan-version',
+      serverSessionId: 'active-server-session',
+      serverVersion: 4,
+      exercises: [{
+        snapshotExerciseKey: 'active-exercise', exerciseCode: 'SQUAT', name: '深蹲',
+        targetWorkSets: 2, targetReps: 8, restSeconds: 60,
+      }],
+    })
+
+    await expect(service.replaceActiveAndStart(active, {
+      clientSessionKey: 'failed-replacement-session',
+      planId: 'plan-id',
+      planVersionNo: 2,
+      planDayId: 'DAY_B',
+    })).rejects.toThrow('offline')
+
+    expect(stored).toMatchObject({
+      clientSessionKey: 'preserved-active-session',
+      sessionId: 'active-server-session',
+      lastServerVersion: 4,
+    })
+  })
+
   it('does not let a stale synchronization result overwrite newer workout facts', async () => {
     let stored: WorkoutDraft | null = null
     let releaseSynchronization!: () => void
@@ -520,6 +743,50 @@ describe('workout recovery', () => {
     expect(restored?.exercises[0].sets).toHaveLength(2)
     expect(restored?.currentSetIndex).toBe(2)
     expect((stored as WorkoutDraft | null)?.queue.operations).toHaveLength(1)
+  })
+
+  it('serializes background synchronization flights without sending the same pending operation twice', async () => {
+    let stored: WorkoutDraft | null = null
+    let releaseSynchronization!: () => void
+    let reportSynchronizationStarted!: () => void
+    let synchronizationAttempts = 0
+    const synchronizationGate = new Promise<void>((resolve) => { releaseSynchronization = resolve })
+    const synchronizationStarted = new Promise<void>((resolve) => { reportSynchronizationStarted = resolve })
+    const service = new WorkoutFlowService(
+      { loadActive: async () => stored, save: async (draft) => { stored = draft }, clearActive: async () => { stored = null } },
+      { nowUtc: () => '2026-07-24T09:00:30.000Z' },
+      {
+        syncWorkoutOperations: async (operations) => {
+          synchronizationAttempts += 1
+          reportSynchronizationStarted()
+          await synchronizationGate
+          return operations.map((operation) => ({
+            clientOperationSeq: operation.clientOperationSeq,
+            status: 'APPLIED' as const,
+          }))
+        },
+      },
+    )
+    let state = await service.start({
+      clientSessionKey: 'serialized-sync-flight', planVersionId: 'plan-version',
+      serverSessionId: 'session-id', serverVersion: 2,
+      exercises: [{ snapshotExerciseKey: 'exercise-id', exerciseCode: 'ROW', name: '划船', targetWorkSets: 2, targetReps: 8, restSeconds: 60 }],
+    })
+    state = await service.beginWorkSets(await service.completeGeneralWarmup(state))
+    state = await service.recordSet(state, {
+      clientSetKey: 'serialized-sync-set-1', exerciseIndex: 0, setType: 'WORK', status: 'COMPLETED',
+      actualWeightKg: 25, actualReps: 8,
+    })
+
+    const first = service.flush(state)
+    await synchronizationStarted
+    const second = service.flush(state)
+    expect(synchronizationAttempts).toBe(1)
+
+    releaseSynchronization()
+    await Promise.all([first, second])
+    expect(synchronizationAttempts).toBe(1)
+    expect(stored!.queue.operations).toHaveLength(0)
   })
 
   it('keeps the restored draft usable when foreground synchronization is offline', async () => {

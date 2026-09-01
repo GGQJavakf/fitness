@@ -434,6 +434,50 @@ describe('workout session API lifecycle', () => {
       body: { status: 'IN_PROGRESS', expectedVersion: 0 },
     })
   })
+
+  it('replaces the active workout with one POST when the server returns the started session', async () => {
+    const requests: TransportRequest[] = []
+    const started = {
+      id: '00000000-0000-4000-8000-000000000011',
+      planId: '00000000-0000-4000-8000-000000000020',
+      planVersionId: '00000000-0000-4000-8000-000000000031',
+      planVersionNo: 2,
+      planDayId: 'DAY_2',
+      status: 'IN_PROGRESS',
+      startedAt: '2026-08-29T08:00:00Z',
+      version: 1,
+      exercises: [],
+    }
+    const transport: TransportPort = {
+      async request<T>(request: TransportRequest): Promise<TransportResponse<T>> {
+        requests.push(request)
+        return { statusCode: 201, data: { data: started } as T }
+      },
+    }
+    const api = new FitnessApiClient('http://127.0.0.1:8080', transport, testSessions())
+
+    await expect(api.startWorkoutSession({
+      clientSessionKey: 'replacement-client-session-0002',
+      planId: started.planId,
+      planVersionNo: 2,
+      planDayId: 'DAY_2',
+      activeWorkoutReplacement: {
+        sessionId: '00000000-0000-4000-8000-000000000010',
+        expectedVersion: 4,
+      },
+    })).resolves.toMatchObject({ status: 'IN_PROGRESS', version: 1 })
+
+    expect(requests).toEqual([expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ 'Idempotency-Key': 'replacement-client-session-0002' }),
+      body: expect.objectContaining({
+        activeWorkoutReplacement: {
+          sessionId: '00000000-0000-4000-8000-000000000010',
+          expectedVersion: 4,
+        },
+      }),
+    })])
+  })
 })
 
 function testSessions() {

@@ -61,6 +61,18 @@ public final class InMemoryWarningConfirmationStore implements WarningConfirmati
         return true;
     }
 
+    /** Opaque copy used by the local atomic candidate-commit transaction adapter. */
+    public synchronized Snapshot snapshot() {
+        return new Snapshot(entries);
+    }
+
+    /** Restores warning consumption when another part of the local transaction fails. */
+    public synchronized void restore(Snapshot snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+        entries.clear();
+        entries.putAll(snapshot.entries);
+    }
+
     private void removeExpired(Instant now) {
         entries.entrySet().removeIf(entry -> !entry.getValue().expiresAt().isAfter(now));
     }
@@ -81,4 +93,12 @@ public final class InMemoryWarningConfirmationStore implements WarningConfirmati
             AuthenticatedUserId user,
             String fingerprint,
             Instant expiresAt) {}
+
+    public static final class Snapshot {
+        private final Map<String, PendingWarning> entries;
+
+        private Snapshot(Map<String, PendingWarning> entries) {
+            this.entries = new HashMap<>(entries);
+        }
+    }
 }

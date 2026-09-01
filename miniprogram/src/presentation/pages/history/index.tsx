@@ -4,19 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import { toWorkoutHistoryCard, type WorkoutHistoryCard } from '../../../application/history'
 import {
   toProgressionCard,
-  progressionApplyIdempotencyKey,
   type ProgressionRecommendationData,
 } from '../../../application/progression'
 import { ApplicationError } from '../../../application/errors'
 import { summarizeWorkout } from '../../../application/workoutFlow'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getProgressApplication } from '../../../platform/weapp/featureRoots/progressCompositionRoot'
 import MainNavigation from '../../components/main-navigation'
 import ProgressionCard from '../../components/progression-card'
 import { trainingDayDisplayName } from '../../copy'
-
-import './index.scss'
-
-const application = getWeappApplication()
 
 function isUncertainRecommendationOutcome(error: unknown): boolean {
   return error instanceof ApplicationError
@@ -24,6 +19,7 @@ function isUncertainRecommendationOutcome(error: unknown): boolean {
 }
 
 export default function HistoryPage() {
+  const application = getProgressApplication()
   const [items, setItems] = useState<WorkoutHistoryCard[]>([])
   const [cursor, setCursor] = useState<string | undefined>()
   const [message, setMessage] = useState('正在读取训练记录…')
@@ -35,11 +31,6 @@ export default function HistoryPage() {
   const [recommendationMessage, setRecommendationMessage] = useState('正在分析近期表现…')
   const [busyRecommendationId, setBusyRecommendationId] = useState<string>()
   const recommendationActionActiveRef = useRef(false)
-  const recommendationApplyAttempts = useRef(new Map<string, {
-    expectedVersion: number
-    acceptedWeightKg: number
-    idempotencyKey: string
-  }>()).current
   const historyRequestActiveRef = useRef(false)
   const historyRequestIdRef = useRef(0)
   const recommendationRequestActiveRef = useRef(false)
@@ -145,26 +136,9 @@ export default function HistoryPage() {
     const lifecycleEpoch = lifecycleEpochRef.current
     setBusyRecommendationId(id)
     try {
-      let attempt = recommendationApplyAttempts.get(id)
-      if (!attempt) {
-        const plan = await application.loadActivePlan()
-        if (!plan) throw new Error('active plan is missing')
-        attempt = {
-          expectedVersion: plan.activeVersion.versionNumber,
-          acceptedWeightKg,
-          idempotencyKey: progressionApplyIdempotencyKey(
-            id,
-            acceptedWeightKg,
-            plan.activeVersion.versionNumber,
-          ),
-        }
-        recommendationApplyAttempts.set(id, attempt)
-      }
-      await application.applyProgressionRecommendation(
+      await application.applyProgressionRecommendationForActivePlan(
         id,
-        attempt.expectedVersion,
-        attempt.acceptedWeightKg,
-        attempt.idempotencyKey,
+        acceptedWeightKg,
       )
       if (!mountedRef.current || lifecycleEpoch !== lifecycleEpochRef.current) return
       const applied = recommendations.find((item) => item.id === id)
@@ -173,11 +147,9 @@ export default function HistoryPage() {
         modified: Boolean(applied && acceptedWeightKg !== applied.recommendedWeightKg),
       })
       setRecommendations((current) => current.filter((item) => item.id !== id))
-      recommendationApplyAttempts.delete(id)
       setRecommendationMessage('建议已采用，新的计划从下一次训练开始生效。')
     } catch (error) {
       const uncertainOutcome = isUncertainRecommendationOutcome(error)
-      if (!uncertainOutcome) recommendationApplyAttempts.delete(id)
       if (!mountedRef.current || lifecycleEpoch !== lifecycleEpochRef.current) return
       setRecommendationMessage(error instanceof ApplicationError && error.code === 'VERSION_CONFLICT'
         ? '计划已在其他位置更新，请重试，系统会按最新版本重新提交。'

@@ -2,8 +2,6 @@ import { Button, View } from '@tarojs/components'
 
 import type { PageDestination } from '../../../application/navigation'
 
-import './index.scss'
-
 type MainDestination = Extract<PageDestination, 'PLAN' | 'HISTORY' | 'MY'>
 
 interface MainNavigationProps {

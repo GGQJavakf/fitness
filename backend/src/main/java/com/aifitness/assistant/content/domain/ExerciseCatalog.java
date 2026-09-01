@@ -27,7 +27,27 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
             String rightsStatus,
             boolean active,
             Image image,
-            List<Alternative> alternatives) {
+            List<Alternative> alternatives,
+            ImpactClass impactClass) {
+
+        public Exercise(
+                String code,
+                String name,
+                String plainLanguage,
+                String movementPattern,
+                String difficulty,
+                Set<String> equipment,
+                Set<String> primaryMuscles,
+                List<String> instructions,
+                List<String> safetyCues,
+                String rightsStatus,
+                boolean active,
+                Image image,
+                List<Alternative> alternatives) {
+            this(
+                    code, name, plainLanguage, movementPattern, difficulty, equipment, primaryMuscles,
+                    instructions, safetyCues, rightsStatus, active, image, alternatives, null);
+        }
 
         private static final Pattern CODE = Pattern.compile("[A-Z][A-Z0-9_]{0,63}");
 
@@ -64,7 +84,7 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
 
         public Exercise withAlternatives(List<Alternative> eligibleAlternatives) {
             return new Exercise(code, name, plainLanguage, movementPattern, difficulty, equipment, primaryMuscles,
-                    instructions, safetyCues, rightsStatus, active, image, eligibleAlternatives);
+                    instructions, safetyCues, rightsStatus, active, image, eligibleAlternatives, impactClass);
         }
 
         private static List<String> requiredTexts(List<String> values, String field) {
@@ -86,6 +106,11 @@ public record ExerciseCatalog(ReleaseMetadata metadata, List<Exercise> exercises
                 throw new IllegalArgumentException(field + " is invalid");
             }
         }
+    }
+
+    public enum ImpactClass {
+        NO_JUMP,
+        JUMPING
     }
 
     public record Image(String primaryRef, String fallbackRef) {

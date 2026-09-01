@@ -49,6 +49,27 @@ describe('R4 workout lifecycle reliability', () => {
     expect(starter.startWorkoutSession).not.toHaveBeenCalled()
   })
 
+  it('re-enters the same durable start intent without asking the user to recover it again', async () => {
+    const store = memoryStore()
+    const starter = {
+      startWorkoutSession: vi.fn().mockResolvedValue(serverSession('unused-server-session')),
+    }
+    const service = new WorkoutFlowService(
+      store,
+      fixedClock(),
+      undefined,
+      undefined,
+      undefined,
+      starter,
+    )
+    await service.start(localStartInput('same-session'))
+
+    const resumed = await service.startOrResume(startRequest('same-session'))
+
+    expect(resumed.kind).toBe('RESUMED')
+    expect(starter.startWorkoutSession).not.toHaveBeenCalled()
+  })
+
   it('creates the server session only after startOrResume observes no active draft', async () => {
     const store = memoryStore()
     const starter = {

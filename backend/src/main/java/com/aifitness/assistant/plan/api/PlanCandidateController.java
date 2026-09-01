@@ -47,7 +47,7 @@ public final class PlanCandidateController {
 
     @GetMapping("/presets")
     public ApiResponse<PresetListData> presets(AuthenticatedUserId user) {
-        return response(new PresetListData(candidates.listPresets()));
+        return response(new PresetListData(candidates.listPresets(user)));
     }
 
     @PostMapping("/candidates")

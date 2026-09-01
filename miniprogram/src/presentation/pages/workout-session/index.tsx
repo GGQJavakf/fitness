@@ -15,22 +15,23 @@ import {
 } from '../../../application/workoutFlow'
 import {
   DEFAULT_FORMAL_WEIGHT_KG,
-  chooseAutomaticWorkoutWeight,
 } from '../../../application/automaticWorkoutWeight'
 import type { ExerciseReplacementCandidate } from '../../../application/ports/WorkoutReplacementPort'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getWorkoutApplication } from '../../../platform/weapp/featureRoots/workoutCompositionRoot'
+import type {
+  WorkoutRecordRecoveryResult,
+  WorkoutSessionLaunchContext,
+  WorkoutSynchronizationResult,
+} from '../../../platform/weapp/featureRoots/workoutGenerationOperations'
 import { useWeappDidHide, useWeappDidShow } from '../../../platform/weapp/lifecycle'
-import ExerciseMotionGuide from '../../../subpackages/exercise-guide/components/exercise-motion-guide'
 import {
   resolveExerciseGuidance,
   toExerciseGuidance,
   type ExerciseGuidance,
 } from '../../../subpackages/exercise-guide/exercise-guidance'
+import WorkoutExerciseMotionGuide from '../../../subpackages/workout/components/workout-exercise-motion-guide'
 import { toWeightInputValue } from '../../workoutWeightInput'
 
-import './index.scss'
-
-const application = getWeappApplication()
 const rirOptions: ReadonlyArray<{ value: WorkoutRir; label: string }> = [
   { value: '0', label: '已到极限' },
   { value: '1', label: '还能 1 次' },
@@ -48,6 +49,10 @@ const safetyOptions: ReadonlyArray<{ value: WorkoutSafetyFlag; label: string }> 
 type WorkoutInputError = {
   readonly field: 'weight' | 'reps' | 'action'
   readonly message: string
+}
+
+function isUserGenerationInvalidated(error: unknown): boolean {
+  return error instanceof ApplicationError && error.name === 'UserGenerationInvalidatedError'
 }
 
 function replacementFailureMessage(
@@ -88,6 +93,61 @@ function recordedSetMessage(input: {
     : '本组已保存在本地，继续完成超级组的下一个动作。'
 }
 
+type WorkoutSynchronizationSource =
+  | 'START'
+  | 'RESUME'
+  | 'RECORD_RECOVERY'
+  | 'REST_ADJUSTMENT'
+  | 'RECORDED_SET'
+
+const synchronizationFeedback: Readonly<Record<WorkoutSynchronizationSource, {
+  readonly failed: string
+  readonly conflict: string
+  readonly rejected: string
+  readonly synchronized?: string
+}>> = {
+  START: {
+    failed: '训练已开始；当前网络不可用，未同步记录仍安全保留。',
+    conflict: '训练已开始；发现两份不同记录，请在同步页确认。',
+    rejected: '训练已开始，但服务器未接受部分记录；请检查后重试同步。',
+    synchronized: '训练已开始，未同步记录已完成后台补传。',
+  },
+  RESUME: {
+    failed: '训练已恢复；当前网络不可用，未同步记录仍安全保留。',
+    conflict: '训练已恢复；发现两份不同记录，请在同步页确认。',
+    rejected: '训练已恢复，但服务器未接受部分记录；请检查后重试同步。',
+    synchronized: '训练已恢复，未同步记录已完成后台补传。',
+  },
+  RECORD_RECOVERY: {
+    failed: '训练草稿已恢复；当前网络不可用，未同步记录仍安全保留。',
+    conflict: '训练草稿已恢复；发现两份不同记录，请在同步页确认。',
+    rejected: '训练草稿已恢复，但服务器未接受部分记录；请检查后重试同步。',
+    synchronized: '训练草稿已恢复，未同步记录已完成后台补传。',
+  },
+  REST_ADJUSTMENT: {
+    failed: '休息时间已调整并保存在本地；未同步记录稍后自动补传。',
+    conflict: '休息时间已调整；训练记录存在冲突，请在同步页确认。',
+    rejected: '休息时间已调整，但服务器未接受部分记录；请检查后重试同步。',
+    synchronized: '休息时间已调整，未同步记录已完成后台补传。',
+  },
+  RECORDED_SET: {
+    failed: '网络不可用，本组已保存在本地，稍后自动补传。',
+    conflict: '本组已保存在本地；发现两份不同记录，请在同步页确认。',
+    rejected: '本组已保存在本地，但服务器未接受该记录；请检查输入后重试同步。',
+  },
+}
+
+export function beginWorkoutSessionMount(
+  mountedRef: { current: boolean },
+  loadSession: () => Promise<void>,
+): () => void {
+  mountedRef.current = true
+  void loadSession()
+  return () => {
+    mountedRef.current = false
+  }
+}
+
 function optionalSetCue(conditionCode: string, active: boolean): string {
   if (active) return '这是本次已选择的唯一补充组；完成后直接结束训练。'
   if (conditionCode === 'TUESDAY_UNDER_42_GOOD_STATE') {
@@ -102,7 +162,42 @@ function repetitionTargetLabel(targetRepMin: number, targetRepMax: number): stri
     : `${targetRepMin}～${targetRepMax}`
 }
 
+function loadedSessionMessage(input: {
+  readonly state: WorkoutFlowState
+  readonly clockRollbackDetected: boolean
+  readonly freshLaunch: boolean
+}): string {
+  if (input.clockRollbackDetected) {
+    return '检测到设备时间回拨，计时已按最近可信时间校准。'
+  }
+  if (input.state.syncStatus === 'CONFLICT') {
+    return '发现两份不同的训练记录，请稍后确认保留方式。'
+  }
+  if (input.state.syncStatus === 'SYNC_REJECTED') {
+    return input.freshLaunch
+      ? '训练已开始，但有记录未被服务器接受；请检查后再结束训练。'
+      : '训练已恢复，但有记录未被服务器接受；请检查后再结束训练。'
+  }
+  if (input.state.syncStatus === 'OFFLINE_PENDING') {
+    return input.freshLaunch
+      ? '训练已开始，可以继续；未同步记录正在后台补传。'
+      : '训练已恢复，可以继续；未同步记录正在后台补传。'
+  }
+  if (!input.freshLaunch) return '训练已恢复，可以从上次位置继续。'
+  return input.state.warmup.phase === 'WORK'
+    ? '训练已开始，可以记录第一组。'
+    : '训练已开始，请按计划完成热身。'
+}
+
 export default function WorkoutSessionPage() {
+  const application = getWorkoutApplication()
+  const [initialLaunchContext] = useState<WorkoutSessionLaunchContext>(() => {
+    const launchMode = application.routeParameter('workoutLaunchMode')
+    const clientSessionKey = application.routeParameter('clientSessionKey')?.trim()
+    return launchMode === 'FRESH_START' && clientSessionKey
+      ? { launchMode: 'FRESH_START', clientSessionKey }
+      : { launchMode: 'RESUME_INTERRUPTED' }
+  })
   const [state, setState] = useState<WorkoutFlowState | null>(null)
   const [weight, setWeight] = useState('')
   const [weightHint, setWeightHint] = useState('')
@@ -110,13 +205,18 @@ export default function WorkoutSessionPage() {
   const [rir, setRir] = useState<WorkoutRir>('UNKNOWN')
   const [remaining, setRemaining] = useState(0)
   const [warmupRemaining, setWarmupRemaining] = useState(0)
-  const [message, setMessage] = useState('正在恢复训练草稿…')
+  const [message, setMessage] = useState(
+    initialLaunchContext.launchMode === 'FRESH_START'
+      ? '正在打开新训练…'
+      : '正在恢复训练草稿…',
+  )
   const [replacements, setReplacements] = useState<readonly ExerciseReplacementCandidate[]>([])
   const [recording, setRecording] = useState(false)
   const [recoveryRequired, setRecoveryRequired] = useState(false)
   const [showEffort, setShowEffort] = useState(false)
   const [showWeightEditor, setShowWeightEditor] = useState(false)
   const [showSafetyChoices, setShowSafetyChoices] = useState(false)
+  const [showMotionGuide, setShowMotionGuide] = useState(false)
   const [inputError, setInputError] = useState<WorkoutInputError | null>(null)
   const [exerciseContent, setExerciseContent] = useState<ExerciseGuidance | null>(null)
   const [exerciseContentStatus, setExerciseContentStatus] = useState<'IDLE' | 'LOADING' | 'LOCAL' | 'FAILED'>('IDLE')
@@ -127,20 +227,34 @@ export default function WorkoutSessionPage() {
   const weightSuggestionRequestRef = useRef(0)
   const sessionLoadInFlightRef = useRef(false)
   const sessionLoadRequestRef = useRef(0)
+  const launchContextRef = useRef<WorkoutSessionLaunchContext>(initialLaunchContext)
+  const pageHiddenRef = useRef(false)
   const mountedRef = useRef(true)
 
   async function loadSession(): Promise<void> {
     if (sessionLoadInFlightRef.current) return
     sessionLoadInFlightRef.current = true
     const requestId = ++sessionLoadRequestRef.current
+    const launchContext = launchContextRef.current
     setSessionLoadFailed(false)
-    setMessage('正在恢复训练草稿…')
+    setMessage(launchContext.launchMode === 'FRESH_START'
+      ? '正在打开新训练…'
+      : '正在恢复训练草稿…')
     try {
-      const loaded = await application.workouts.loadStatus()
+      const loaded = await application.loadWorkoutSession(launchContext)
       if (!mountedRef.current || requestId !== sessionLoadRequestRef.current) return
       if (loaded.kind === 'RECOVERY_REQUIRED') {
         setRecoveryRequired(true)
         setMessage('检测到损坏的训练草稿。登录状态仍然有效，请清理该草稿后返回计划。')
+        return
+      }
+      if (loaded.kind === 'SESSION_MISMATCH') {
+        setState(null)
+        setRecoveryRequired(false)
+        setRemaining(0)
+        setWarmupRemaining(0)
+        setReplacements([])
+        setMessage('新训练启动信息已过期；现有训练草稿未改动，请返回计划后重新开始。')
         return
       }
       if (loaded.kind === 'NONE') {
@@ -153,7 +267,11 @@ export default function WorkoutSessionPage() {
         return
       }
       setRecoveryRequired(false)
-      const resumed = await application.workouts.resume(loaded.state)
+      const resumed = loaded.resumed
+      launchContextRef.current = {
+        launchMode: 'RESUME_INTERRUPTED',
+        clientSessionKey: resumed.state.clientSessionKey,
+      }
       if (!mountedRef.current || requestId !== sessionLoadRequestRef.current) return
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
@@ -162,20 +280,23 @@ export default function WorkoutSessionPage() {
         setMessage('安全信号已保存在本地。请立即停止训练并按上方提示处理。')
         return
       }
-      if (isWorkoutPrescriptionFinished(resumed.state)) {
+      if (loaded.openSummary) {
         setMessage('本次训练已完成，正在整理训练总结。')
-        await application.navigation.replace('WORKOUT_SUMMARY')
+        await loaded.openSummary()
         return
       }
-      setMessage(resumed.clockRollbackDetected
-        ? '检测到设备时间回拨，计时已按最近可信时间校准。'
-        : resumed.syncFailed
-          ? '草稿已恢复；当前网络不可用，未同步记录仍安全保留。'
-          : resumed.state.syncStatus === 'CONFLICT'
-            ? '发现两份不同的训练记录，请稍后确认保留方式。'
-            : '训练已恢复，可以从上次位置继续。')
-      application.telemetry.track('workout_resumed', { source: 'foreground' })
-    } catch {
+      const freshLaunch = loaded.launchMode === 'FRESH_START'
+      setMessage(loadedSessionMessage({
+        state: resumed.state,
+        clockRollbackDetected: resumed.clockRollbackDetected,
+        freshLaunch,
+      }))
+      if (resumed.state.syncStatus === 'OFFLINE_PENDING') {
+        void monitorSynchronization(loaded.synchronization, freshLaunch ? 'START' : 'RESUME')
+      }
+      if (!freshLaunch) application.telemetry.track('workout_resumed', { source: 'foreground' })
+    } catch (error) {
+      if (isUserGenerationInvalidated(error)) return
       if (mountedRef.current && requestId === sessionLoadRequestRef.current) {
         setSessionLoadFailed(true)
         setMessage('训练记录读取失败，本地草稿未作改动，请重新读取。')
@@ -186,19 +307,18 @@ export default function WorkoutSessionPage() {
   }
 
   useWeappDidShow(() => {
+    if (!pageHiddenRef.current) return
+    pageHiddenRef.current = false
     void loadSession()
   })
 
   useWeappDidHide(() => {
+    pageHiddenRef.current = true
     if (state) application.telemetry.track('workout_paused', { reason: 'background' })
   })
 
   useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-      sessionLoadRequestRef.current += 1
-    }
+    return beginWorkoutSessionMount(mountedRef, loadSession)
   }, [])
 
   useEffect(() => {
@@ -237,6 +357,7 @@ export default function WorkoutSessionPage() {
     setReps(current ? String(current.targetRepMax) : '')
     setRir('UNKNOWN')
     setShowEffort(false)
+    setShowMotionGuide(false)
     setInputError(null)
   }, [
     state?.clientSessionKey,
@@ -267,23 +388,25 @@ export default function WorkoutSessionPage() {
     const plannedWeight = toWeightInputValue(current.targetWeightKg)
     setWeight(plannedWeight ?? String(DEFAULT_FORMAL_WEIGHT_KG))
     setWeightHint('')
-    void application.getExerciseTrend(current.exerciseCode)
-      .then((trend) => chooseAutomaticWorkoutWeight(trend.points, current.targetWeightKg))
-      .catch(() => chooseAutomaticWorkoutWeight([], current.targetWeightKg))
-      .then(async (automaticWeight) => {
+    void application.setAutomaticWorkoutWeight(
+      state,
+      state.currentExerciseIndex,
+      current.exerciseCode,
+      current.targetWeightKg,
+      () => active
+        && requestId === weightSuggestionRequestRef.current
+        && !weightDirtyRef.current,
+    )
+      .then((result) => {
+        if (!result) return
         if (!active
           || requestId !== weightSuggestionRequestRef.current
           || weightDirtyRef.current) return
-        setWeight(String(automaticWeight))
-        const updated = await application.workouts.setExerciseWeight(
-          state!, state!.currentExerciseIndex, automaticWeight,
-        )
-        if (!active
-          || requestId !== weightSuggestionRequestRef.current
-          || weightDirtyRef.current) return
-        setState(updated)
+        setWeight(String(result.weightKg))
+        setState(result.state)
       })
-      .catch(() => {
+      .catch((error) => {
+        if (isUserGenerationInvalidated(error)) return
         if (active && requestId === weightSuggestionRequestRef.current) {
           setInputError({ field: 'weight', message: '重量暂时无法自动保存，请点击下方按钮重试。' })
         }
@@ -351,11 +474,11 @@ export default function WorkoutSessionPage() {
       const updated = await application.workouts.setExerciseWeight(state, exerciseIndex, parsedWeight)
       setState(updated)
       setWeight(String(parsedWeight))
-      setWeightHint('已应用到本次训练后续正式组')
+      setWeightHint('已应用到本动作全部未完成正式组')
       setShowWeightEditor(false)
       setMessage(state.currentSetIndex > 0
-        ? '已调整本次训练后续正式组重量；之前完成的组保持原记录。'
-        : '正式组重量已确认，后续各组无需重复输入。')
+        ? '已统一调整本动作全部未完成组的重量；已完成组保持原记录。'
+        : '已统一设置本动作全部正式组的重量，后续各组无需重复输入。')
     } catch {
       setInputError({ field: 'action', message: '正式组重量保存失败，请稍后重试。' })
     } finally {
@@ -364,42 +487,60 @@ export default function WorkoutSessionPage() {
     }
   }
 
-  async function syncRecordedSet(updated: WorkoutFlowState): Promise<void> {
+  async function monitorSynchronization(
+    synchronization: Promise<WorkoutSynchronizationResult>,
+    source: WorkoutSynchronizationSource,
+  ): Promise<void> {
     const attempt = ++syncAttemptRef.current
+    const feedback = synchronizationFeedback[source]
     try {
-      const synchronized = await application.workouts.flush(updated)
-      if (attempt !== syncAttemptRef.current) return
+      const result = await synchronization
+      if (!mountedRef.current || attempt !== syncAttemptRef.current || result.kind === 'CANCELLED') return
+      if (result.kind === 'FAILED') {
+        setMessage(feedback.failed)
+        application.telemetry.track('sync_failed', { reason: 'network' })
+        return
+      }
+      const synchronized = result.state
       if (synchronized.syncStatus === 'CONFLICT') {
-        setMessage('本组已保存在本地；发现两份不同记录，请在同步页确认。')
+        setMessage(feedback.conflict)
         application.telemetry.track('sync_failed', { reason: 'conflict' })
       } else if (synchronized.syncStatus === 'SYNC_REJECTED') {
-        setMessage('本组已保存在本地，但服务器未接受该记录；请检查输入后重试同步。')
+        setMessage(feedback.rejected)
         application.telemetry.track('sync_failed', { reason: 'rejected' })
+      } else if (feedback.synchronized) {
+        setMessage(feedback.synchronized)
       }
-    } catch {
-      if (attempt !== syncAttemptRef.current) return
-      setMessage('网络不可用，本组已保存在本地，稍后自动补传。')
+    } catch (error) {
+      if (isUserGenerationInvalidated(error)) return
+      if (!mountedRef.current || attempt !== syncAttemptRef.current) return
+      setMessage(feedback.failed)
       application.telemetry.track('sync_failed', { reason: 'network' })
     }
   }
 
-  async function recoverAfterRecordFailure(failedState: WorkoutFlowState): Promise<boolean> {
-    const recovered = await application.workouts.load().catch(() => null)
-    if (!recovered || recovered.clientSessionKey !== failedState.clientSessionKey) return false
-    const resumed = await application.workouts.resume(recovered).catch(() => null)
-    const restored = resumed?.state ?? recovered
+  async function applyRecordRecovery(
+    recovery: WorkoutRecordRecoveryResult | null,
+  ): Promise<boolean> {
+    if (!recovery) return false
+    const restored = recovery.state
     setState(restored)
-    if (resumed) {
-      setRemaining(resumed.remainingSeconds)
-      setWarmupRemaining(resumed.warmupRemainingSeconds)
+    if (recovery.resumed) {
+      setRemaining(recovery.resumed.remainingSeconds)
+      setWarmupRemaining(recovery.resumed.warmupRemainingSeconds)
     }
     if (restored.safetyNotice) {
       setMessage('安全信号已保存在本地。请立即停止训练并按上方提示处理。')
       return true
     }
-    if (!isWorkoutPrescriptionFinished(restored)) return false
+    if (!isWorkoutPrescriptionFinished(restored)) {
+      if (restored.syncStatus === 'OFFLINE_PENDING' && recovery.synchronization) {
+        void monitorSynchronization(recovery.synchronization, 'RECORD_RECOVERY')
+      }
+      return false
+    }
     setMessage('本次训练已完成，正在整理训练总结。')
-    await application.navigation.replace('WORKOUT_SUMMARY')
+    await recovery.openSummary?.()
     return true
   }
 
@@ -439,7 +580,7 @@ export default function WorkoutSessionPage() {
       const clientSetKey = optionalSet
         ? `${state.clientSessionKey}-extra-${exercise.optionalSetRule!.exclusiveChoiceGroup}`
         : `${state.clientSessionKey}-${exerciseIndex}-${state.currentSetIndex}`
-      const updated = await application.workouts.recordSet(state, {
+      const outcome = await application.recordWorkoutSetAndSync(state, {
         clientSetKey,
         exerciseIndex,
         setType: optionalSet ? 'EXTRA' : 'WORK',
@@ -449,6 +590,20 @@ export default function WorkoutSessionPage() {
         rir: status === 'COMPLETED' ? rir : 'UNKNOWN',
         safetyFlag,
       })
+      if (outcome.kind === 'RECORD_FAILED') {
+        const finished = await applyRecordRecovery(outcome.recovery)
+        if (!finished) {
+          setInputError({
+            field: 'action',
+            message: outcome.error instanceof Error
+              && outcome.error.message === 'clientSetKey already identifies different workout facts'
+              ? '训练进度已从本地记录刷新，请核对当前组后重新提交。'
+              : '本组记录失败，请稍后重试；已填写内容仍保留。',
+          })
+        }
+        return
+      }
+      const updated = outcome.state
       setState(updated)
       setRemaining(updated.restTimer?.configuredDurationSeconds ?? 0)
       setRir('UNKNOWN')
@@ -464,18 +619,11 @@ export default function WorkoutSessionPage() {
         status,
         resting: Boolean(updated.restTimer),
       }))
-      void syncRecordedSet(updated)
-      if (prescriptionFinished && !safetyFlag) await application.navigation.replace('WORKOUT_SUMMARY')
+      void monitorSynchronization(outcome.synchronization, 'RECORDED_SET')
+      await outcome.openSummary?.()
     } catch (error) {
-      const finished = await recoverAfterRecordFailure(state)
-      if (!finished) {
-        setInputError({
-          field: 'action',
-          message: error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
-            ? '训练进度已从本地记录刷新，请核对当前组后重新提交。'
-            : '本组记录失败，请稍后重试；已填写内容仍保留。',
-        })
-      }
+      if (isUserGenerationInvalidated(error)) return
+      setInputError({ field: 'action', message: '本组记录失败，请稍后重试；已填写内容仍保留。' })
     } finally {
       recordingRef.current = false
       setRecording(false)
@@ -500,33 +648,37 @@ export default function WorkoutSessionPage() {
         setMessage('已进入正式组。')
         return
       }
-      const updated = await application.workouts.recordSet(state, {
+      const finalWarmupSet = remainingRampSets.length === 1
+      const outcome = await application.recordRampSetAndMaybeBeginWorkSets(state, {
         clientSetKey: `${state.clientSessionKey}-warmup-${count + 1}`,
         exerciseIndex,
         setType: 'WARMUP',
         status: 'COMPLETED',
         actualWeightKg: nextRampSet.weightKg,
         actualReps: nextRampSet.reps,
-      })
-      const finalWarmupSet = remainingRampSets.length === 1
-      const nextState = finalWarmupSet
-        ? await application.workouts.beginWorkSets(updated)
-        : updated
+      }, finalWarmupSet)
+      if (outcome.kind === 'RECORD_FAILED') {
+        const finished = await applyRecordRecovery(outcome.recovery)
+        if (!finished) {
+          setInputError({
+            field: 'action',
+            message: outcome.error instanceof Error
+              && outcome.error.message === 'clientSetKey already identifies different workout facts'
+              ? '训练进度已从本地记录刷新，请核对当前热身组后重新提交。'
+              : '热身组记录失败，请稍后重试；已填写内容仍保留。',
+          })
+        }
+        return
+      }
+      const nextState = outcome.state
       setState(nextState)
       setMessage(finalWarmupSet
         ? '热身完成，正式组重量已准备好。'
         : '热身完成，下一组训练安排中的热身重量已准备好。')
-      void syncRecordedSet(nextState)
+      void monitorSynchronization(outcome.synchronization, 'RECORDED_SET')
     } catch (error) {
-      const finished = await recoverAfterRecordFailure(state)
-      if (!finished) {
-        setInputError({
-          field: 'action',
-          message: error instanceof Error && error.message === 'clientSetKey already identifies different workout facts'
-            ? '训练进度已从本地记录刷新，请核对当前热身组后重新提交。'
-            : '热身组记录失败，请稍后重试；已填写内容仍保留。',
-        })
-      }
+      if (isUserGenerationInvalidated(error)) return
+      setInputError({ field: 'action', message: '热身组记录失败，请稍后重试；已填写内容仍保留。' })
     } finally {
       recordingRef.current = false
       setRecording(false)
@@ -574,11 +726,15 @@ export default function WorkoutSessionPage() {
     recordingRef.current = true
     setRecording(true)
     try {
-      const updated = await application.workouts.adjustRest(state, seconds)
-      const resumed = await application.workouts.resume(updated)
+      const recovery = await application.adjustAndResumeWorkout(state, seconds)
+      const resumed = recovery.resumed
       setState(resumed.state)
       setRemaining(resumed.remainingSeconds)
-    } catch {
+      if (resumed.state.syncStatus === 'OFFLINE_PENDING') {
+        void monitorSynchronization(recovery.synchronization, 'REST_ADJUSTMENT')
+      }
+    } catch (error) {
+      if (isUserGenerationInvalidated(error)) return
       setMessage('休息时间调整未保存，已保留原计时。')
     } finally {
       recordingRef.current = false
@@ -608,16 +764,22 @@ export default function WorkoutSessionPage() {
     setRecording(true)
     setInputError(null)
     try {
-      const updated = await application.workouts.chooseOptionalSet(state, choiceGroup, exerciseIndex)
+      const result = await application.chooseOptionalSetAndMaybeOpenSummary(
+        state,
+        choiceGroup,
+        exerciseIndex,
+      )
+      const updated = result.state
       setState(updated)
-      if (isWorkoutPrescriptionFinished(updated)) {
+      if (result.openSummary) {
         setMessage('正式训练已完成，正在整理训练总结。')
-        await application.navigation.replace('WORKOUT_SUMMARY')
+        await result.openSummary()
       } else {
         const selected = updated.exercises[updated.currentExerciseIndex]
         setMessage(`已选择 ${selected.name} 补充 1 组；另一项不会再增加。`)
       }
-    } catch {
+    } catch (error) {
+      if (isUserGenerationInvalidated(error)) return
       setInputError({ field: 'action', message: '补充组选择暂时无法保存，请重试。' })
     } finally {
       recordingRef.current = false
@@ -663,9 +825,9 @@ export default function WorkoutSessionPage() {
     recordingRef.current = true
     setRecording(true)
     try {
-      await application.workouts.discardCorruptedDraft()
-      await application.navigation.replace('PLAN')
-    } catch {
+      await application.discardCorruptedDraftAndOpenPlan()
+    } catch (error) {
+      if (isUserGenerationInvalidated(error)) return
       setMessage('草稿暂时无法清理，未创建新训练，请重试。')
     } finally {
       recordingRef.current = false
@@ -992,7 +1154,9 @@ export default function WorkoutSessionPage() {
         <Text className='page-hero__eyebrow'>
           {setEyebrow}
         </Text>
-        <Text className='page-hero__title'>{exercise?.name ?? '恢复训练'}</Text>
+        <Text className='page-hero__title'>
+          {exercise?.name ?? (initialLaunchContext.launchMode === 'FRESH_START' ? '开始训练' : '恢复训练')}
+        </Text>
         <Text className='page-hero__description'>
           {exercise
             ? `本组目标 ${repetitionTargetLabel(exercise.targetRepMin, exercise.targetRepMax)} 次${exercise.perSide ? '／侧' : ''}，按真实完成情况记录。`
@@ -1051,14 +1215,14 @@ export default function WorkoutSessionPage() {
               <View className='session-weight-setup'>
                 <View className='session-field-heading'>
                   <Text className='field-label'>实际重量</Text>
-                  <Text className='field-helper'>仅本次训练</Text>
+                  <Text className='field-helper'>应用到本动作全部未完成组</Text>
                 </View>
                 <Text className='field-helper'>
                   {exercise.sessionWeightKg === undefined
                     ? weightHint || '正在自动使用最近一次有效重量；没有历史时使用 2.5 KG。'
                     : state.currentSetIndex > 0
-                      ? '只影响后续组，已经完成的组保持原记录'
-                      : '本次训练的后续组会直接使用该重量，不会修改长期计划'}
+                      ? '本动作后续未完成组统一使用该重量；已完成组保留原记录'
+                      : '本动作全部正式组统一使用该重量，不修改其他动作和长期计划'}
                 </Text>
                 <View className='metric-input-wrap'>
                   <Input className='metric-input' type='digit' value={weight} placeholder='例如 12.5' onInput={(event) => updateWeight(event.detail.value)} />
@@ -1072,7 +1236,11 @@ export default function WorkoutSessionPage() {
                     disabled={recording}
                     onClick={() => void confirmFormalWeight(state.currentExerciseIndex)}
                   >
-                    {recording ? '正在保存' : '重试保存重量'}
+                    {recording
+                      ? '正在应用'
+                      : inputError?.field === 'weight'
+                        ? '重试应用重量'
+                        : '应用到本动作全部未完成组'}
                   </Button>
                   {exercise.sessionWeightKg !== undefined && (
                     <Button className='session-formal-weight__edit' onClick={() => setShowWeightEditor(false)}>取消</Button>
@@ -1098,10 +1266,10 @@ export default function WorkoutSessionPage() {
                         setWeight(String(exercise.sessionWeightKg))
                         setShowWeightEditor(true)
                       }}
-                    >仅本次调整</Button>
+                    >调整本动作重量</Button>
                   </View>
                   <Text className='session-formal-weight__value data-number'>{exercise.sessionWeightKg} KG</Text>
-                  <Text className='session-formal-weight__hint'>可按当天状态仅调整本次训练</Text>
+                  <Text className='session-formal-weight__hint'>后续未完成组统一使用此重量</Text>
                 </View>
               )}
               <View className='field-group session-reps-field'>
@@ -1186,13 +1354,34 @@ export default function WorkoutSessionPage() {
           </View>
 
           <View className='session-motion-section'>
-            <ExerciseMotionGuide
-              compact
-              exerciseCode={exercise.exerciseCode}
-              exerciseName={exercise.name}
-              primaryRef={exerciseContent?.primaryRef}
-              fallbackRef={exerciseContent?.fallbackRef}
-            />
+            {showMotionGuide ? (
+              <>
+                <WorkoutExerciseMotionGuide
+                  compact
+                  exerciseCode={exercise.exerciseCode}
+                  exerciseName={exercise.name}
+                  primaryRef={exerciseContent?.primaryRef}
+                  fallbackRef={exerciseContent?.fallbackRef}
+                />
+                <Button
+                  className='session-motion-guide-toggle'
+                  onClick={() => setShowMotionGuide(false)}
+                >收起动作示例</Button>
+              </>
+            ) : (
+              <View className='surface-card session-motion-opt-in'>
+                <View>
+                  <Text className='session-motion-opt-in__title'>动作示例按需加载</Text>
+                  <Text className='session-motion-opt-in__description'>
+                    训练草稿已可直接使用；需要图片时再加载，不影响当前组和计时。
+                  </Text>
+                </View>
+                <Button
+                  className='session-motion-guide-toggle'
+                  onClick={() => setShowMotionGuide(true)}
+                >加载动作示例</Button>
+              </View>
+            )}
             <View className='surface-card session-exercise-guidance'>
               <View className='session-exercise-guidance__section'>
                 <View className='session-exercise-guidance__heading'>

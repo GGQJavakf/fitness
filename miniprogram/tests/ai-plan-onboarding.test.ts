@@ -22,7 +22,7 @@ const draft: OnboardingDraft = {
   safetyAccepted: true,
   goal: 'GENERAL_FITNESS',
   experience: 'BEGINNER',
-  trainingSplit: 'UPPER_LOWER',
+  trainingSplit: 'FULL_BODY',
   weeklyFrequency: 2,
   sessionMinutes: 45,
   location: 'HOME',
@@ -34,7 +34,7 @@ const draft: OnboardingDraft = {
 
 const context = {
   profile: {
-    experience: 'BEGINNER', trainingSplit: 'UPPER_LOWER', goal: 'GENERAL_FITNESS', weeklyFrequency: 2,
+    experience: 'BEGINNER', trainingSplit: 'FULL_BODY', goal: 'GENERAL_FITNESS', weeklyFrequency: 2,
     sessionMinutes: 45, location: 'HOME', profileVersion: 1,
   },
   exercises: [],
@@ -51,6 +51,11 @@ const context = {
     ruleVersion: '1.3.0', templateVersion: '1.3.0', contentVersion: '1.6.0',
   },
 } satisfies PlanGenerationContextData
+
+const bodyweightContext = {
+  ...context,
+  profile: { ...context.profile, trainingSplit: undefined },
+}
 
 const proposal: AiPlanProposal = {
   name: 'AI 候选',
@@ -114,10 +119,11 @@ describe('onboarding AI boundary', () => {
     expect(persistence.getPlanGenerationContext).not.toHaveBeenCalled()
     expect(persistence.generateCandidate).toHaveBeenCalledWith({
       profileVersion: 1,
-      trainingSplit: 'UPPER_LOWER',
       additionalRequirements: draft.additionalRequirements,
       fallbackAllowed: true,
     })
+    expect(vi.mocked(persistence.generateCandidate).mock.calls[0][0])
+      .not.toHaveProperty('trainingSplit')
   })
 
   it('uses AI selection only after consent and asks the backend for authoritative validation', async () => {
@@ -132,17 +138,18 @@ describe('onboarding AI boundary', () => {
     )).resolves.toMatchObject({ candidate: { generationSource: 'AI_PERSONALIZED' } })
 
     expect(persistence.getPlanGenerationContext).toHaveBeenCalledWith(1)
-    expect(generator.generate).toHaveBeenCalledWith(context, {
+    expect(generator.generate).toHaveBeenCalledWith(bodyweightContext, {
       consentGranted: true,
       repairIssues: undefined,
     })
     expect(persistence.generateCandidate).toHaveBeenCalledWith({
       profileVersion: 1,
-      trainingSplit: 'UPPER_LOWER',
       additionalRequirements: draft.additionalRequirements,
       aiProposal: proposal,
       fallbackAllowed: false,
     })
+    expect(vi.mocked(persistence.generateCandidate).mock.calls[0][0])
+      .not.toHaveProperty('trainingSplit')
   })
 
   it('uses one structured repair attempt before accepting an AI candidate', async () => {
@@ -168,7 +175,7 @@ describe('onboarding AI boundary', () => {
     )).resolves.toMatchObject({ candidate: { generationSource: 'AI_PERSONALIZED' } })
 
     expect(generator.generate).toHaveBeenCalledTimes(2)
-    expect(generator.generate).toHaveBeenNthCalledWith(2, context, {
+    expect(generator.generate).toHaveBeenNthCalledWith(2, bodyweightContext, {
       consentGranted: true,
       repairIssues: rejected.validationIssues,
     })
@@ -212,6 +219,7 @@ describe('onboarding AI boundary', () => {
       validatePlan: vi.fn(),
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     }, generator)

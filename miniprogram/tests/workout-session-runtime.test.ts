@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ExerciseContent } from '../src/application/content'
 import { ApplicationError } from '../src/application/errors'
+import { chooseAutomaticWorkoutWeight } from '../src/application/automaticWorkoutWeight'
 import {
   chooseOptionalSet,
   completeGeneralWarmup,
   createWorkoutFlow,
+  isWorkoutPrescriptionFinished,
   recordWorkoutSet,
   setWorkoutExerciseWeight,
   type RecordWorkoutSetInput,
@@ -16,11 +18,20 @@ import {
 
 const lifecycle = vi.hoisted(() => ({
   didShow: null as (() => void) | null,
+  didHide: null as (() => void) | null,
 }))
 
 const application = vi.hoisted(() => ({
   getExercise: vi.fn(),
   getExerciseTrend: vi.fn(),
+  loadWorkoutSession: vi.fn(),
+  routeParameter: vi.fn(),
+  recordWorkoutSetAndSync: vi.fn(),
+  adjustAndResumeWorkout: vi.fn(),
+  setAutomaticWorkoutWeight: vi.fn(),
+  recordRampSetAndMaybeBeginWorkSets: vi.fn(),
+  chooseOptionalSetAndMaybeOpenSummary: vi.fn(),
+  discardCorruptedDraftAndOpenPlan: vi.fn(),
   navigation: {
     open: vi.fn(),
     replace: vi.fn(),
@@ -29,14 +40,19 @@ const application = vi.hoisted(() => ({
     track: vi.fn(),
   },
   workouts: {
+    load: vi.fn(),
     loadStatus: vi.fn(),
     resume: vi.fn(),
+    resumeLocal: vi.fn(),
+    adjustRest: vi.fn(),
     recordSet: vi.fn(),
+    beginWorkSets: vi.fn(),
     chooseOptionalSet: vi.fn(),
     setExerciseWeight: vi.fn(),
     replacementCandidates: vi.fn(),
     replaceCurrentExercise: vi.fn(),
     flush: vi.fn(),
+    discardCorruptedDraft: vi.fn(),
   },
 }))
 
@@ -51,18 +67,20 @@ vi.mock('../src/platform/weapp/lifecycle', () => ({
   useWeappDidShow: (effect: () => void) => {
     lifecycle.didShow = effect
   },
-  useWeappDidHide: vi.fn(),
+  useWeappDidHide: (effect: () => void) => {
+    lifecycle.didHide = effect
+  },
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/workoutCompositionRoot', () => ({
+  getWorkoutApplication: () => application,
 }))
 
-vi.mock('../src/subpackages/exercise-guide/components/exercise-motion-guide', () => ({
+vi.mock('../src/subpackages/workout/components/workout-exercise-motion-guide', () => ({
   default: 'exercise-motion-guide',
 }))
 
-const { default: WorkoutSessionPage } = await import(
+const { default: WorkoutSessionPage, beginWorkoutSessionMount } = await import(
   '../src/presentation/pages/workout-session'
 )
 
@@ -176,11 +194,286 @@ describe('live workout page behavior', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     lifecycle.didShow = null
+    lifecycle.didHide = null
+    application.routeParameter.mockReturnValue(undefined)
     application.getExerciseTrend.mockRejectedValue(new Error('offline'))
+    application.workouts.resumeLocal.mockImplementation(async (state: WorkoutFlowState) => {
+      const resumed = await application.workouts.resume(state)
+      return {
+        state: resumed.state,
+        remainingSeconds: resumed.remainingSeconds,
+        warmupRemainingSeconds: resumed.warmupRemainingSeconds,
+        clockRollbackDetected: resumed.clockRollbackDetected,
+      }
+    })
     application.workouts.setExerciseWeight.mockImplementation(
       async (state: WorkoutFlowState, exerciseIndex: number, weightKg: number) =>
         setWorkoutExerciseWeight(state, exerciseIndex, weightKg),
     )
+    application.loadWorkoutSession.mockImplementation(async (context) => {
+      const status = await application.workouts.loadStatus()
+      if (status.kind !== 'ACTIVE') return status
+      if (context.launchMode === 'FRESH_START'
+        && status.state.clientSessionKey !== context.clientSessionKey) {
+        return { kind: 'SESSION_MISMATCH' }
+      }
+      const resumed = await application.workouts.resumeLocal(status.state)
+      return {
+        kind: 'ACTIVE',
+        launchMode: context.launchMode,
+        resumed,
+        synchronization: status.state.syncStatus === 'OFFLINE_PENDING'
+          ? (async () => {
+              try {
+                return { kind: 'SYNCED', state: await application.workouts.flush(resumed.state) }
+              } catch (error) {
+                return { kind: 'FAILED', error }
+              }
+            })()
+          : Promise.resolve({ kind: 'SYNCED', state: resumed.state }),
+        openSummary: isWorkoutPrescriptionFinished(resumed.state)
+          ? async () => { await application.navigation.replace('WORKOUT_SUMMARY') }
+          : null,
+      }
+    })
+    application.recordWorkoutSetAndSync.mockImplementation(async (state, input) => {
+      try {
+        const updated = await application.workouts.recordSet(state, input)
+        const synchronization = (async () => {
+          try {
+            return { kind: 'SYNCED', state: await application.workouts.flush(updated) }
+          } catch (error) {
+            return { kind: 'FAILED', error }
+          }
+        })()
+        return {
+          kind: 'RECORDED',
+          state: updated,
+          synchronization,
+          openSummary: isWorkoutPrescriptionFinished(updated) && !input.safetyFlag
+            ? async () => { await application.navigation.replace('WORKOUT_SUMMARY') }
+            : null,
+        }
+      } catch (error) {
+        return { kind: 'RECORD_FAILED', error, recovery: null }
+      }
+    })
+    application.adjustAndResumeWorkout.mockImplementation(async (state, seconds) => {
+      const updated = await application.workouts.adjustRest(state, seconds)
+      const resumed = await application.workouts.resumeLocal(updated)
+      return {
+        resumed,
+        synchronization: Promise.resolve({ kind: 'SYNCED', state: resumed.state }),
+      }
+    })
+    application.setAutomaticWorkoutWeight.mockImplementation(async (
+      state,
+      exerciseIndex,
+      exerciseCode,
+      plannedWeightKg,
+      shouldContinue,
+    ) => {
+      let points = []
+      try {
+        points = (await application.getExerciseTrend(exerciseCode)).points
+      } catch {
+        // Preserve the deterministic planned/default fallback.
+      }
+      if (!shouldContinue()) return null
+      const weightKg = chooseAutomaticWorkoutWeight(points, plannedWeightKg)
+      return {
+        weightKg,
+        state: await application.workouts.setExerciseWeight(state, exerciseIndex, weightKg),
+      }
+    })
+    application.recordRampSetAndMaybeBeginWorkSets.mockImplementation(async (
+      state,
+      input,
+      beginWorkSets,
+    ) => {
+      const recorded = await application.workouts.recordSet(state, input)
+      const updated = beginWorkSets
+        ? application.workouts.beginWorkSets(recorded)
+        : recorded
+      const nextState = await updated
+      const synchronization = (async () => {
+        try {
+          return { kind: 'SYNCED', state: await application.workouts.flush(nextState) }
+        } catch (error) {
+          return { kind: 'FAILED', error }
+        }
+      })()
+      return {
+        kind: 'RECORDED',
+        state: nextState,
+        synchronization,
+        openSummary: null,
+      }
+    })
+    application.chooseOptionalSetAndMaybeOpenSummary.mockImplementation(async (
+      state,
+      choiceGroup,
+      exerciseIndex,
+    ) => {
+      const updated = await application.workouts.chooseOptionalSet(state, choiceGroup, exerciseIndex)
+      return {
+        state: updated,
+        openSummary: isWorkoutPrescriptionFinished(updated)
+          ? async () => { await application.navigation.replace('WORKOUT_SUMMARY') }
+          : null,
+      }
+    })
+    application.discardCorruptedDraftAndOpenPlan.mockImplementation(async () => {
+      await application.workouts.discardCorruptedDraft()
+      await application.navigation.replace('PLAN')
+    })
+  })
+
+  it('restores the workout when the lazy feature mounts after the page show event', async () => {
+    const state = createReadyWorkout()
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state })
+    application.workouts.resume.mockResolvedValue({
+      state,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.workouts.flush.mockResolvedValue(state)
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+      await flushPage()
+    })
+
+    expect(application.loadWorkoutSession).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(renderer?.toJSON())).toContain('训练已恢复，可以从上次位置继续')
+  })
+
+  it('opens a newly created workout without presenting it as draft recovery', async () => {
+    const state = { ...createReadyWorkout(), syncStatus: 'SYNC_REJECTED' as const }
+    application.routeParameter.mockImplementation((name: string) => ({
+      workoutLaunchMode: 'FRESH_START',
+      clientSessionKey: state.clientSessionKey,
+    })[name])
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state })
+    application.workouts.resume.mockResolvedValue({
+      state,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.workouts.flush.mockResolvedValue(state)
+    application.getExercise.mockRejectedValue(new Error('offline'))
+
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+      await flushPage()
+    })
+
+    expect(application.loadWorkoutSession).toHaveBeenCalledWith({
+      launchMode: 'FRESH_START',
+      clientSessionKey: state.clientSessionKey,
+    })
+    const rendered = JSON.stringify(renderer?.toJSON())
+    expect(rendered).toContain('训练已开始，但有记录未被服务器接受')
+    expect(rendered).not.toContain('训练已恢复')
+    expect(application.telemetry.track).not.toHaveBeenCalledWith(
+      'workout_resumed',
+      expect.anything(),
+    )
+
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+    expect(application.loadWorkoutSession).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(renderer?.toJSON())).not.toContain('训练已恢复')
+
+    await act(async () => {
+      lifecycle.didHide?.()
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+    expect(application.loadWorkoutSession).toHaveBeenLastCalledWith({
+      launchMode: 'RESUME_INTERRUPTED',
+      clientSessionKey: state.clientSessionKey,
+    })
+  })
+
+  it('keeps an in-flight recovery valid across mount effect cleanup and replay', async () => {
+    const mountedRef = { current: false }
+    const pendingLoad = deferred<void>()
+    let loadInFlight = false
+    let loadCalls = 0
+    let recovered = false
+    const loadSession = async () => {
+      if (loadInFlight) return
+      loadInFlight = true
+      loadCalls += 1
+      await pendingLoad.promise
+      if (mountedRef.current) recovered = true
+      loadInFlight = false
+    }
+
+    const firstCleanup = beginWorkoutSessionMount(mountedRef, loadSession)
+    firstCleanup()
+    const secondCleanup = beginWorkoutSessionMount(mountedRef, loadSession)
+
+    expect(loadCalls).toBe(1)
+    expect(recovered).toBe(false)
+
+    pendingLoad.resolve()
+    await pendingLoad.promise
+    await Promise.resolve()
+
+    expect(mountedRef.current).toBe(true)
+    expect(recovered).toBe(true)
+
+    secondCleanup()
+    expect(mountedRef.current).toBe(false)
+  })
+
+  it('restores an actionable workout before the optional motion guide is requested', async () => {
+    const state = createReadyWorkout()
+    application.workouts.loadStatus.mockResolvedValue({ kind: 'ACTIVE', state })
+    application.workouts.resume.mockResolvedValue({
+      state,
+      remainingSeconds: 0,
+      warmupRemainingSeconds: 0,
+      clockRollbackDetected: false,
+      syncFailed: false,
+    })
+    application.workouts.flush.mockResolvedValue(state)
+    application.getExercise.mockRejectedValue(new Error('offline'))
+    let renderer: ReactTestRenderer | undefined
+
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutSessionPage))
+    })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
+    await act(async () => {
+      lifecycle.didShow?.()
+      await flushPage()
+    })
+
+    expect(JSON.stringify(renderer.toJSON())).toContain('训练已恢复，可以从上次位置继续')
+    expect(JSON.stringify(renderer.toJSON())).toContain('动作示例按需加载')
+    expect(renderer.root.findAll(
+      (node) => String(node.type) === 'exercise-motion-guide'
+    )).toHaveLength(0)
+
+    act(() => renderer!.root.find(
+      (node) => node.type === 'button' && node.props.children === '加载动作示例'
+    ).props.onClick())
+
+    expect(renderer.root.findAll(
+      (node) => String(node.type) === 'exercise-motion-guide'
+    )).toHaveLength(1)
   })
 
   it('lets the user choose and record exactly one Tuesday optional set', async () => {
@@ -488,6 +781,9 @@ describe('live workout page behavior', () => {
       (node) => node.props.className === 'session-formal-weight__value data-number',
     )
     expect(confirmedWeight.props.children.join('')).toBe('14 KG')
+    expect(JSON.stringify(renderer.toJSON())).toContain('调整本动作重量')
+    expect(JSON.stringify(renderer.toJSON())).toContain('后续未完成组统一使用此重量')
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('仅本次调整')
     expect(JSON.stringify(renderer.toJSON())).not.toContain('沿用')
     expect(JSON.stringify(renderer.toJSON())).not.toContain('保存本次重量')
     expect(completeButton(renderer).props.disabled).toBe(false)
@@ -655,12 +951,9 @@ describe('live workout page behavior', () => {
     let renderer: ReactTestRenderer | undefined
     await act(async () => {
       renderer = TestRenderer.create(createElement(WorkoutSessionPage))
-    })
-    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
-    await act(async () => {
-      lifecycle.didShow?.()
       await flushPage()
     })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
 
     expect(JSON.stringify(renderer.toJSON())).toContain('本地草稿未作改动')
     const retry = renderer.root.find(
@@ -701,15 +994,13 @@ describe('live workout page behavior', () => {
     let renderer: ReactTestRenderer | undefined
     await act(async () => {
       renderer = TestRenderer.create(createElement(WorkoutSessionPage))
-    })
-    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
-    await act(async () => {
-      lifecycle.didShow?.()
       await flushPage()
     })
+    if (!renderer || !lifecycle.didShow) throw new Error('workout page did not initialize')
     expect(JSON.stringify(renderer.toJSON())).toContain('自重深蹲')
 
     await act(async () => {
+      lifecycle.didHide?.()
       lifecycle.didShow?.()
       await flushPage()
     })

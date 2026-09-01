@@ -20,15 +20,15 @@ const application = vi.hoisted(() => ({
   navigation: { back: vi.fn() },
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/exerciseGuideCompositionRoot', () => ({
+  getExerciseGuideApplication: () => application,
 }))
 
 const { default: ExerciseMotionGuide } = await import(
   '../src/subpackages/exercise-guide/components/exercise-motion-guide'
 )
 const { default: ExerciseDetailPage } = await import(
-  '../src/subpackages/exercise-guide/pages/detail'
+  '../src/subpackages/exercise-guide/pages/detail/DetailPage'
 )
 
 const repositoryRoot = resolve(import.meta.dirname, '..', '..')

@@ -103,6 +103,55 @@ class WorkoutSessionEndpointIntegrationTest {
     @Autowired private ObjectMapper objectMapper;
 
     @Test
+    void preparesTheLowImpactBeginnerWorkoutFromTheIntroductoryPrescriptionSnapshot()
+            throws Exception {
+        String token = login();
+        mvc.perform(put("/api/v1/profile")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"experience":"BEGINNER","goal":"FAT_LOSS",
+                                 "weeklyFrequency":4,"sessionMinutes":30,"location":"HOME",
+                                 "expectedVersion":0}
+                                """))
+                .andExpect(status().isOk());
+        JsonNode presetCandidate = json(mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString()).at("/data/candidate");
+        JsonNode plan = createPlan(token, presetCandidate.path("candidateId").asText());
+        String planId = plan.at("/data/planId").asText();
+        String dayCode = plan.at("/data/activeVersion/plan/days/0/code").asText();
+        assertThat(plan.at("/data/activeVersion/plan/movementImpactConstraint").asText())
+                .isEqualTo("NO_JUMP");
+
+        String clientKey = "introductory-low-impact-" + UUID.randomUUID();
+        mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", clientKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of(
+                                "clientSessionKey", clientKey,
+                                "planId", planId,
+                                "planVersionNo", 1,
+                                "planDayId", dayCode,
+                                "trainingDayCode", dayCode))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.exercises[*].prescription.workSets")
+                        .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(2))))
+                .andExpect(jsonPath("$.data.exercises[*].prescription.targetRirMin")
+                        .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(3))))
+                .andExpect(jsonPath("$.data.exercises[*].prescription.targetRirMax")
+                        .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(4))));
+    }
+
+    @Test
     void startsOwnedImmutableSnapshotIdempotentlyAndEnforcesStatusVersion() throws Exception {
         String token = loginAndConfigure();
         JsonNode candidate = candidate(token);
@@ -304,6 +353,105 @@ class WorkoutSessionEndpointIntegrationTest {
                         .content("{\"resolution\":\"KEEP_LOCAL\",\"expectedVersion\":0}"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.error.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    void replacesTheActiveWorkoutAtomicallyAndReplaysTheStartedReplacement() throws Exception {
+        String token = loginAndConfigure();
+        JsonNode plan = createPlan(token, candidate(token).at("/candidateId").asText());
+        String planId = plan.at("/data/planId").asText();
+        String dayCode = plan.at("/data/activeVersion/plan/days/0/code").asText();
+        String activeKey = "active-workout-" + UUID.randomUUID();
+        String activeBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "clientSessionKey", activeKey,
+                "planId", planId,
+                "planVersionNo", 1,
+                "planDayId", dayCode));
+        JsonNode active = json(mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", activeKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(activeBody))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString());
+        String activeId = active.at("/data/id").asText();
+        mvc.perform(put("/api/v1/workout-sessions/{id}/status", activeId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_PROGRESS\",\"expectedVersion\":0}"))
+                .andExpect(status().isOk());
+
+        String replacementKey = "replacement-workout-" + UUID.randomUUID();
+        String incompleteReplacement = objectMapper.writeValueAsString(java.util.Map.of(
+                "clientSessionKey", replacementKey,
+                "planId", planId,
+                "planVersionNo", 1,
+                "planDayId", dayCode,
+                "activeWorkoutReplacement", java.util.Map.of("sessionId", activeId)));
+        mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", replacementKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(incompleteReplacement))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_FAILED"));
+        mvc.perform(get("/api/v1/workout-sessions/{id}", activeId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
+
+        String staleReplacement = objectMapper.writeValueAsString(java.util.Map.of(
+                "clientSessionKey", replacementKey,
+                "planId", planId,
+                "planVersionNo", 1,
+                "planDayId", dayCode,
+                "activeWorkoutReplacement", java.util.Map.of(
+                        "sessionId", activeId,
+                        "expectedVersion", 0)));
+        mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", replacementKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(staleReplacement))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("VERSION_CONFLICT"));
+        mvc.perform(get("/api/v1/workout-sessions/{id}", activeId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
+
+        String replacementBody = objectMapper.writeValueAsString(java.util.Map.of(
+                "clientSessionKey", replacementKey,
+                "planId", planId,
+                "planVersionNo", 1,
+                "planDayId", dayCode,
+                "activeWorkoutReplacement", java.util.Map.of(
+                        "sessionId", activeId,
+                        "expectedVersion", 1)));
+        JsonNode replaced = json(mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", replacementKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replacementBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.data.version").value(1))
+                .andReturn().getResponse().getContentAsString());
+        String replacementId = replaced.at("/data/id").asText();
+        assertThat(replacementId).isNotEqualTo(activeId);
+        mvc.perform(get("/api/v1/workout-sessions/{id}", activeId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("ABORTED"));
+
+        mvc.perform(post("/api/v1/workout-sessions")
+                        .header("Authorization", "Bearer " + token)
+                        .header("Idempotency-Key", replacementKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(replacementBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.id").value(replacementId))
+                .andExpect(jsonPath("$.data.status").value("IN_PROGRESS"));
     }
 
     @Test

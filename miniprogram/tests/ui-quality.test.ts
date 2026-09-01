@@ -24,6 +24,7 @@ describe('P0 page usability contract', () => {
     }
     for (const label of [
       '我已满 18 周岁，并理解这不是医疗或康复服务',
+      '全身训练',
       '2 分化',
       '3 分化',
       '5 分化',
@@ -64,8 +65,10 @@ describe('P0 page usability contract', () => {
 
   it('uses the plan as the authenticated landing navigation instead of a duplicate home tab', () => {
     const navigation = source('src/presentation/components/main-navigation/index.tsx')
-    const home = source('src/presentation/pages/home/index.tsx')
+    const bootstrap = source('src/presentation/pages/home/index.tsx')
+    const home = source('src/subpackages/startup/pages/home/index.tsx')
     expect(navigation).not.toContain("{ destination: 'HOME', label: '首页' }")
+    expect(bootstrap).not.toContain('MainNavigation')
     expect(home).not.toContain("current='HOME'")
     expect(home).not.toContain('MainNavigation')
   })
@@ -77,6 +80,16 @@ describe('P0 page usability contract', () => {
     expect(styles).toMatch(/workout-actions \.secondary-action[\s\S]*min-height:\s*88px/)
     expect(styles).toMatch(/rir-options[\s\S]*grid-template-columns:\s*repeat\(3/)
     expect(styles).not.toMatch(/@media \(max-width: 360px\)[\s\S]*session-metrics[\s\S]*grid-template-columns:\s*1fr/)
+  })
+
+  it('keeps recovery content clear of the hero and summary actions compact', () => {
+    const sessionStyles = source('src/presentation/pages/workout-session/index.scss')
+    const summaryStyles = source('src/presentation/pages/workout-summary/index.scss')
+
+    expect(sessionStyles).toMatch(/\.rest-controls\s*\{[^}]*margin-top:\s*0/)
+    expect(sessionStyles).not.toMatch(/\.rest-controls\s*\{[^}]*margin-top:\s*-/)
+    expect(summaryStyles).toMatch(/\.summary-actions\s*>\s*button\s*\{[^}]*flex:\s*0\s+0\s+auto/)
+    expect(summaryStyles).toMatch(/\.summary-actions\s*\{[^}]*padding-bottom:\s*calc\(12px\s*\+\s*env\(safe-area-inset-bottom\)\)/)
   })
 
   it('keeps warmup prescription server-authoritative and guards asynchronous suggestions', () => {
@@ -103,7 +116,9 @@ describe('P0 page usability contract', () => {
     expect(guide).not.toMatch(/GIF|WebP|Video|animated/i)
     expect(styles).toMatch(/motion-guide--compact \.motion-guide__stage[\s\S]*height:\s*236px/)
     expect(styles).toMatch(/@media \(max-width: 360px\)[\s\S]*height:\s*208px/)
-    expect(workout).toContain('<ExerciseMotionGuide')
+    expect(workout).toContain('<WorkoutExerciseMotionGuide')
+    expect(workout).toContain('动作示例按需加载')
+    expect(workout).toContain('showMotionGuide ?')
     expect(workout).toContain('compact')
     expect(workout).toContain('session-exercise-guidance')
     expect(workout).toContain('exerciseContent?.plainLanguage')

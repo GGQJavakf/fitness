@@ -126,6 +126,7 @@ describe('recommended plan first-use flow', () => {
       validatePlan: vi.fn(),
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     }
@@ -163,6 +164,7 @@ describe('recommended plan first-use flow', () => {
       validatePlan: vi.fn(),
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     })
@@ -195,6 +197,75 @@ describe('recommended plan first-use flow', () => {
     expect(port.saveProfile).toHaveBeenCalledTimes(1)
   })
 
+  it('does not write a preset candidate after user state is cleared while generation is pending', async () => {
+    let finishGeneration: ((value: PlanCandidateGenerationData) => void) | undefined
+    const port = onboardingPort()
+    port.getProfileVersion = vi.fn().mockResolvedValue(1)
+    port.generateCandidate = vi.fn(() => new Promise<PlanCandidateGenerationData>((resolveGeneration) => {
+      finishGeneration = resolveGeneration
+    }))
+    const application = createFitnessApplication(port, {
+      validatePlan: vi.fn(),
+      createInitialPlan: vi.fn(),
+      getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    })
+
+    const pending = application.selectPlanPreset('beginner-three-day')
+    await vi.waitFor(() => expect(port.generateCandidate).toHaveBeenCalledOnce())
+    application.clearUserState()
+    finishGeneration?.({
+      status: 'CANDIDATE_READY',
+      candidate,
+      validationIssues: [],
+      lockedFieldOutcomes: {},
+    })
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+      retryable: false,
+    })
+    expect(application.getCandidate()).toBeNull()
+  })
+
+  it('does not return or install an activated plan after user state is cleared', async () => {
+    let finishActivation: ((value: ActivePlanData) => void) | undefined
+    const createInitialPlan = vi.fn(() => new Promise<ActivePlanData>((resolveActivation) => {
+      finishActivation = resolveActivation
+    }))
+    const application = createFitnessApplication(onboardingPort(), {
+      validatePlan: vi.fn(),
+      createInitialPlan,
+      getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
+      createPlanVersion: vi.fn(),
+      previewRebalance: vi.fn(),
+    })
+    await application.completeOnboarding({
+      adultConfirmed: true,
+      safetyAccepted: true,
+      goal: 'GENERAL_FITNESS',
+      experience: 'BEGINNER',
+      weeklyFrequency: 3,
+      sessionMinutes: 45,
+      location: 'HOME',
+      equipment: [],
+      preferences: [],
+    })
+
+    const pending = application.activateCandidate()
+    application.clearUserState()
+    finishActivation?.(activePlan)
+
+    await expect(pending).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+      retryable: false,
+    })
+    expect(application.getActivePlan()).toBeNull()
+  })
+
   it('allows a safe retry when candidate activation fails', async () => {
     const createInitialPlan = vi.fn()
       .mockRejectedValueOnce(new Error('temporary network failure'))
@@ -203,6 +274,7 @@ describe('recommended plan first-use flow', () => {
       validatePlan: vi.fn(),
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     })
@@ -249,6 +321,7 @@ describe('recommended plan first-use flow', () => {
       validatePlan: vi.fn(),
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     })
@@ -281,7 +354,7 @@ describe('recommended plan first-use flow', () => {
     pending.get('candidate-latest')?.(latestPlan)
     await expect(latestActivation).resolves.toEqual(latestPlan)
     pending.get('candidate-older')?.(activePlan)
-    await expect(olderActivation).resolves.toEqual(activePlan)
+    await expect(olderActivation).rejects.toThrow('推荐方案已更新，本次旧计划未激活')
 
     expect(application.getCandidate()?.candidateId).toBe('candidate-latest')
     expect(application.getActivePlan()).toEqual(latestPlan)
@@ -318,6 +391,7 @@ describe('recommended plan first-use flow', () => {
       validatePlan,
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion,
       previewRebalance: vi.fn(),
     })

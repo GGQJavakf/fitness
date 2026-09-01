@@ -9,6 +9,7 @@ const application = vi.hoisted(() => ({
   listExercises: vi.fn(),
   getExercisePreferences: vi.fn(),
   completeOnboarding: vi.fn(),
+  completeOnboardingAndOpenCandidates: vi.fn(),
   aiPlanGenerationAvailable: true,
   telemetry: { track: vi.fn() },
   navigation: { open: vi.fn() },
@@ -20,8 +21,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/planningCompositionRoot', () => ({
+  getPlanningApplication: () => application,
 }))
 
 const { default: OnboardingPage } = await import('../src/presentation/pages/onboarding')
@@ -86,6 +87,19 @@ describe('live onboarding submission', () => {
     application.listExercises.mockResolvedValue([])
     application.getExercisePreferences.mockResolvedValue({ items: [] })
     application.navigation.open.mockResolvedValue(undefined)
+    application.completeOnboardingAndOpenCandidates.mockImplementation(async (draft) => {
+      const candidate = await application.completeOnboarding(draft)
+      application.telemetry.track('onboarding_completed', {
+        daysPerWeek: draft.weeklyFrequency,
+        sessionMinutes: draft.sessionMinutes,
+      })
+      application.telemetry.track('plan_generated', {
+        result: candidate.status === 'READY' ? 'ready' : 'needs_adjustment',
+        issueCount: candidate.status === 'READY' ? 0 : 1,
+      })
+      await application.navigation.open('PLAN_CANDIDATES')
+      return candidate
+    })
   })
 
   it('completes the four required steps through live controls and submits the selected schedule', async () => {

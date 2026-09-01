@@ -61,6 +61,11 @@ export interface RevokedAccountLocalLifecyclePort {
   onAccessRevoked(status: DeletionStatus): Promise<void>
 }
 
+export interface PrivacyOperationGuard {
+  capture(): number
+  assertCurrent(generation: number): void
+}
+
 export interface PrivacyExportViewModel extends PrivacyExportData {
   scopeLabel: string
   resourceSummary: string
@@ -138,27 +143,58 @@ export function createVerifiedPrivacyUseCases(
   port: PrivacyPort,
   proofPort: ReauthenticationProofPort,
   lifecycle?: RevokedAccountLocalLifecyclePort,
+  operationGuard?: PrivacyOperationGuard,
 ) {
   const privacy = createPrivacyUseCases(port)
+
+  async function awaitCurrent<T>(
+    generation: number | undefined,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (generation !== undefined) operationGuard?.assertCurrent(generation)
+    try {
+      const result = await operation()
+      if (generation !== undefined) operationGuard?.assertCurrent(generation)
+      return result
+    } catch (error) {
+      if (generation !== undefined) operationGuard?.assertCurrent(generation)
+      throw error
+    }
+  }
+
   async function enforceRevokedAccess(
     result: DeletionStatusViewModel,
+    generation?: number,
   ): Promise<DeletionStatusViewModel> {
     if (lifecycle && hasRevokedAccess(result.status)) {
+      if (generation !== undefined) operationGuard?.assertCurrent(generation)
       await lifecycle.onAccessRevoked(result.status)
     }
     return result
   }
   return {
     async exportData(): Promise<PrivacyExportViewModel> {
-      return privacy.exportData(await proofPort.getProof())
+      const generation = operationGuard?.capture()
+      const proof = await awaitCurrent(generation, () => proofPort.getProof())
+      return awaitCurrent(generation, () => privacy.exportData(proof))
     },
     async requestDeletion(confirmationText: string): Promise<DeletionStatusViewModel> {
+      const generation = operationGuard?.capture()
+      const proof = await awaitCurrent(generation, () => proofPort.getProof())
       return enforceRevokedAccess(
-        await privacy.requestDeletion(await proofPort.getProof(), confirmationText),
+        await awaitCurrent(
+          generation,
+          () => privacy.requestDeletion(proof, confirmationText),
+        ),
+        generation,
       )
     },
     async getDeletionStatus(requestId: string): Promise<DeletionStatusViewModel> {
-      return enforceRevokedAccess(await privacy.getDeletionStatus(requestId))
+      const generation = operationGuard?.capture()
+      return enforceRevokedAccess(
+        await awaitCurrent(generation, () => privacy.getDeletionStatus(requestId)),
+        generation,
+      )
     },
   }
 }

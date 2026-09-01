@@ -15,9 +15,9 @@ import com.aifitness.assistant.identity.api.AuthController;
 import com.aifitness.assistant.identity.api.AuthExceptionHandler;
 import com.aifitness.assistant.identity.api.AuthenticationFilter;
 import com.aifitness.assistant.identity.api.IdentityWebConfiguration;
-import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
@@ -26,6 +26,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.web.client.RestClient;
 
 class ExperienceIdentityConfigurationTest {
 
@@ -52,6 +53,7 @@ class ExperienceIdentityConfigurationTest {
                     assertThat(context).hasSingleBean(UserAccessRevocation.class);
                     assertThat(context).hasSingleBean(WechatLoginService.class);
                     assertThat(context).hasSingleBean(AuthenticationAttemptLimiter.class);
+                    assertThat(context).hasSingleBean(RestClient.class);
                 });
     }
 

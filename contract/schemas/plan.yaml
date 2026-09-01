@@ -14,7 +14,7 @@ components:
       enum: [AI_PERSONALIZED, FALLBACK_RULE_PLAN, SYSTEM_PRESET]
     TrainingSplit:
       type: string
-      enum: [UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY]
+      enum: [FULL_BODY, UPPER_LOWER, PUSH_PULL_LEGS, BODY_PART_FIVE_DAY]
     WeightStatus:
       type: string
       enum: [KNOWN, NEEDS_CALIBRATION, BODYWEIGHT]
@@ -79,6 +79,9 @@ components:
         progressionRules:
           type: array
           items: {type: string, minLength: 1}
+        movementImpactConstraint:
+          type: string
+          enum: [NO_JUMP]
     PlanDay:
       type: object
       additionalProperties: false
@@ -297,18 +300,73 @@ components:
         estimatedMinutesMin: {type: integer, minimum: 1}
         estimatedMinutesMax: {type: integer, minimum: 1}
         exerciseCount: {type: integer, minimum: 1, maximum: 8}
+    PlanPresetContentStatus:
+      type: string
+      enum: [AI_DRAFT, AI_VALIDATED, PUBLIC_RELEASE_APPROVED, RETIRED]
+    PlanPresetProfessionalReviewStatus:
+      type: string
+      enum: [PENDING, APPROVED]
+    PlanPresetAvailabilityStatus:
+      type: string
+      enum: [AVAILABLE, BLOCKED_CAPABILITY]
+    PlanPresetIntroductoryPhase:
+      type: object
+      additionalProperties: false
+      required: [weeks, workSets, targetRirMin, targetRirMax, transitionCondition]
+      properties:
+        weeks: {type: integer, minimum: 1, maximum: 8}
+        workSets: {type: integer, minimum: 1, maximum: 6}
+        targetRirMin: {type: integer, minimum: 0, maximum: 10}
+        targetRirMax: {type: integer, minimum: 0, maximum: 10}
+        transitionCondition: {type: string, minLength: 8}
+    PlanPresetSourceKind:
+      type: string
+      enum: [PEER_REVIEWED_POSITION_STAND, PEER_REVIEWED_CONSENSUS_STATEMENT, PROFESSIONAL_ORGANIZATION_SUMMARY, GOVERNMENT_GUIDELINE, GOVERNMENT_PUBLIC_HEALTH_GUIDANCE, INTERNAL_USER_PLAN]
+    PlanPresetSourceSummary:
+      type: object
+      additionalProperties: false
+      required: [id, title, usageBoundary, sourceKind]
+      properties:
+        id: {type: string, pattern: '^[A-Z0-9_]+$'}
+        title: {type: string, minLength: 2}
+        url: {type: string, format: uri, pattern: '^https://'}
+        usageBoundary: {type: string, minLength: 8}
+        sourceKind: {$ref: '#/components/schemas/PlanPresetSourceKind'}
     PlanPresetSummary:
       type: object
       additionalProperties: false
-      required: [code, version, name, goal, weeklyFrequency, sessionMinutes, location, days]
+      required: [code, version, name, experience, goal, weeklyFrequency, sessionMinutes, location, contentStatus, professionalReviewStatus, availabilityStatus, sources, explanationSources, matchStatus, recommended, mismatchFields, days]
       properties:
         code: {type: string, pattern: '^[A-Z0-9_]+$'}
         version: {type: string}
         name: {type: string}
+        experience: {$ref: './profile.yaml#/components/schemas/ExperienceLevel'}
         goal: {$ref: './profile.yaml#/components/schemas/FitnessGoal'}
         weeklyFrequency: {type: integer, minimum: 2, maximum: 6}
         sessionMinutes: {type: integer, minimum: 1}
         location: {$ref: './profile.yaml#/components/schemas/TrainingLocation'}
+        contentStatus: {$ref: '#/components/schemas/PlanPresetContentStatus'}
+        professionalReviewStatus: {$ref: '#/components/schemas/PlanPresetProfessionalReviewStatus'}
+        availabilityStatus: {$ref: '#/components/schemas/PlanPresetAvailabilityStatus'}
+        unavailableReason: {type: string, minLength: 8}
+        introductoryPhase: {$ref: '#/components/schemas/PlanPresetIntroductoryPhase'}
+        sources:
+          type: array
+          minItems: 1
+          items: {$ref: '#/components/schemas/PlanPresetSourceSummary'}
+        explanationSources:
+          type: array
+          items: {$ref: '#/components/schemas/PlanPresetSourceSummary'}
+        matchStatus:
+          type: string
+          enum: [EXACT, PARTIAL]
+        recommended: {type: boolean}
+        mismatchFields:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            enum: [EXPERIENCE, GOAL, WEEKLY_FREQUENCY, SESSION_MINUTES, LOCATION]
         days:
           type: array
           items: {$ref: '#/components/schemas/PlanPresetDaySummary'}
@@ -519,6 +577,22 @@ components:
       required: [candidateId]
       properties:
         candidateId: {type: string, format: uuid, minLength: 36, maxLength: 36}
+    CandidateCommitRequest:
+      type: object
+      additionalProperties: false
+      required: [candidateId, expectedActiveVersionNumber, plan, locks]
+      properties:
+        candidateId: {type: string, format: uuid, minLength: 36, maxLength: 36}
+        expectedActiveVersionNumber: {type: integer, minimum: 0}
+        plan: {$ref: '#/components/schemas/PlanValidationDraft'}
+        locks:
+          type: object
+          maxProperties: 100
+          propertyNames:
+            type: string
+            pattern: '^/days/[^/]+/exercises/[^/]+/(workSets|repMin|repMax|restSeconds|targetWeightKg)$'
+          additionalProperties: {$ref: '#/components/schemas/LockCommandStatus'}
+        warningConfirmationToken: {type: string, minLength: 1, maxLength: 128}
     CreatePlanVersionRequest:
       type: object
       additionalProperties: false

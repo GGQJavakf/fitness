@@ -44,6 +44,12 @@ const config: IProjectConfig<'webpack5'> = {
     __FITNESS_CLOUDBASE_SERVICE_NAME__: JSON.stringify(cloudBaseServiceName)
   },
   mini: {
+    optimizeMainPackage: {
+      enable: false,
+    },
+    miniCssExtractPluginOption: {
+      runtime: false,
+    },
     postcss: {
       pxtransform: {
         enable: true,

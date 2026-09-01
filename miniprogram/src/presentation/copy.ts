@@ -105,6 +105,15 @@ export function locationDisplayName(value?: string): string {
   return ({ HOME: '居家', GYM: '健身房', OTHER: '其他场地' } as Record<string, string>)[value ?? ''] ?? readableCode(value ?? '未设置')
 }
 
+export function trainingSplitDisplayName(value?: string): string {
+  return ({
+    FULL_BODY: '全身训练',
+    UPPER_LOWER: '上下肢',
+    PUSH_PULL_LEGS: '推拉腿',
+    BODY_PART_FIVE_DAY: '五分化',
+  } as Record<string, string>)[value ?? ''] ?? '未记录'
+}
+
 export function weightStatusDisplayName(value?: string): string {
   return ({ KNOWN: '自动使用最近重量', NEEDS_CALIBRATION: '自动设置起始重量', BODYWEIGHT: '自重训练' } as Record<string, string>)[value ?? ''] ?? readableCode(value ?? '待确认')
 }
@@ -114,8 +123,22 @@ export function exerciseDisplayName(value: string): string {
 }
 
 export function trainingDayDisplayName(value: string): string {
-  const matched = /^DAY[_\s-]*(.+)$/i.exec(value)
-  return matched ? `训练日 ${matched[1]}` : readableCode(value)
+  const matched = /^(DAY|UPPER|LOWER|PUSH|PULL|LEGS|CHEST|BACK|ARMS|SHOULDERS|BODYWEIGHT)[_\s-]+(.+)$/i.exec(value)
+  if (!matched) return readableCode(value)
+  const focusName = ({
+    DAY: '训练日',
+    UPPER: '上肢',
+    LOWER: '下肢',
+    PUSH: '推',
+    PULL: '拉',
+    LEGS: '腿',
+    CHEST: '胸部重点',
+    BACK: '背部重点',
+    ARMS: '手臂重点',
+    SHOULDERS: '肩部重点',
+    BODYWEIGHT: '自重训练',
+  } as Readonly<Record<string, string>>)[matched[1].toUpperCase()]
+  return `${focusName} ${matched[2].toUpperCase()}`
 }
 
 export function weekdayDisplayName(value?: string): string {

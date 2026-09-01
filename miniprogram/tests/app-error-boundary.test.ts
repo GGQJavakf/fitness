@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reLaunch = vi.hoisted(() => vi.fn())
 
+const diagnostics = vi.hoisted(() => ({
+  recordStartupFailure: vi.fn(),
+}))
+
 vi.mock('@tarojs/components', () => ({
   Button: 'button',
   Text: 'text',
@@ -16,13 +20,17 @@ vi.mock('@tarojs/taro', () => ({
   },
 }))
 
+vi.mock('../src/platform/weapp/startupDiagnostics', () => ({
+  recordStartupFailure: diagnostics.recordStartupFailure,
+}))
+
 const { default: App } = await import('../src/app')
 
 let shouldFail = true
 
 class FlakyPage extends Component {
   render(): ReactNode {
-    if (shouldFail) throw new Error('render failed')
+    if (shouldFail) throw new Error('render failed token=must-not-leak')
     return createElement('view', null, 'page recovered')
   }
 }
@@ -64,6 +72,10 @@ describe('application error boundary', () => {
     const failed = JSON.stringify(renderer.toJSON())
     expect(failed).toContain('页面加载失败')
     expect(failed).toContain('不会清除本地训练记录')
+    expect(reLaunch).not.toHaveBeenCalled()
+    expect(diagnostics.recordStartupFailure.mock.calls).toEqual([
+      ['APP_RENDER', 'RENDER'],
+    ])
 
     shouldFail = false
     await act(async () => {

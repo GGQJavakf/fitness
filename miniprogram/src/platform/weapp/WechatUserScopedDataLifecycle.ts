@@ -36,6 +36,8 @@ export class UserScopedStoragePurgeError extends Error {
 
 export interface WeappUserScopedDataLifecycle extends UserScopedLocalDataPort {
   runUserOperation<T>(operation: () => Promise<T>): Promise<T>
+  runClearedSessionRead<T>(operation: () => Promise<T | null>): Promise<T | null>
+  isClearVerified(): boolean
   activate(): void
 }
 
@@ -44,6 +46,7 @@ export function createWeappUserScopedDataLifecycle(): WeappUserScopedDataLifecyc
   let blocked = false
   let purgesInFlight = 0
   let purgeFailed = false
+  let clearVerified = false
 
   function enqueue<T>(operation: () => Promise<T>): Promise<T> {
     const task = tail.then(operation, operation)
@@ -57,12 +60,24 @@ export function createWeappUserScopedDataLifecycle(): WeappUserScopedDataLifecyc
       return enqueue(operation)
     },
 
+    runClearedSessionRead<T>(operation: () => Promise<T | null>): Promise<T | null> {
+      if (!blocked) return enqueue(operation)
+      if (purgesInFlight === 0 && !purgeFailed) return Promise.resolve(null)
+      return Promise.reject(new UserScopedStorageBlockedError())
+    },
+
+    isClearVerified(): boolean {
+      return blocked && purgesInFlight === 0 && !purgeFailed && clearVerified
+    },
+
     async purge(_reason: UserScopedLocalDataPurgeReason): Promise<void> {
       blocked = true
+      clearVerified = false
       purgesInFlight += 1
       try {
         await enqueue(purgeUserScopedStorage)
         purgeFailed = false
+        clearVerified = true
       } catch (error) {
         purgeFailed = true
         throw error
@@ -76,6 +91,7 @@ export function createWeappUserScopedDataLifecycle(): WeappUserScopedDataLifecyc
         throw new UserScopedStorageBlockedError()
       }
       blocked = false
+      clearVerified = false
     },
   }
 }

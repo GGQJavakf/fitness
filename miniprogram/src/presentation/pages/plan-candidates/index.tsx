@@ -1,12 +1,8 @@
 import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-import { exerciseDisplayName, weekdayDisplayName } from '../../copy'
-
-import './index.scss'
-
-const application = getWeappApplication()
+import { getPlanningApplication } from '../../../platform/weapp/featureRoots/planningCompositionRoot'
+import { exerciseDisplayName, trainingSplitDisplayName, weekdayDisplayName } from '../../copy'
 
 function sourceEyebrow(source: string | undefined): string {
   if (source === 'AI_PERSONALIZED') return 'AI PERSONALIZED PLAN'
@@ -16,7 +12,7 @@ function sourceEyebrow(source: string | undefined): string {
 
 function sourceTitle(source: string | undefined): string {
   if (source === 'AI_PERSONALIZED') return '你的 AI 个性化训练方案'
-  if (source === 'SYSTEM_PRESET') return '你的五日增肌个人预设'
+  if (source === 'SYSTEM_PRESET') return '你的系统预制训练方案'
   return '你的规则生成训练方案'
 }
 
@@ -27,6 +23,7 @@ function sourceDescription(source: string | undefined): string {
 }
 
 export default function PlanCandidatesPage() {
+  const application = getPlanningApplication()
   const [candidate] = useState(() => application.getCandidate())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -49,11 +46,7 @@ export default function PlanCandidatesPage() {
     setBusy(true)
     setError('')
     try {
-      const activePlan = await application.activateCandidate()
-      application.telemetry.track('plan_confirmed', {
-        versionNumber: activePlan.activeVersion.versionNumber,
-      })
-      await application.navigation.replace('WORKOUT_PREPARE')
+      await application.activateCandidateAndOpenWorkoutPreparation()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '科学计划暂时无法启用，请稍后重试')
     } finally {
@@ -75,9 +68,7 @@ export default function PlanCandidatesPage() {
     setBusy(true)
     setError('')
     try {
-      await application.activateCandidate()
-      application.openPlanEditor()
-      await application.navigation.open('PLAN_EDITOR')
+      await application.activateCandidateAndOpenEditor()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '计划编辑器暂时无法打开，请稍后重试')
     } finally {
@@ -155,6 +146,33 @@ export default function PlanCandidatesPage() {
       {candidate.notices.map((notice) => (
         <View className='recommendation-notice' key={notice}>{notice}</View>
       ))}
+      {candidate.status === 'READY' && (
+        <>
+          <View className='recommendation-reason'>
+            <Text className='recommendation-reason__label'>计划名称</Text>
+            <Text className='recommendation-reason__text'>{candidate.name}</Text>
+            {candidate.trainingSplit && (
+              <Text className='recommendation-reason__text'>训练分化：{trainingSplitDisplayName(candidate.trainingSplit)}</Text>
+            )}
+          </View>
+          <View className='recommendation-notes'>
+            <Text className='recommendation-notes__title'>执行规则</Text>
+            {candidate.executionRules.length > 0
+              ? candidate.executionRules.map((rule, index) => (
+                  <Text className='recommendation-notes__item' key={`execution-rule-${index}`}>• {rule}</Text>
+                ))
+              : <Text className='recommendation-notes__item'>当前计划未提供额外执行规则。</Text>}
+          </View>
+          <View className='recommendation-notes'>
+            <Text className='recommendation-notes__title'>进阶规则</Text>
+            {candidate.progressionRules.length > 0
+              ? candidate.progressionRules.map((rule, index) => (
+                  <Text className='recommendation-notes__item' key={`progression-rule-${index}`}>• {rule}</Text>
+                ))
+              : <Text className='recommendation-notes__item'>当前计划未提供额外进阶规则。</Text>}
+          </View>
+        </>
+      )}
 
       {candidate.days.map((day, dayIndex) => (
         <View key={day.code} className='recommendation-day'>
@@ -246,10 +264,17 @@ export default function PlanCandidatesPage() {
               disabled={busy}
               onClick={() => void startFirstWorkout()}
             >
-              开始第一次训练
+              确认启用并准备训练
             </Button>
           )
           : <Button className='recommendation-actions__primary' onClick={() => void adjustCandidate()}>{candidate.action?.label ?? '返回调整档案'}</Button>}
+        <Button
+          className='recommendation-actions__edit'
+          disabled={busy}
+          onClick={() => void application.navigation.open('PLAN_PRESETS')}
+        >
+          选择系统预设
+        </Button>
         {candidate.canContinue && (
           <Button
             className='recommendation-actions__edit'
@@ -259,7 +284,7 @@ export default function PlanCandidatesPage() {
             修改训练计划
           </Button>
         )}
-        {candidate.canContinue && <Text className='recommendation-actions__note'>进入修改时会先保存初始版本；后续调整生成新版本，已有训练记录不会改变。</Text>}
+        {candidate.canContinue && <Text className='recommendation-actions__note'>修改期间不会启用计划；只有保存时才会创建初始计划，若有调整再生成新版本。取消返回不会创建计划。</Text>}
       </View>
     </View>
   )

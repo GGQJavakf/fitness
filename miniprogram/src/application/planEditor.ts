@@ -450,6 +450,7 @@ function toValidationDraft(plan: PlanDraft): PlanValidationDraft {
     presetVersion: plan.presetVersion,
     executionRules: plan.executionRules ? [...plan.executionRules] : undefined,
     progressionRules: plan.progressionRules ? [...plan.progressionRules] : undefined,
+    movementImpactConstraint: plan.movementImpactConstraint,
     days: plan.days.map((day) => ({
       ...day,
       exercises: day.exercises.map((exercise) => ({ ...exercise })),

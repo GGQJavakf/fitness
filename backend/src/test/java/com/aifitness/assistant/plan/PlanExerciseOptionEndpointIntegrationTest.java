@@ -163,9 +163,62 @@ class PlanExerciseOptionEndpointIntegrationTest {
                         .value(org.hamcrest.Matchers.hasItem("INCLINE_PUSH_UP")));
     }
 
+    @Test
+    void failsClosedForUnknownImpactWhenEditingANoJumpPlan() throws Exception {
+        String token = loginAndConfigureHome();
+        UUID userId = loginService.authenticate(token).value();
+        UUID planId = UUID.randomUUID();
+        PlanDraft noJumpPlan = new PlanDraft(
+                "BODYWEIGHT_4_DAY_V1", (PlanDraft.TrainingSplit) null,
+                "无跳跃编辑约束回归计划",
+                List.of(
+                        new PlanDraft.Day(
+                                "BODYWEIGHT_B", "自重上肢与躯干 B",
+                                List.of(exercise("WALL_PUSH_UP"))),
+                        new PlanDraft.Day(
+                                "FULL_BODY_TEST", "全身约束测试",
+                                List.of(exercise("DEAD_BUG")))),
+                Map.of(), null, null, List.of(), List.of(),
+                PlanDraft.MovementImpactConstraint.NO_JUMP);
+        plans.create(userId, new TrainingPlanVersion(
+                UUID.randomUUID(), planId, 1, TrainingPlanVersion.SourceType.INITIAL,
+                noJumpPlan, new RuleReference("rule-v1", "template-v1", "content-v1"),
+                Set.of(), Instant.now()));
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-options", planId)
+                        .queryParam("dayCode", "BODYWEIGHT_B")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("BENT_KNEE_PUSH_UP")))
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("PUSH_UP"))))
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("PLANK"))));
+
+        mvc.perform(get("/api/v1/plans/{planId}/exercise-replacements", planId)
+                        .queryParam("dayCode", "FULL_BODY_TEST")
+                        .queryParam("sourceExerciseCode", "DEAD_BUG")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.hasItem("BIRD_DOG")))
+                .andExpect(jsonPath("$.data.items[*].exerciseCode")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("PLANK"))));
+
+        mvc.perform(get("/api/v1/plans/{planId}/day-options", planId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[*].code")
+                        .value(org.hamcrest.Matchers.hasItem("BODYWEIGHT_B")))
+                .andExpect(jsonPath("$.data.items[*].code")
+                        .value(org.hamcrest.Matchers.not(org.hamcrest.Matchers.hasItem("BODYWEIGHT_D"))));
+    }
+
     private static PlanDraft.Exercise exercise(String code) {
         PlanDraft.WeightStatus weightStatus = Set.of(
-                "PUSH_UP", "BODYWEIGHT_SQUAT", "PLANK", "GLUTE_BRIDGE_EXERCISE").contains(code)
+                "PUSH_UP", "BODYWEIGHT_SQUAT", "PLANK", "GLUTE_BRIDGE_EXERCISE", "DEAD_BUG")
+                .contains(code)
                 ? PlanDraft.WeightStatus.BODYWEIGHT
                 : PlanDraft.WeightStatus.NEEDS_CALIBRATION;
         return new PlanDraft.Exercise(code, 3, 8, 12, 90, weightStatus);
@@ -207,6 +260,20 @@ class PlanExerciseOptionEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"items\":[" + items + "],\"expectedVersion\":0}"))
+                .andExpect(status().isOk());
+        return token;
+    }
+
+    private String loginAndConfigureHome() throws Exception {
+        String token = login();
+        mvc.perform(put("/api/v1/profile")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"experience":"BEGINNER","goal":"FAT_LOSS",
+                                 "weeklyFrequency":4,"sessionMinutes":30,"location":"HOME",
+                                 "expectedVersion":0}
+                                """))
                 .andExpect(status().isOk());
         return token;
     }

@@ -13,6 +13,7 @@ import {
   LocalUserDataCleanupError,
   createAccountLifecycleUseCases,
 } from '../src/application/localPrivacyLifecycle'
+import { createStartupUseCases, type Session } from '../src/application/startup'
 import { FitnessApiClient } from '../src/infrastructure/api/client'
 import { createWeappSessionStore } from '../src/platform/weapp/adapters'
 import {
@@ -84,6 +85,21 @@ describe('WeApp user-scoped local privacy lifecycle', () => {
 
     expect(values.size).toBe(0)
     expect(taro.getStorage).not.toHaveBeenCalled()
+  })
+
+  it('reports a verified clear only after purge completes and resets it on activation', async () => {
+    const values = new Map<string, unknown>()
+    installStorage(values)
+    const lifecycle = createWeappUserScopedDataLifecycle()
+
+    expect(lifecycle.isClearVerified()).toBe(false)
+    const purge = lifecycle.purge('AUTHENTICATION_EXPIRED')
+    expect(lifecycle.isClearVerified()).toBe(false)
+    await purge
+    expect(lifecycle.isClearVerified()).toBe(true)
+
+    lifecycle.activate()
+    expect(lifecycle.isClearVerified()).toBe(false)
   })
 
   it('fails closed when the storage inventory is malformed instead of claiming dynamic keys were removed', async () => {
@@ -168,6 +184,153 @@ describe('WeApp user-scoped local privacy lifecycle', () => {
     expect(values.has('fitness.workout.draft.recovery.v1')).toBe(true)
     expect(values.has('fitness.workout.draft.quarantine.v1')).toBe(true)
   })
+
+  it('treats a successfully purged session as absent until an explicit login activates writes', async () => {
+    const oldSession: Session = {
+      accessToken: 'old-access-redacted',
+      refreshToken: 'old-refresh-redacted',
+      expiresAt: '2026-08-28T08:00:00Z',
+    }
+    const newSession: Session = {
+      accessToken: 'new-access-redacted',
+      refreshToken: 'new-refresh-redacted',
+      expiresAt: '2026-08-28T10:00:00Z',
+    }
+    const values = new Map<string, unknown>([['fitness.session.v1', oldSession]])
+    installStorage(values)
+    const lifecycle = createWeappUserScopedDataLifecycle()
+    const sessionStore = createWeappSessionStore(lifecycle)
+    const replaceLogin = vi.fn()
+    const account = createAccountLifecycleUseCases({
+      remote: { logout: vi.fn() },
+      localData: lifecycle,
+      navigation: { replaceLogin },
+      login: vi.fn(),
+    })
+
+    await account.logout()
+    expect(replaceLogin).toHaveBeenCalledOnce()
+    expect(values.has('fitness.session.v1')).toBe(false)
+
+    taro.getStorage.mockClear()
+    taro.removeStorage.mockClear()
+    const navigation = { replace: vi.fn() }
+    const authLogin = vi.fn().mockResolvedValue(newSession)
+    const startup = createStartupUseCases({
+      sessionStore,
+      wechatLogin: { getCode: vi.fn().mockResolvedValue('temporary-wechat-code') },
+      auth: { login: authLogin },
+      workout: { hasActive: vi.fn().mockResolvedValue(false) },
+      profile: { exists: vi.fn().mockResolvedValue(true) },
+      plan: { hasActivePlan: vi.fn().mockResolvedValue(true) },
+      navigation,
+      localUserData: lifecycle,
+    })
+
+    await expect(startup.start()).resolves.toBe('LOGIN')
+    expect(navigation.replace).toHaveBeenCalledWith('LOGIN')
+    expect(taro.getStorage).not.toHaveBeenCalled()
+
+    await expect(startup.login()).resolves.toBe('PLAN')
+    expect(authLogin).toHaveBeenCalledWith('temporary-wechat-code')
+    expect(values.get('fitness.session.v1')).toEqual(newSession)
+    expect(taro.removeStorage).not.toHaveBeenCalled()
+  })
+
+  it('purges orphaned account data before requesting a new session when the session key is absent', async () => {
+    const newSession: Session = {
+      accessToken: 'new-access-redacted',
+      refreshToken: 'new-refresh-redacted',
+      expiresAt: '2026-08-28T10:00:00Z',
+    }
+    const values = new Map<string, unknown>([
+      ['fitness.workout.draft.record.old-user.4.good', { owner: 'old-user' }],
+      ['fitness.workout.queue.pending.v1', [{ owner: 'old-user' }]],
+      ['fitness.privacy.export.temporary.v1', { owner: 'old-user' }],
+      ['fitness.settings.theme.v1', 'dark'],
+    ])
+    installStorage(values)
+    let releaseInventory!: () => void
+    const inventoryReleased = new Promise<void>((resolve) => {
+      releaseInventory = resolve
+    })
+    let markInventoryStarted!: () => void
+    const inventoryStarted = new Promise<void>((resolve) => {
+      markInventoryStarted = resolve
+    })
+    taro.getStorageInfo.mockImplementation(async () => {
+      markInventoryStarted()
+      await inventoryReleased
+      return { keys: [...values.keys()] }
+    })
+    const lifecycle = createWeappUserScopedDataLifecycle()
+    const getCode = vi.fn().mockResolvedValue('temporary-wechat-code')
+    const authLogin = vi.fn().mockResolvedValue(newSession)
+    const startup = createStartupUseCases({
+      sessionStore: createWeappSessionStore(lifecycle),
+      wechatLogin: { getCode },
+      auth: { login: authLogin },
+      workout: { hasActive: vi.fn().mockResolvedValue(false) },
+      profile: { exists: vi.fn().mockResolvedValue(true) },
+      plan: { hasActivePlan: vi.fn().mockResolvedValue(true) },
+      navigation: { replace: vi.fn() },
+      localUserData: lifecycle,
+    })
+
+    const login = startup.login()
+    await inventoryStarted
+    expect(getCode).not.toHaveBeenCalled()
+    expect(authLogin).not.toHaveBeenCalled()
+    releaseInventory()
+
+    await expect(login).resolves.toBe('PLAN')
+    expect([...values.entries()]).toEqual([
+      ['fitness.settings.theme.v1', 'dark'],
+      ['fitness.session.v1', newSession],
+    ])
+    expect(getCode).toHaveBeenCalledOnce()
+    expect(authLogin).toHaveBeenCalledWith('temporary-wechat-code')
+  })
+
+  it('keeps startup reads, activation, and session writes blocked after an incomplete purge', async () => {
+    const values = new Map<string, unknown>([
+      ['fitness.session.v1', { accessToken: 'old-access-redacted' }],
+      ['fitness.workout.draft.record.old-user.1.bad', 'residual'],
+    ])
+    installStorage(values)
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (key.startsWith('fitness.workout.draft.record.')) throw new Error('storage unavailable')
+      if (!values.has(key)) throw missingStorageError
+      values.delete(key)
+    })
+    const lifecycle = createWeappUserScopedDataLifecycle()
+    const sessionStore = createWeappSessionStore(lifecycle)
+    await expect(lifecycle.purge('LOGOUT')).rejects.toBeInstanceOf(UserScopedStoragePurgeError)
+
+    const authLogin = vi.fn()
+    const startup = createStartupUseCases({
+      sessionStore,
+      wechatLogin: { getCode: vi.fn().mockResolvedValue('temporary-wechat-code') },
+      auth: { login: authLogin },
+      workout: { hasActive: vi.fn() },
+      profile: { exists: vi.fn() },
+      plan: { hasActivePlan: vi.fn() },
+      navigation: { replace: vi.fn() },
+      localUserData: lifecycle,
+    })
+
+    await expect(startup.start()).rejects.toBeInstanceOf(UserScopedStorageBlockedError)
+    expect(() => lifecycle.activate()).toThrow(UserScopedStorageBlockedError)
+    await expect(startup.login()).rejects.toBeInstanceOf(UserScopedStorageBlockedError)
+    await expect(sessionStore.save({
+      accessToken: 'new-access-redacted',
+      refreshToken: 'new-refresh-redacted',
+      expiresAt: '2026-08-28T10:00:00Z',
+    })).rejects.toBeInstanceOf(UserScopedStorageBlockedError)
+    expect(authLogin).not.toHaveBeenCalled()
+    expect(values.has('fitness.session.v1')).toBe(false)
+    expect(values.has('fitness.workout.draft.record.old-user.1.bad')).toBe(true)
+  })
 })
 
 describe('account logout and switch lifecycle', () => {
@@ -182,7 +345,7 @@ describe('account logout and switch lifecycle', () => {
     })
 
     await expect(account.logout()).resolves.toEqual({ remoteLogoutSucceeded: true })
-    expect(order).toEqual(['clear-memory', 'remote-logout', 'purge', 'login-screen'])
+    expect(order).toEqual(['clear-memory', 'purge', 'remote-logout', 'login-screen'])
   })
 
   it('still purges stale local data when remote logout fails', async () => {
@@ -214,7 +377,7 @@ describe('account logout and switch lifecycle', () => {
     })
 
     await expect(account.switchAccount()).rejects.toThrow('login failed')
-    expect(order).toEqual(['remote-logout', 'purge', 'login-screen', 'new-login', 'login-screen'])
+    expect(order).toEqual(['purge', 'remote-logout', 'login-screen', 'new-login'])
   })
 
   it('does not start a new-account login when old-user purge is incomplete', async () => {
@@ -257,7 +420,7 @@ describe('account logout and switch lifecycle', () => {
     }))
   })
 
-  it('preserves drafts on an ordinary 401 while clearing only the stale session', async () => {
+  it('purges all old-account local data and keeps storage blocked on an ordinary 401', async () => {
     const values = new Map<string, unknown>([
       ['fitness.session.v1', { accessToken: 'expired', refreshToken: 'expired-refresh', expiresAt: '2026-08-11T01:00:00Z' }],
       ['fitness.workout.draft.record.user.1.good', { exercise: 'SQUAT' }],
@@ -279,14 +442,50 @@ describe('account logout and switch lifecycle', () => {
       'http://127.0.0.1:8080',
       { request },
       createWeappSessionStore(lifecycle),
-      async () => navigate(),
+      async () => {
+        await lifecycle.purge('AUTHENTICATION_EXPIRED')
+        await navigate()
+      },
     )
 
     await expect(client.getProfileVersion()).rejects.toMatchObject({ code: 'AUTHENTICATION_REQUIRED' })
 
     expect(values.has('fitness.session.v1')).toBe(false)
-    expect(values.has('fitness.workout.draft.record.user.1.good')).toBe(true)
-    expect(values.has('fitness.workout.queue.pending.v1')).toBe(true)
+    expect(values.has('fitness.workout.draft.record.user.1.good')).toBe(false)
+    expect(values.has('fitness.workout.queue.pending.v1')).toBe(false)
+    await expect(lifecycle.runUserOperation(async () => undefined))
+      .rejects.toBeInstanceOf(UserScopedStorageBlockedError)
+    expect(navigate).toHaveBeenCalledOnce()
+  })
+
+  it('routes an absent local session through full authentication cleanup without calling transport', async () => {
+    const values = new Map<string, unknown>([
+      ['fitness.workout.draft.record.orphaned-user.1.good', { exercise: 'SQUAT' }],
+      ['fitness.workout.queue.pending.v1', [{ operation: 'record-set' }]],
+      ['fitness.privacy.export.temporary.v1', { owner: 'orphaned-user' }],
+    ])
+    installStorage(values)
+    const lifecycle = createWeappUserScopedDataLifecycle()
+    const navigate = vi.fn()
+    const request = vi.fn()
+    const client = new FitnessApiClient(
+      'http://127.0.0.1:8080',
+      { request },
+      createWeappSessionStore(lifecycle),
+      async () => {
+        await lifecycle.purge('AUTHENTICATION_EXPIRED')
+        await navigate()
+      },
+    )
+
+    await expect(client.getProfileVersion()).rejects.toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+    })
+
+    expect(request).not.toHaveBeenCalled()
+    expect([...values.keys()]).toEqual([])
+    await expect(lifecycle.runUserOperation(async () => undefined))
+      .rejects.toBeInstanceOf(UserScopedStorageBlockedError)
     expect(navigate).toHaveBeenCalledOnce()
   })
 

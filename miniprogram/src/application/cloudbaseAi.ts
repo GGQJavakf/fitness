@@ -413,6 +413,9 @@ function switchSessionFocus(
   trainingSplit: NonNullable<PlanGenerationContextData['profile']['trainingSplit']>,
   weeklyFrequency: number,
 ): ProfessionalSessionFocus[] {
+  if (trainingSplit === 'FULL_BODY') {
+    return Array.from({ length: weeklyFrequency }, () => 'FULL_BODY')
+  }
   if (trainingSplit === 'UPPER_LOWER') {
     return Array.from({ length: weeklyFrequency }, (_, index) => index % 2 === 0 ? 'UPPER' : 'LOWER')
   }
@@ -426,6 +429,8 @@ function resolveTrainingSplit(
   context: PlanGenerationContextData,
 ): NonNullable<PlanGenerationContextData['profile']['trainingSplit']> {
   if (context.profile.trainingSplit) return context.profile.trainingSplit
+  if (context.profile.experience === 'BEGINNER'
+    && (context.profile.weeklyFrequency === 2 || context.profile.weeklyFrequency === 3)) return 'FULL_BODY'
   if (context.profile.weeklyFrequency === 2 || context.profile.weeklyFrequency === 4) return 'UPPER_LOWER'
   if (context.profile.weeklyFrequency === 3 || context.profile.weeklyFrequency === 6) return 'PUSH_PULL_LEGS'
   return 'BODY_PART_FIVE_DAY'

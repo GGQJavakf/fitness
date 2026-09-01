@@ -256,6 +256,7 @@ describe('plan structure editing', () => {
           confirmedWarningCodes: [], createdAt: '2026-07-25T00:00:00Z',
         },
       }),
+      commitCandidate: vi.fn(),
       listDayOptions: vi.fn().mockResolvedValue([
         { code: 'D1', name: '训练日 1', exercises: [] },
         { code: 'D2', name: '训练日 2', exercises: [] },

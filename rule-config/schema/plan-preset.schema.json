@@ -31,7 +31,7 @@
     "metadata": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "kind", "version", "status", "sourceReferences", "activation"],
+      "required": ["schemaVersion", "kind", "version", "status", "sourceReferences", "sources", "activation"],
       "properties": {
         "schemaVersion": { "const": "1.0.0" },
         "kind": { "const": "SYSTEM_PLAN_PRESET" },
@@ -43,8 +43,46 @@
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1 }
         },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source" }
+        },
         "activation": { "$ref": "#/$defs/activation" }
       }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "usageBoundary", "sourceKind"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
+        "title": { "type": "string", "minLength": 2 },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "internalSource": { "type": "string", "minLength": 2 },
+        "usageBoundary": { "type": "string", "minLength": 8 },
+        "sourceKind": {
+          "enum": [
+            "PEER_REVIEWED_POSITION_STAND",
+            "PEER_REVIEWED_CONSENSUS_STATEMENT",
+            "PROFESSIONAL_ORGANIZATION_SUMMARY",
+            "GOVERNMENT_GUIDELINE",
+            "GOVERNMENT_PUBLIC_HEALTH_GUIDANCE",
+            "INTERNAL_USER_PLAN"
+          ]
+        }
+      },
+      "oneOf": [
+        { "required": ["url"], "not": { "required": ["internalSource"] } },
+        { "required": ["internalSource"], "not": { "required": ["url"] } }
+      ],
+      "allOf": [
+        {
+          "if": { "properties": { "sourceKind": { "const": "INTERNAL_USER_PLAN" } } },
+          "then": { "required": ["internalSource"], "not": { "required": ["url"] } },
+          "else": { "required": ["url"], "not": { "required": ["internalSource"] } }
+        }
+      ]
     },
     "activation": {
       "type": "object",
@@ -62,17 +100,37 @@
     "preset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "version", "templateCode", "name", "goal", "weeklyFrequency", "sessionMinutes", "location", "trainingSplit", "executionRules", "progressionRules", "days"],
+      "required": ["code", "version", "templateCode", "name", "experience", "goal", "weeklyFrequency", "sessionMinutes", "location", "trainingSplit", "contentStatus", "professionalReviewStatus", "availabilityStatus", "sourceIds", "explanationSourceIds", "executionRules", "progressionRules", "days"],
       "properties": {
         "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
         "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
         "templateCode": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
         "name": { "type": "string", "minLength": 2 },
-        "goal": { "enum": ["STRENGTH", "HYPERTROPHY", "GENERAL_FITNESS"] },
+        "experience": { "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED"] },
+        "goal": { "enum": ["STRENGTH", "HYPERTROPHY", "FAT_LOSS", "GENERAL_FITNESS"] },
         "weeklyFrequency": { "type": "integer", "minimum": 2, "maximum": 6 },
         "sessionMinutes": { "type": "integer", "minimum": 1 },
         "location": { "enum": ["HOME", "GYM"] },
-        "trainingSplit": { "enum": ["UPPER_LOWER", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"] },
+        "trainingSplit": { "enum": ["FULL_BODY", "UPPER_LOWER", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"] },
+        "contentStatus": { "enum": ["AI_DRAFT", "AI_VALIDATED", "PUBLIC_RELEASE_APPROVED", "RETIRED"] },
+        "professionalReviewStatus": { "enum": ["PENDING", "APPROVED"] },
+        "availabilityStatus": { "enum": ["AVAILABLE", "BLOCKED_CAPABILITY"] },
+        "unavailableReason": { "type": "string", "minLength": 8 },
+        "introductoryPhase": { "$ref": "#/$defs/introductoryPhase" },
+        "movementImpactConstraint": { "enum": ["NO_JUMP"] },
+        "reviewRecordId": { "type": "string", "minLength": 1 },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "sourceIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z0-9_]+$" }
+        },
+        "explanationSourceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z0-9_]+$" }
+        },
         "executionRules": {
           "type": "array",
           "minItems": 1,
@@ -89,6 +147,41 @@
           "maxItems": 6,
           "items": { "$ref": "#/$defs/day" }
         }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "professionalReviewStatus": { "const": "APPROVED" } } },
+          "then": { "required": ["reviewRecordId", "reviewedAt"] },
+          "else": {
+            "not": {
+              "anyOf": [
+                { "required": ["reviewRecordId"] },
+                { "required": ["reviewedAt"] }
+              ]
+            }
+          }
+        },
+        {
+          "if": { "properties": { "contentStatus": { "const": "PUBLIC_RELEASE_APPROVED" } } },
+          "then": { "properties": { "professionalReviewStatus": { "const": "APPROVED" } } }
+        },
+        {
+          "if": { "properties": { "availabilityStatus": { "const": "BLOCKED_CAPABILITY" } } },
+          "then": { "required": ["unavailableReason"] },
+          "else": { "not": { "required": ["unavailableReason"] } }
+        }
+      ]
+    },
+    "introductoryPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weeks", "workSets", "targetRirMin", "targetRirMax", "transitionCondition"],
+      "properties": {
+        "weeks": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "workSets": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "targetRirMin": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "targetRirMax": { "type": "integer", "minimum": 0, "maximum": 10 },
+        "transitionCondition": { "type": "string", "minLength": 8 }
       }
     },
     "day": {

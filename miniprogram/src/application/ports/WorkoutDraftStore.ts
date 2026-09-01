@@ -21,6 +21,8 @@ export interface WorkoutDraft {
 export interface WorkoutDraftStore {
   loadActive(): Promise<WorkoutDraft | null>
   save(draft: WorkoutDraft, expectedRevision?: number | null): Promise<void>
+  /** Atomically switches the active pointer from the expected draft to a fully persisted replacement. */
+  replaceActive?(expectedDraftId: string, replacement: WorkoutDraft): Promise<void>
   clearActive(expectedDraftId: string): Promise<void>
   discardCorrupted?(): Promise<void>
 }

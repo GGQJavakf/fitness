@@ -54,7 +54,10 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
                 texts(node.path("equipment")),
                 texts(node.path("primaryMuscles")), textList(node.path("instructions")),
                 textList(node.path("safetyCues")), node.path("rightsStatus").asText(),
-                node.path("active").asBoolean(false), image(node), alternatives(node.path("alternatives")))));
+                node.path("active").asBoolean(false), image(node), alternatives(node.path("alternatives")),
+                node.path("impactClass").isTextual()
+                        ? ExerciseCatalog.ImpactClass.valueOf(node.path("impactClass").asText())
+                        : null)));
         return new ExerciseCatalog(metadata(document.path("metadata")), exercises);
     }
 
@@ -100,7 +103,8 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
                     slot.at("/repRange/max").asInt(), slot.path("restSeconds").asInt(),
                     slot.path("initialWeightState").asText())));
             days.add(new PlanTemplateCatalog.Day(
-                    day.path("code").asText(), day.path("name").asText(), exercises));
+                    day.path("code").asText(), day.path("name").asText(),
+                    textOrNull(day.path("focus")), exercises));
         });
         return List.copyOf(days);
     }
@@ -138,5 +142,9 @@ public final class ClasspathContentCatalogRepository implements ContentCatalogRe
         List<String> values = new ArrayList<>();
         nodes.forEach(node -> values.add(node.asText()));
         return values;
+    }
+
+    private static String textOrNull(JsonNode node) {
+        return node.isTextual() && !node.asText().isBlank() ? node.asText() : null;
     }
 }

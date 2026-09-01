@@ -6,12 +6,16 @@ import type { WorkoutFlowState } from '../../../application/workoutFlow'
 import type { WorkoutRecoveryAssessment } from '../../../application/ports/WorkoutRecoveryPort'
 import { PendingWorkoutStartError } from '../../../application/ports/WorkoutStartIntentStore'
 import { selectNextTrainingDayCode } from '../../../application/selectNextTrainingDay'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import type {
+  CoordinatedWorkoutStartInput,
+  CoordinatedWorkoutStartResult,
+} from '../../../application/use-cases/WorkoutStartCoordinator'
+import {
+  WorkoutReplacementWorkflowError,
+  type WorkoutReplacementPhase,
+} from '../../../application/workoutReplacementWorkflow'
+import { getWorkoutApplication } from '../../../platform/weapp/featureRoots/workoutCompositionRoot'
 import { exerciseDisplayName } from '../../copy'
-
-import './index.scss'
-
-const application = getWeappApplication()
 
 const muscleLabels: Readonly<Record<string, string>> = {
   BACK: '背部',
@@ -27,7 +31,10 @@ const muscleLabels: Readonly<Record<string, string>> = {
   TRICEPS: '肱三头肌',
 }
 
+type WorkoutStartPhase = 'IDLE' | 'STARTING' | WorkoutReplacementPhase
+
 export default function WorkoutPreparePage() {
+  const application = getWorkoutApplication()
   const [routedTrainingDayCode] = useState(
     () => application.routeParameter('trainingDayCode')?.trim() ?? '',
   )
@@ -37,7 +44,7 @@ export default function WorkoutPreparePage() {
   const [clientSessionKey, setClientSessionKey] = useState(newWorkoutClientSessionKey)
   const [loading, setLoading] = useState(true)
   const [planReadFailed, setPlanReadFailed] = useState(false)
-  const [starting, setStarting] = useState(false)
+  const [startPhase, setStartPhase] = useState<WorkoutStartPhase>('IDLE')
   const [unfinished, setUnfinished] = useState<WorkoutFlowState | null>(null)
   const [recoveryWarning, setRecoveryWarning] = useState<WorkoutRecoveryAssessment | null>(null)
   const [recoveryConfirmationToken, setRecoveryConfirmationToken] = useState<string | null>(null)
@@ -47,6 +54,7 @@ export default function WorkoutPreparePage() {
   const mountedRef = useRef(true)
   const startInFlightRef = useRef(false)
   const abandonInFlightRef = useRef(false)
+  const starting = startPhase !== 'IDLE'
 
   async function loadPlan(): Promise<void> {
     if (loadActiveRef.current) return
@@ -56,16 +64,13 @@ export default function WorkoutPreparePage() {
     setPlanReadFailed(false)
     setMessage('正在准备今天的训练…')
     try {
-      let historyUnavailable = false
-      const [value, history] = await Promise.all([
-        application.loadActivePlan(),
-        application.listWorkoutHistory(undefined, 50).catch(() => {
-          historyUnavailable = true
-          return { items: [] }
-        }),
-      ])
+      const {
+        plan: value,
+        history,
+        historyUnavailable,
+        rememberedTrainingDayCode,
+      } = await application.loadWorkoutPreparation()
       if (!mountedRef.current || requestId !== loadRequestIdRef.current) return
-      const rememberedTrainingDayCode = await application.nextTrainingDaySelection.consume()
       const requestedTrainingDayCode = (
         routedTrainingDayCode || rememberedTrainingDayCode || ''
       ).trim()
@@ -105,64 +110,81 @@ export default function WorkoutPreparePage() {
     }
   }, [])
 
+  function buildStartInput(
+    activeDraftDecision?: 'RESUME',
+    confirmationToken?: string,
+  ): CoordinatedWorkoutStartInput | null {
+    const day = plan?.activeVersion.plan.days.find((item) => item.code === selectedDayCode)
+    if (!plan || !day) return null
+    return {
+      clientSessionKey,
+      planId: plan.planId,
+      planVersionNo: plan.activeVersion.versionNumber,
+      planDayId: day.code,
+      activeDraftDecision,
+      ...(confirmationToken ? { recoveryConfirmationToken: confirmationToken } : {}),
+    }
+  }
+
+  function applyStartResult(result: CoordinatedWorkoutStartResult): void {
+    if (result.kind === 'RECOVERY_CONFIRMATION_REQUIRED') {
+      setRecoveryWarning(result.assessment)
+      setRecoveryConfirmationToken(result.confirmationToken)
+      setMessage('最近的实际训练仍在规则恢复窗口内，请明确选择下一步。')
+      return
+    }
+    if (result.kind === 'RESUME_REQUIRED') {
+      setUnfinished(result.state)
+      setMessage('发现一场未完成训练。继续原训练，或明确结束原训练后再创建新会话。')
+      return
+    }
+    if (result.kind === 'TERMINAL_REPLAY') {
+      setClientSessionKey(newWorkoutClientSessionKey())
+      setRecoveryWarning(null)
+      setRecoveryConfirmationToken(null)
+      setMessage('上次训练已经结束，已准备新的安全启动标识；请再次点击开始。')
+      return
+    }
+    setUnfinished(null)
+    setRecoveryWarning(null)
+    setRecoveryConfirmationToken(null)
+    if (result.kind === 'STARTED') {
+      application.telemetry.track('workout_started', { exerciseCount: result.state.exercises.length })
+    }
+  }
+
+  function handleStartError(error: unknown, currentPlan: ActivePlanData): void {
+    if (error instanceof PendingWorkoutStartError
+      && currentPlan.planId === error.intent.planId
+      && currentPlan.activeVersion.versionNumber === error.intent.planVersionNo
+      && currentPlan.activeVersion.plan.days.some((item) => item.code === error.intent.planDayId)) {
+      setSelectedDayCode(error.intent.planDayId)
+      setRecoveryWarning(null)
+      setRecoveryConfirmationToken(null)
+      setMessage('检测到上次开始训练的结果尚未确认，已切回原训练日；请再次点击以安全恢复。')
+    } else {
+      setMessage('本次训练暂未开始，请稍后重试；重复点击不会生成两次训练。')
+    }
+  }
+
   async function start(
     activeDraftDecision?: 'RESUME',
     confirmationToken?: string,
   ): Promise<void> {
-    const day = plan?.activeVersion.plan.days.find((item) => item.code === selectedDayCode)
-    if (!plan || !day || startInFlightRef.current || abandonInFlightRef.current) return
+    const currentPlan = plan
+    const input = buildStartInput(activeDraftDecision, confirmationToken)
+    if (!currentPlan || !input || startInFlightRef.current || abandonInFlightRef.current) return
     startInFlightRef.current = true
-    setStarting(true)
+    setStartPhase('STARTING')
     setMessage(confirmationToken ? '正在按你的明确选择开始训练…' : '正在开始训练…')
     try {
-      const result = await application.workoutStart.start({
-        clientSessionKey,
-        planId: plan.planId,
-        planVersionNo: plan.activeVersion.versionNumber,
-        planDayId: day.code,
-        activeDraftDecision,
-        ...(confirmationToken ? { recoveryConfirmationToken: confirmationToken } : {}),
-      })
-      if (result.kind === 'RECOVERY_CONFIRMATION_REQUIRED') {
-        setRecoveryWarning(result.assessment)
-        setRecoveryConfirmationToken(result.confirmationToken)
-        setMessage('最近的实际训练仍在规则恢复窗口内，请明确选择下一步。')
-        return
-      }
-      if (result.kind === 'RESUME_REQUIRED') {
-        setUnfinished(result.state)
-        setMessage('发现一场未完成训练。继续原训练，或明确结束原训练后再创建新会话。')
-        return
-      }
-      if (result.kind === 'TERMINAL_REPLAY') {
-        setClientSessionKey(newWorkoutClientSessionKey())
-        setRecoveryWarning(null)
-        setRecoveryConfirmationToken(null)
-        setMessage('上次训练已经结束，已准备新的安全启动标识；请再次点击开始。')
-        return
-      }
-      setUnfinished(null)
-      setRecoveryWarning(null)
-      setRecoveryConfirmationToken(null)
-      if (result.kind === 'STARTED') {
-        application.telemetry.track('workout_started', { exerciseCount: result.state.exercises.length })
-      }
-      await application.navigation.replace('WORKOUT_SESSION')
+      const result = await application.startWorkout(input)
+      if (result) applyStartResult(result)
     } catch (error) {
-      if (error instanceof PendingWorkoutStartError
-        && plan.planId === error.intent.planId
-        && plan.activeVersion.versionNumber === error.intent.planVersionNo
-        && plan.activeVersion.plan.days.some((item) => item.code === error.intent.planDayId)) {
-        setSelectedDayCode(error.intent.planDayId)
-        setRecoveryWarning(null)
-        setRecoveryConfirmationToken(null)
-        setMessage('检测到上次开始训练的结果尚未确认，已切回原训练日；请再次点击以安全恢复。')
-      } else {
-        setMessage('本次训练暂未开始，请稍后重试；重复点击不会生成两次训练。')
-      }
+      handleStartError(error, currentPlan)
     } finally {
       startInFlightRef.current = false
-      setStarting(false)
+      setStartPhase('IDLE')
     }
   }
 
@@ -174,25 +196,37 @@ export default function WorkoutPreparePage() {
   }
 
   async function postponeWorkout(): Promise<void> {
-    if (!await clearUncreatedRecoveryStart()) return
-    setRecoveryWarning(null)
-    setRecoveryConfirmationToken(null)
-    await application.navigation.replace('PLAN')
+    const input = buildCancelInput()
+    if (!input) return
+    try {
+      const completed = await application.cancelWorkoutStartAndOpenPlan(input)
+      if (!completed) return
+      setRecoveryWarning(null)
+      setRecoveryConfirmationToken(null)
+    } catch {
+      setMessage('暂时无法安全清除上次待启动记录，已保留当前恢复提示；请稍后重试。')
+    }
   }
 
-  async function clearUncreatedRecoveryStart(): Promise<boolean> {
+  function buildCancelInput() {
     const recoveryDay = plan?.activeVersion.plan.days.find((item) => item.code === selectedDayCode)
     if (!plan || !recoveryDay) {
       setMessage('当前训练日信息已变化，无法安全清除待启动记录；请重新读取计划。')
-      return false
+      return null
     }
+    return {
+      clientSessionKey,
+      planId: plan.planId,
+      planVersionNo: plan.activeVersion.versionNumber,
+      planDayId: recoveryDay.code,
+    }
+  }
+
+  async function clearUncreatedRecoveryStart(): Promise<boolean> {
+    const input = buildCancelInput()
+    if (!input) return false
     try {
-      await application.workoutStart.cancelUncreatedStart({
-        clientSessionKey,
-        planId: plan.planId,
-        planVersionNo: plan.activeVersion.versionNumber,
-        planDayId: recoveryDay.code,
-      })
+      await application.workoutStart.cancelUncreatedStart(input)
       return true
     } catch {
       setMessage('暂时无法安全清除上次待启动记录，已保留当前恢复提示；请稍后重试。')
@@ -200,22 +234,45 @@ export default function WorkoutPreparePage() {
     }
   }
 
-  async function abandonAndStart(): Promise<void> {
-    if (!unfinished || abandonInFlightRef.current || startInFlightRef.current) return
+  async function abandonAndStart(confirmationToken?: string): Promise<void> {
+    const currentPlan = plan
+    const currentUnfinished = unfinished
+    const input = buildStartInput(undefined, confirmationToken)
+    if (!currentPlan || !currentUnfinished || !input
+      || abandonInFlightRef.current || startInFlightRef.current) return
     abandonInFlightRef.current = true
-    setStarting(true)
+    setStartPhase('ENDING_ACTIVE')
     setMessage('正在结束原训练…')
     try {
-      await application.workouts.abandonActive(unfinished)
-      setUnfinished(null)
-      setStarting(false)
-      abandonInFlightRef.current = false
-      await start()
-    } catch {
-      setMessage('原训练暂时无法安全结束，已保留草稿；请稍后重试或继续原训练。')
+      const result = await application.abandonAndStartWorkout(currentUnfinished, input, {
+        onPhaseChanged(phase) {
+          if (!mountedRef.current) return
+          setStartPhase(phase)
+          setMessage(phase === 'OPENING_NEW'
+            ? '新训练已创建，正在打开训练页…'
+            : '正在结束原训练…')
+        },
+      })
+      if (result) applyStartResult(result)
+    } catch (error) {
+      const failure = error instanceof WorkoutReplacementWorkflowError
+        ? error.failure
+        : error
+      const failedAfterEnding = error instanceof WorkoutReplacementWorkflowError
+        && error.phase === 'OPENING_NEW'
+      if (failedAfterEnding) {
+        setUnfinished(null)
+        setRecoveryWarning(null)
+        setRecoveryConfirmationToken(null)
+        setMessage('新训练已创建，但页面暂时未打开；请再次点击开始以安全恢复。')
+      } else if (failure instanceof PendingWorkoutStartError) {
+        handleStartError(failure, currentPlan)
+      } else {
+        setMessage('原训练暂时无法安全结束，已保留草稿；请稍后重试或继续原训练。')
+      }
     } finally {
       abandonInFlightRef.current = false
-      if (!startInFlightRef.current) setStarting(false)
+      if (!startInFlightRef.current) setStartPhase('IDLE')
     }
   }
 
@@ -368,10 +425,15 @@ export default function WorkoutPreparePage() {
                 </Button>
                 <Button
                   className='primary-action'
-                  loading={starting}
+                  loading={startPhase === 'STARTING'}
                   disabled={starting}
                   onClick={() => {
-                    if (recoveryConfirmationToken) void start(undefined, recoveryConfirmationToken)
+                    if (!recoveryConfirmationToken) return
+                    if (unfinished) {
+                      void abandonAndStart(recoveryConfirmationToken)
+                    } else {
+                      void start(undefined, recoveryConfirmationToken)
+                    }
                   }}
                 >
                   仍继续本次训练
@@ -386,19 +448,24 @@ export default function WorkoutPreparePage() {
         {unfinished && (
           <Button
             className='secondary-action'
+            loading={startPhase === 'ENDING_ACTIVE' || startPhase === 'OPENING_NEW'}
             disabled={starting}
             onClick={() => void abandonAndStart()}
           >
-            结束原训练并开始新的
+            {startPhase === 'ENDING_ACTIVE'
+              ? '正在结束原训练…'
+              : startPhase === 'OPENING_NEW'
+                ? '正在打开新训练…'
+                : '结束原训练并开始新的'}
           </Button>
         )}
         <Button
           className='primary-action'
-          loading={starting}
+          loading={startPhase === 'STARTING'}
           disabled={!day || starting}
           onClick={() => void start(unfinished ? 'RESUME' : undefined)}
         >
-          {starting ? '正在开始训练' : unfinished ? '继续未完成训练' : '开始热身'}
+          {startPhase === 'STARTING' ? '正在开始训练' : unfinished ? '继续未完成训练' : '开始热身'}
         </Button>
       </View>}
     </View>

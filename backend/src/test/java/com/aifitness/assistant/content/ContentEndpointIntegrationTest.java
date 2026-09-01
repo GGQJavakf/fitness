@@ -43,7 +43,7 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("equipmentType", "dumbbell"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.9.0"))
                 .andExpect(jsonPath("$.data.items.length()").value(21))
                 .andExpect(jsonPath("$.data.items[*].code", containsInAnyOrder(
                         "DUMBBELL_BENCH_PRESS",
@@ -83,7 +83,7 @@ class ContentEndpointIntegrationTest {
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
                 .andExpect(jsonPath("$.data.image.fallbackRef")
                         .value("asset://exercise-guides/goblet-squat-01-setup.jpg"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"));
+                .andExpect(jsonPath("$.data.contentVersion").value("1.9.0"));
 
         mvc.perform(get("/api/v1/exercises/GOBLET_SQUAT/replacements")
                         .header("Authorization", "Bearer " + token))
@@ -108,8 +108,8 @@ class ContentEndpointIntegrationTest {
                         .header("Authorization", "Bearer " + token)
                         .queryParam("weeklyFrequency", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.templateVersion").value("1.8.0"))
-                .andExpect(jsonPath("$.data.contentVersion").value("1.8.0"))
+                .andExpect(jsonPath("$.data.templateVersion").value("1.9.1"))
+                .andExpect(jsonPath("$.data.contentVersion").value("1.9.0"))
                 .andExpect(jsonPath("$.data.items.length()").value(3))
                 .andExpect(jsonPath("$.data.items[*].code")
                         .value(containsInAnyOrder(

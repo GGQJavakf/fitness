@@ -1,9 +1,10 @@
 import Taro from '@tarojs/taro'
 
 import type { NavigationParameters, PageDestination, PageNavigationPort } from '../../application/navigation'
-import type { AppDestination, Session } from '../../application/onboarding'
+import type { AppDestination, Session } from '../../application/startup'
 import type {
   SessionAccessPort,
+  RequestGenerationFence,
   TransportPort,
   TransportRequest,
   TransportResponse,
@@ -18,6 +19,11 @@ import {
 export const WEAPP_REQUEST_TIMEOUT_MS = 20_000
 
 interface CloudContainerRuntime {
+  loadSubpackage?(options: {
+    name: string
+    success: () => void
+    fail: (error: unknown) => void
+  }): unknown
   cloud?: {
     callContainer?<T>(request: {
       config: { env: string }
@@ -31,30 +37,35 @@ interface CloudContainerRuntime {
 
 declare const wx: CloudContainerRuntime | undefined
 
-const pageRoutes: Record<PageDestination, string> = {
-  HOME: '/presentation/pages/home/index',
-  ONBOARDING: '/presentation/pages/onboarding/index',
-  PLAN_CANDIDATES: '/presentation/pages/plan-candidates/index',
-  PLAN_PRESETS: '/presentation/pages/plan-presets/index',
-  PLAN: '/presentation/pages/plan/index',
-  PLAN_EDITOR: '/presentation/pages/plan-editor/index',
-  MY: '/presentation/pages/my/index',
-  WORKOUT_PREPARE: '/presentation/pages/workout-prepare/index',
-  WORKOUT_SESSION: '/subpackages/exercise-guide/pages/workout-session/index',
-  WORKOUT_SUMMARY: '/presentation/pages/workout-summary/index',
-  SYNC_CONFLICTS: '/presentation/pages/sync-conflicts/index',
-  HISTORY: '/presentation/pages/history/index',
-  EXERCISE_TREND: '/presentation/pages/exercise-trend/index',
-  EXERCISE_DETAIL: '/subpackages/exercise-guide/pages/detail/index',
-  EXERCISE_PREFERENCES: '/presentation/pages/exercise-preferences/index',
+interface WeappPageRoute {
+  path: string
+  subpackage?: string
 }
 
-const appPageRoutes: Record<AppDestination, PageDestination> = {
-  LOGIN: 'HOME',
-  HOME: 'HOME',
-  ONBOARDING: 'ONBOARDING',
-  PLAN: 'PLAN',
-  WORKOUT_SESSION: 'WORKOUT_SESSION',
+const pageRoutes: Record<PageDestination, WeappPageRoute> = {
+  HOME: { path: '/subpackages/startup/pages/home/index', subpackage: 'startup' },
+  ONBOARDING: { path: '/subpackages/planning/pages/onboarding/index', subpackage: 'planning' },
+  PLAN_CANDIDATES: { path: '/subpackages/planning/pages/plan-candidates/index', subpackage: 'planning' },
+  PLAN_PRESETS: { path: '/subpackages/planning/pages/plan-presets/index', subpackage: 'planning' },
+  PLAN: { path: '/subpackages/planning/pages/plan/index', subpackage: 'planning' },
+  PLAN_EDITOR: { path: '/subpackages/planning/pages/plan-editor/index', subpackage: 'planning' },
+  MY: { path: '/subpackages/account/pages/my/index', subpackage: 'account' },
+  WORKOUT_PREPARE: { path: '/subpackages/workout/pages/workout-prepare/index', subpackage: 'workout' },
+  WORKOUT_SESSION: { path: '/subpackages/workout/pages/workout-session/index', subpackage: 'workout' },
+  WORKOUT_SUMMARY: { path: '/subpackages/workout/pages/workout-summary/index', subpackage: 'workout' },
+  SYNC_CONFLICTS: { path: '/subpackages/progress/pages/sync-conflicts/index', subpackage: 'progress' },
+  HISTORY: { path: '/subpackages/progress/pages/history/index', subpackage: 'progress' },
+  EXERCISE_TREND: { path: '/subpackages/progress/pages/exercise-trend/index', subpackage: 'progress' },
+  EXERCISE_DETAIL: { path: '/subpackages/exercise-guide/pages/detail/index', subpackage: 'exercise-guide' },
+  EXERCISE_PREFERENCES: { path: '/subpackages/account/pages/exercise-preferences/index', subpackage: 'account' },
+}
+
+const appPageRoutes: Record<AppDestination, WeappPageRoute> = {
+  LOGIN: { path: '/presentation/pages/home/index' },
+  HOME: pageRoutes.HOME,
+  ONBOARDING: pageRoutes.ONBOARDING,
+  PLAN: pageRoutes.PLAN,
+  WORKOUT_SESSION: pageRoutes.WORKOUT_SESSION,
 }
 
 export function createWeappTransport(options: {
@@ -180,7 +191,11 @@ export function createWeappSessionStore(
     },
   }
   return {
-    load: () => lifecycle.runUserOperation(() => store.load()),
+    load: () => lifecycle.runClearedSessionRead(() => store.load()),
+    loadImmediately: () => {
+      const value = Taro.getStorageSync<unknown>(WEAPP_SESSION_STORAGE_KEY)
+      return isSession(value) ? value : null
+    },
     save: (session) => lifecycle.runUserOperation(() => store.save(session)),
     clear: () => lifecycle.runUserOperation(() => store.clear()),
   }
@@ -228,21 +243,54 @@ export function createWechatNextTrainingDaySelection(
   }
 }
 
-export function createWeappNavigation(): PageNavigationPort & {
+export function createWeappNavigation(
+  userGeneration?: RequestGenerationFence,
+): PageNavigationPort & {
   replaceApp(destination: AppDestination): Promise<void>
 } {
+  async function awaitCurrent<T>(
+    generation: number | undefined,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    if (generation !== undefined) userGeneration?.assertCurrent(generation)
+    try {
+      const result = await operation()
+      if (generation !== undefined) userGeneration?.assertCurrent(generation)
+      return result
+    } catch (error) {
+      if (generation !== undefined) userGeneration?.assertCurrent(generation)
+      throw error
+    }
+  }
+
   return {
     async open(destination, parameters): Promise<void> {
-      await Taro.navigateTo({ url: routeUrl(destination, parameters) })
+      const generation = userGeneration?.capture()
+      const route = pageRoutes[destination]
+      await awaitCurrent(generation, () => loadRouteSubpackage(route))
+      await awaitCurrent(
+        generation,
+        () => Taro.navigateTo({ url: routeUrl(route, parameters) }),
+      )
     },
     async replace(destination, parameters): Promise<void> {
-      await Taro.redirectTo({ url: routeUrl(destination, parameters) })
+      const generation = userGeneration?.capture()
+      const route = pageRoutes[destination]
+      await awaitCurrent(generation, () => loadRouteSubpackage(route))
+      await awaitCurrent(
+        generation,
+        () => Taro.redirectTo({ url: routeUrl(route, parameters) }),
+      )
     },
     async back(): Promise<void> {
-      await Taro.navigateBack()
+      const generation = userGeneration?.capture()
+      await awaitCurrent(generation, () => Taro.navigateBack())
     },
     async replaceApp(destination): Promise<void> {
-      await Taro.reLaunch({ url: pageRoutes[appPageRoutes[destination]] })
+      const generation = userGeneration?.capture()
+      const route = appPageRoutes[destination]
+      await awaitCurrent(generation, () => loadRouteSubpackage(route))
+      await awaitCurrent(generation, () => Taro.reLaunch({ url: route.path }))
     },
   }
 }
@@ -252,13 +300,28 @@ export function currentWeappRouteParameter(name: string): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
-function routeUrl(destination: PageDestination, parameters?: NavigationParameters): string {
+async function loadRouteSubpackage(route: WeappPageRoute): Promise<void> {
+  const subpackage = route.subpackage
+  if (!subpackage) return
+  const runtime = cloudRuntime()
+  const loadSubpackage = runtime?.loadSubpackage
+  if (!loadSubpackage) return
+  await new Promise<void>((resolve, reject) => {
+    loadSubpackage.call(runtime, {
+      name: subpackage,
+      success: resolve,
+      fail: reject,
+    })
+  })
+}
+
+function routeUrl(route: WeappPageRoute, parameters?: NavigationParameters): string {
   const entries = Object.entries(parameters ?? {})
-  if (!entries.length) return pageRoutes[destination]
+  if (!entries.length) return route.path
   const query = entries
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
     .join('&')
-  return `${pageRoutes[destination]}?${query}`
+  return `${route.path}?${query}`
 }
 
 function isSession(value: unknown): value is Session {

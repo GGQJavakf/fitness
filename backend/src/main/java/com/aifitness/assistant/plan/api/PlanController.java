@@ -4,6 +4,7 @@ import com.aifitness.assistant.common.api.ApiResponse;
 import com.aifitness.assistant.common.api.ResponseMeta;
 import com.aifitness.assistant.common.domain.RuleReference;
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
+import com.aifitness.assistant.plan.application.CandidateCommitService;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import com.aifitness.assistant.plan.application.PlanExerciseOptionService;
 import com.aifitness.assistant.plan.domain.FieldLock;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,16 +38,40 @@ import org.springframework.web.bind.annotation.RestController;
 @Profile({"local", "test", "staging-experience"})
 public final class PlanController {
     private final PlanVersionService versions;
+    private final CandidateCommitService candidateCommits;
     private final PlanExerciseOptionService exerciseOptions;
     private final Clock clock;
 
     public PlanController(
             PlanVersionService versions,
+            CandidateCommitService candidateCommits,
             PlanExerciseOptionService exerciseOptions,
             Clock clock) {
         this.versions = versions;
+        this.candidateCommits = candidateCommits;
         this.exerciseOptions = exerciseOptions;
         this.clock = clock;
+    }
+
+    @PostMapping("/candidate-commits")
+    public ResponseEntity<ApiResponse<VersionResultData>> commitCandidate(
+            AuthenticatedUserId user,
+            @RequestHeader("Idempotency-Key") String idempotencyKey,
+            @RequestBody CandidateCommitRequest request) {
+        if (request == null || request.plan() == null) {
+            throw new IllegalArgumentException("candidate commit request and plan are required");
+        }
+        PlanVersionService.VersionResult result = candidateCommits.commit(
+                user,
+                validCandidateId(request.candidateId()),
+                request.expectedActiveVersionNumber(),
+                request.plan().toDomain(),
+                safeLocks(request.locks()),
+                request.warningConfirmationToken(),
+                idempotencyKey);
+        HttpStatus status = result.status() == PlanVersionService.VersionStatus.CREATED
+                ? HttpStatus.CREATED : HttpStatus.OK;
+        return ResponseEntity.status(status).body(response(VersionResultData.from(result)));
     }
 
     @PostMapping
@@ -157,6 +183,20 @@ public final class PlanController {
 
     public record CreatePlanRequest(String candidateId) {}
 
+    public record CandidateCommitRequest(
+            String candidateId,
+            Integer expectedActiveVersionNumber,
+            PlanData plan,
+            Map<String, FieldLock.Status> locks,
+            String warningConfirmationToken) {
+        public CandidateCommitRequest {
+            if (expectedActiveVersionNumber == null || expectedActiveVersionNumber < 0) {
+                throw new IllegalArgumentException(
+                        "expectedActiveVersionNumber is required and must not be negative");
+            }
+        }
+    }
+
     public record ExerciseOptionListData(List<PlanExerciseOptionService.Option> items) {
         public ExerciseOptionListData {
             items = List.copyOf(items);
@@ -253,14 +293,16 @@ public final class PlanController {
             @JsonInclude(JsonInclude.Include.NON_NULL) String presetCode,
             @JsonInclude(JsonInclude.Include.NON_NULL) String presetVersion,
             List<String> executionRules,
-            List<String> progressionRules) {
+            List<String> progressionRules,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+                    PlanDraft.MovementImpactConstraint movementImpactConstraint) {
         public PlanData(
                 String templateCode,
                 PlanDraft.TrainingSplit trainingSplit,
                 String name,
                 List<DayData> days,
                 Map<String, FieldLock.Status> locks) {
-            this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of());
+            this(templateCode, trainingSplit, name, days, locks, null, null, List.of(), List.of(), null);
         }
 
         PlanDraft toDomain() {
@@ -271,7 +313,8 @@ public final class PlanController {
                     templateCode, trainingSplit, name, days.stream().map(DayData::toDomain).toList(),
                     Map.of(), presetCode, presetVersion,
                     executionRules == null ? List.of() : executionRules,
-                    progressionRules == null ? List.of() : progressionRules);
+                    progressionRules == null ? List.of() : progressionRules,
+                    movementImpactConstraint);
         }
 
         static PlanData from(PlanDraft plan) {
@@ -279,7 +322,7 @@ public final class PlanController {
                     plan.templateCode(), plan.trainingSplit(), plan.name(),
                     plan.days().stream().map(DayData::from).toList(), plan.locks(),
                     plan.presetCode(), plan.presetVersion(),
-                    plan.executionRules(), plan.progressionRules());
+                    plan.executionRules(), plan.progressionRules(), plan.movementImpactConstraint());
         }
     }
 

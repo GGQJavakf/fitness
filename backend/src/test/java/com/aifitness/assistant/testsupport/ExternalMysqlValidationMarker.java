@@ -19,7 +19,8 @@ public final class ExternalMysqlValidationMarker {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final List<String> EXPECTED_VERSIONS = List.of(
             "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-            "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024");
+            "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
+            "025");
 
     private ExternalMysqlValidationMarker() {}
 
@@ -123,7 +124,7 @@ public final class ExternalMysqlValidationMarker {
             }
             if (!versions.equals(EXPECTED_VERSIONS)) {
                 throw new IllegalArgumentException(
-                        "External MySQL migration history does not match V001 through V024");
+                        "External MySQL migration history does not match " + expectedHistoryRange());
             }
             return new Marker(
                     runId,
@@ -146,6 +147,14 @@ public final class ExternalMysqlValidationMarker {
         } catch (RuntimeException ignored) {
             throw new IllegalArgumentException("External MySQL validation marker path is invalid");
         }
+    }
+
+    static List<String> expectedVersions() {
+        return EXPECTED_VERSIONS;
+    }
+
+    private static String expectedHistoryRange() {
+        return "V" + EXPECTED_VERSIONS.getFirst() + " through V" + EXPECTED_VERSIONS.getLast();
     }
 
     private static String sha256(String value) {

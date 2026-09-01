@@ -3,8 +3,6 @@ import { Button, Text, View } from '@tarojs/components'
 import type { ProgressionCardView } from '../../../application/progression'
 import { exerciseDisplayName } from '../../copy'
 
-import './index.scss'
-
 interface ProgressionCardProps {
   readonly card: ProgressionCardView
   readonly busy: boolean

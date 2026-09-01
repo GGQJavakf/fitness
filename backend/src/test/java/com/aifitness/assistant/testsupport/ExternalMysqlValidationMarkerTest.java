@@ -1,6 +1,7 @@
 package com.aifitness.assistant.testsupport;
 
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -9,9 +10,11 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
 class ExternalMysqlValidationMarkerTest {
     private static final String JDBC_URL =
@@ -52,7 +55,7 @@ class ExternalMysqlValidationMarkerTest {
     }
 
     @Test
-    void markerMustExistAndHistoryMustBeExactlyV001ThroughV024() throws Exception {
+    void markerMustExistAndHistoryMustBeExactlyV001ThroughV025() throws Exception {
         Path marker = tempDirectory.resolve("external-mysql-validation-marker.json");
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExternalMysqlValidationMarker.verifyAndConsume(
@@ -63,7 +66,23 @@ class ExternalMysqlValidationMarkerTest {
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> ExternalMysqlValidationMarker.write(
                         marker.toString(), "run-1", JDBC_URL, incompleteHistoryConnection()))
-                .withMessage("External MySQL migration history does not match V001 through V024");
+                .withMessage("External MySQL migration history does not match V001 through V025");
+    }
+
+    @Test
+    void expectedVersionsMatchTheClasspathMigrationSet() throws Exception {
+        var resources = new PathMatchingResourcePatternResolver()
+                .getResources("classpath*:db/migration/V*__*.sql");
+        var versions = Arrays.stream(resources)
+                .map(resource -> resource.getFilename())
+                .map(filename -> filename == null ? "" : filename)
+                .filter(filename -> filename.matches("V[0-9]{3}__.+\\.sql"))
+                .map(filename -> filename.substring(1, 4))
+                .sorted()
+                .toList();
+
+        assertThat(versions)
+                .containsExactlyElementsOf(ExternalMysqlValidationMarker.expectedVersions());
     }
 
     private static Connection connection(String serverUuid, int checksumBase) throws Exception {
@@ -78,7 +97,9 @@ class ExternalMysqlValidationMarkerTest {
 
         ResultSet history = mock(ResultSet.class);
         AtomicInteger row = new AtomicInteger();
-        when(history.next()).thenAnswer(ignored -> row.get() < 24 && row.incrementAndGet() <= 24);
+        int migrationCount = ExternalMysqlValidationMarker.expectedVersions().size();
+        when(history.next()).thenAnswer(
+                ignored -> row.get() < migrationCount && row.incrementAndGet() <= migrationCount);
         when(history.getString(1)).thenAnswer(ignored -> "%03d".formatted(row.get()));
         when(history.getString(2)).thenAnswer(ignored -> Integer.toString(checksumBase + row.get()));
         when(historyStatement.executeQuery(anyString())).thenReturn(history);

@@ -7,14 +7,11 @@ import {
   type PrivacyExportResource,
 } from '../../../application/privacy'
 import { LocalUserDataCleanupError } from '../../../application/localPrivacyLifecycle'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getAccountApplication } from '../../../platform/weapp/featureRoots/accountCompositionRoot'
 import MainNavigation from '../../components/main-navigation'
 
-import './index.scss'
-
-const application = getWeappApplication()
-
 export default function MyPage() {
+  const application = getAccountApplication()
   const [confirmation, setConfirmation] = useState('')
   const [message, setMessage] = useState('')
   const [requestId, setRequestId] = useState('')

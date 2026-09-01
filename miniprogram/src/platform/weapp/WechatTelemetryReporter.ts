@@ -13,10 +13,10 @@ interface WechatTelemetryRuntime {
   reportEvent?: WechatReportEvent
 }
 
-type WechatGlobal = typeof globalThis & { wx?: WechatTelemetryRuntime }
+declare const wx: WechatTelemetryRuntime
 
 const reportThroughWechat: WechatReportEvent = (eventId, data) => {
-  const runtime = (globalThis as WechatGlobal).wx
+  const runtime = wx as unknown as WechatTelemetryRuntime
   const reportEvent = runtime?.reportEvent
   if (typeof reportEvent !== 'function') {
     throw new Error('WeChat reportEvent is unavailable')

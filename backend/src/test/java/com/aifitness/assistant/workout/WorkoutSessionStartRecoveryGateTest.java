@@ -332,13 +332,15 @@ class WorkoutSessionStartRecoveryGateTest {
             sessionsService = new WorkoutSessionService(
                     sessions, plans, clock, () -> new UUID(0, ids.getAndIncrement()));
             WorkoutRecoveryAssessmentQuery recoveryQuery = (user, planId, versionNo, dayCode) -> recovery.get();
+            InMemoryWorkoutRecoveryConfirmationStore confirmations =
+                    new InMemoryWorkoutRecoveryConfirmationStore();
             starts = new WorkoutSessionStartService(
                     sessionsService,
                     sessions,
                     sets,
                     recoveryQuery,
-                    new InMemoryWorkoutRecoveryConfirmationStore(),
-                    new InMemoryWorkoutSessionStartTransaction(),
+                    confirmations,
+                    new InMemoryWorkoutSessionStartTransaction(sessions, confirmations),
                     clock,
                     Duration.ofMinutes(5));
         }

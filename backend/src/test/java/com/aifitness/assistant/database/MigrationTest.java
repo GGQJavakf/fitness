@@ -377,7 +377,8 @@ class MigrationTest {
                 "db/migration/V021__shared_auth_and_plan_warning_state.sql",
                 "db/migration/V022__workout_set_safety_flag.sql",
                 "db/migration/V023__backfill_workout_set_idempotency.sql",
-                "db/migration/V024__workout_recovery_confirmation.sql"))
+                "db/migration/V024__workout_recovery_confirmation.sql",
+                "db/migration/V025__plan_candidate_commit_idempotency.sql"))
                 .allSatisfy(resource -> assertThat(getClass().getClassLoader().getResource(resource))
                         .as("migration resource %s", resource)
                         .isNotNull());
@@ -523,6 +524,17 @@ class MigrationTest {
                 "client_session_key VARCHAR(128) NOT NULL",
                 "PRIMARY KEY (token_digest)",
                 "consumed_at IS NULL OR consumed_at >= issued_at");
+        assertThat(readMigration("V025__plan_candidate_commit_idempotency.sql")).contains(
+                "CREATE TABLE plan_candidate_commit_receipt",
+                "key_digest VARBINARY(32) NOT NULL",
+                "payload_digest VARBINARY(32) NOT NULL",
+                "PRIMARY KEY (user_id, key_digest)",
+                "uq_training_plan_version_receipt",
+                "fk_plan_candidate_commit_version",
+                "FOREIGN KEY (version_id, plan_id, version_no)",
+                "ck_plan_candidate_commit_result",
+                "trg_plan_candidate_commit_receipt_controlled_update",
+                "trg_plan_candidate_commit_receipt_immutable_delete");
     }
 
     @Test
@@ -533,7 +545,8 @@ class MigrationTest {
                 .extracting(Object::toString)
                 .containsExactly(
                         "001", "002", "003", "004", "005", "006", "007", "008", "009", "010", "011", "012",
-                        "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024");
+                        "013", "014", "015", "016", "017", "018", "019", "020", "021", "022", "023", "024",
+                        "025");
     }
 
     @Test
@@ -633,7 +646,7 @@ class MigrationTest {
         assertThat(queryOne("SELECT COUNT(*) FROM plan_template_version "
                 + "WHERE template_code='FULL_BODY_3_DAY_V1'"))
                 .isEqualTo("1");
-        PlanDraft initial = planDraft("GOBLET_SQUAT", 90);
+        PlanDraft initial = noJumpPresetPlanDraft("GOBLET_SQUAT", 90);
         PlanVersionService.PlanPolicy policy = new PlanVersionService.PlanPolicy() {
             @Override
             public PlanVersionService.CandidatePlan candidate(
@@ -655,6 +668,9 @@ class MigrationTest {
         AuthenticatedUserId user = new AuthenticatedUserId(userId);
 
         var created = service.createInitial(user, "candidate-db");
+        assertThat(repository.findByIdAndUser(created.id(), userId).orElseThrow().version(1)
+                .plan().movementImpactConstraint())
+                .isEqualTo(PlanDraft.MovementImpactConstraint.NO_JUMP);
         var updated = service.createVersion(
                 user, created.id(), 1, planDraft("GOBLET_SQUAT", 120), Map.of(), null);
 
@@ -663,6 +679,9 @@ class MigrationTest {
                 .plan().valueAt("/days/DAY_A/exercises/GOBLET_SQUAT/restSeconds")).contains(90);
         assertThat(repository.findActiveByUser(userId).orElseThrow().activeVersion()
                 .plan().valueAt("/days/DAY_A/exercises/GOBLET_SQUAT/restSeconds")).contains(120);
+        assertThat(repository.findActiveByUser(userId).orElseThrow().activeVersion()
+                .plan().movementImpactConstraint())
+                .isEqualTo(PlanDraft.MovementImpactConstraint.NO_JUMP);
         assertThat(queryOne("SELECT COUNT(*) FROM training_plan_version WHERE plan_id = "
                 + binary(created.id().toString()))).isEqualTo("2");
 
@@ -1374,6 +1393,14 @@ class MigrationTest {
                 Map.of());
     }
 
+    private static PlanDraft noJumpPresetPlanDraft(String exerciseCode, int restSeconds) {
+        PlanDraft plan = planDraft(exerciseCode, restSeconds);
+        return new PlanDraft(
+                plan.templateCode(), plan.trainingSplit(), plan.name(), plan.days(), plan.locks(),
+                "NO_JUMP_TEST_PRESET", "1.0.0", List.of("保持无跳跃约束"), List.of("渐进规则"),
+                PlanDraft.MovementImpactConstraint.NO_JUMP);
+    }
+
     private static void databasePreservesTheOldPlanWhenANewVersionBecomesActive() throws Exception {
         String userId = createUser();
         String exerciseId = createExercise();
@@ -1654,7 +1681,7 @@ class MigrationTest {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load();
-        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(13);
+        assertThat(flyway.migrate().migrationsExecuted).isEqualTo(14);
         flyway.validate();
         assertThat(flyway.migrate().migrationsExecuted).isZero();
         if (externalValidationJdbcUrl != null) {

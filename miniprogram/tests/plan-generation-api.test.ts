@@ -130,4 +130,61 @@ describe('AI-primary plan API adapter', () => {
       fallbackAllowed: false,
     })
   })
+
+  it('commits an edited candidate atomically with the idempotency header and fixed body', async () => {
+    const body = {
+      candidateId: '11111111-1111-4111-8111-111111111111',
+      expectedActiveVersionNumber: 3,
+      plan: {
+        templateCode: 'FULL_BODY_V1',
+        trainingSplit: 'FULL_BODY' as const,
+        name: '全身训练',
+        days: [{
+          code: 'DAY_A',
+          name: '训练日 A',
+          exercises: [{
+            exerciseCode: 'GOBLET_SQUAT',
+            workSets: 4,
+            repMin: 8,
+            repMax: 12,
+            restSeconds: 90,
+            weightStatus: 'KNOWN' as const,
+          }],
+        }],
+      },
+      locks: {
+        '/days/DAY_A/exercises/GOBLET_SQUAT/workSets': 'USER_LOCKED' as const,
+      },
+      warningConfirmationToken: 'warning-token-1',
+    }
+    const api = client((request) => {
+      expect(request).toEqual(expect.objectContaining({
+        method: 'POST',
+        url: 'http://127.0.0.1:8080/api/v1/plans/candidate-commits',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer access-redacted',
+          'Idempotency-Key': 'candidate-commit-12345678',
+        }),
+        body,
+      }))
+      return {
+        data: {
+          status: 'WARNING_CONFIRMATION_REQUIRED',
+          plan: { ...body.plan, locks: body.locks },
+          validationIssues: [{
+            severity: 'WARNING',
+            reasonCode: 'HIGH_VOLUME',
+            fieldPath: '/days/DAY_A',
+          }],
+          warningConfirmationToken: 'warning-token-1',
+        },
+        meta,
+      }
+    })
+
+    await expect(api.commitCandidate(body, 'candidate-commit-12345678')).resolves.toMatchObject({
+      status: 'WARNING_CONFIRMATION_REQUIRED',
+      warningConfirmationToken: 'warning-token-1',
+    })
+  })
 })

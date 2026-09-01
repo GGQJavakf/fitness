@@ -127,11 +127,14 @@ class PlanCandidateEndpointIntegrationTest {
 
     @Test
     void generatesTheExplicitProfessionalTwoThreeAndFiveDaySplits() throws Exception {
-        int[] frequencies = {2, 4, 3, 6, 5};
+        int[] frequencies = {2, 3, 2, 4, 3, 6, 5};
         String[] splits = {
-            "UPPER_LOWER", "UPPER_LOWER", "PUSH_PULL_LEGS", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"
+            "FULL_BODY", "FULL_BODY", "UPPER_LOWER", "UPPER_LOWER",
+            "PUSH_PULL_LEGS", "PUSH_PULL_LEGS", "BODY_PART_FIVE_DAY"
         };
         String[] templates = {
+            "FULL_BODY_2_DAY_V1",
+            "FULL_BODY_3_DAY_V1",
             "UPPER_LOWER_2_DAY_V1",
             "UPPER_LOWER_4_DAY_V1",
             "PUSH_PULL_LEGS_3_DAY_V1",
@@ -205,6 +208,19 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].code")
                         .value("PERSONAL_5_DAY_HYPERTROPHY_V1"))
+                .andExpect(jsonPath("$.data.items[0].matchStatus").value("EXACT"))
+                .andExpect(jsonPath("$.data.items[0].recommended").value(true))
+                .andExpect(jsonPath("$.data.items[0].mismatchFields.length()").value(0))
+                .andExpect(jsonPath("$.data.items[0].experience").value("INTERMEDIATE"))
+                .andExpect(jsonPath("$.data.items[0].contentStatus").value("AI_VALIDATED"))
+                .andExpect(jsonPath("$.data.items[0].professionalReviewStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.items[0].sources[0].id")
+                        .value("INTERNAL_USER_PLAN_20260821"))
+                .andExpect(jsonPath("$.data.items[0].sources[0].title")
+                        .value("用户提供的个人五日增肌训练计划"))
+                .andExpect(jsonPath("$.data.items[0].sources[0].url").doesNotExist())
+                .andExpect(jsonPath("$.data.items[0].sources[0].usageBoundary").isNotEmpty())
+                .andExpect(jsonPath("$.data.items[0].explanationSources.length()").value(0))
                 .andExpect(jsonPath("$.data.items[0].days.length()").value(5));
 
         String response = mvc.perform(post("/api/v1/plans/candidates")
@@ -250,6 +266,254 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void ranksTheBestProfileMatchFirstAndRecommendsNothingWhenNoAvailableExactPresetExists()
+            throws Exception {
+        String token = login();
+        configureProfile(token, 3, 60, "FAT_LOSS", "BEGINNER", "HOME");
+
+        String response = mvc.perform(get("/api/v1/plans/presets")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].code")
+                        .value("BEGINNER_3_DAY_FAT_LOSS_HOME_V1"))
+                .andExpect(jsonPath("$.data.items[0].matchStatus").value("PARTIAL"))
+                .andExpect(jsonPath("$.data.items[0].recommended").value(false))
+                .andExpect(jsonPath("$.data.items[0].availabilityStatus").value("BLOCKED_CAPABILITY"))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode items = objectMapper.readTree(response).at("/data/items");
+        org.assertj.core.api.Assertions.assertThat(StreamSupport.stream(items.spliterator(), false)
+                        .filter(item -> item.path("recommended").asBoolean())
+                        .count())
+                .isZero();
+        JsonNode blockedBandPreset = StreamSupport.stream(items.spliterator(), false)
+                .filter(item -> "BEGINNER_3_DAY_FAT_LOSS_HOME_V1".equals(item.path("code").asText()))
+                .findFirst()
+                .orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(blockedBandPreset.path("availabilityStatus").asText())
+                .isEqualTo("BLOCKED_CAPABILITY");
+        org.assertj.core.api.Assertions.assertThat(blockedBandPreset.path("recommended").asBoolean())
+                .isFalse();
+        org.assertj.core.api.Assertions.assertThat(blockedBandPreset.path("unavailableReason").asText())
+                .contains("BANDS")
+                .contains("固定锚点")
+                .contains("Equipment Inventory V2");
+        JsonNode availablePartialPreset = StreamSupport.stream(items.spliterator(), false)
+                .filter(item -> "BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1"
+                        .equals(item.path("code").asText()))
+                .findFirst()
+                .orElseThrow();
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("availabilityStatus").asText())
+                .isEqualTo("AVAILABLE");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("matchStatus").asText())
+                .isEqualTo("PARTIAL");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("recommended").asBoolean())
+                .isFalse();
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("contentStatus").asText())
+                .isEqualTo("AI_VALIDATED");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("professionalReviewStatus").asText())
+                .isEqualTo("PENDING");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("sources"))
+                .extracting(source -> source.path("id").asText())
+                .containsExactly("ACSM_RT_POSITION_2026", "ACSM_WEIGHT_CONSENSUS_2024", "HHS_PAG2_2018");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.at("/sources/0/url").asText())
+                .isEqualTo("https://pubmed.ncbi.nlm.nih.gov/41843416/");
+        org.assertj.core.api.Assertions.assertThat(availablePartialPreset.path("explanationSources"))
+                .extracting(source -> source.path("id").asText())
+                .containsExactly(
+                        "CDC_WEIGHT_ACTIVITY_20260407",
+                        "CDC_ADULT_ACTIVITY_20231220",
+                        "ACSM_RT_SUMMARY_20260317");
+    }
+
+    @Test
+    void blocksBandPresetUntilEquipmentInventoryV2CanRepresentBandAndAnchorSafety() throws Exception {
+        String beginnerToken = login();
+        configureProfile(beginnerToken, 3, 45, "FAT_LOSS", "BEGINNER", "HOME");
+
+        mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + beginnerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"BEGINNER_3_DAY_FAT_LOSS_HOME_V1"}
+                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("NO_CANDIDATE"))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("PRESET_CAPABILITY_BLOCKED")));
+    }
+
+    @Test
+    void materializesTheBeginnerHypertrophyIntroductoryPhaseIntoTheCandidate() throws Exception {
+        String token = login();
+        configureProfile(token, 3, 45, "HYPERTROPHY", "BEGINNER", "GYM");
+        configureEquipment(token);
+
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+
+        JsonNode exercises = objectMapper.readTree(response).at("/data/candidate/plan/days/0/exercises");
+        org.assertj.core.api.Assertions.assertThat(exercises)
+                .allSatisfy(exercise -> {
+                    org.assertj.core.api.Assertions.assertThat(exercise.path("workSets").asInt())
+                            .isEqualTo(2);
+                    org.assertj.core.api.Assertions.assertThat(exercise.path("targetRirMin").asInt())
+                            .isEqualTo(3);
+                    org.assertj.core.api.Assertions.assertThat(exercise.path("targetRirMax").asInt())
+                            .isEqualTo(4);
+                });
+    }
+
+    @Test
+    void rejectsAnAvailablePresetWhenTheProfileIsNotAnExactMatch() throws Exception {
+        String token = login();
+        configureProfile(token, 3, 60, "HYPERTROPHY", "BEGINNER", "GYM");
+        configureEquipment(token);
+
+        mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("NO_CANDIDATE"))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem("PRESET_PROFILE_MISMATCH")));
+    }
+
+    @Test
+    void generatesAStableCandidateIdForTheSameUserProfileAndPreset() throws Exception {
+        String token = login();
+        configureProfile(token, 3, 45, "HYPERTROPHY", "BEGINNER", "GYM");
+        configureEquipment(token);
+        String request = """
+                {"profileVersion":1,"lockedFields":{},
+                 "presetCode":"BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1"}
+                """;
+
+        String firstCandidateId = objectMapper.readTree(mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString()).at("/data/candidate/candidateId").asText();
+        mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(request))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andExpect(jsonPath("$.data.candidate.candidateId").value(firstCandidateId));
+    }
+
+    @Test
+    void allThreeAvailableAuthoritativePersonaPresetsGenerateValidCandidatesForTheirExactProfiles()
+            throws Exception {
+        String[][] cases = {
+                {"INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1", "4", "60", "HYPERTROPHY", "INTERMEDIATE", "GYM"},
+                {"BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1", "3", "45", "HYPERTROPHY", "BEGINNER", "GYM"},
+                {"BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1", "4", "30", "FAT_LOSS", "BEGINNER", "HOME"}
+        };
+
+        for (String[] testCase : cases) {
+            String token = login();
+            int weeklyFrequency = Integer.parseInt(testCase[1]);
+            configureProfile(
+                    token,
+                    weeklyFrequency,
+                    Integer.parseInt(testCase[2]),
+                    testCase[3],
+                    testCase[4],
+                    testCase[5]);
+            if ("GYM".equals(testCase[5])) {
+                configureEquipment(token);
+            }
+
+            mvc.perform(get("/api/v1/plans/presets")
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.items[0].code").value(testCase[0]))
+                    .andExpect(jsonPath("$.data.items[0].matchStatus").value("EXACT"))
+                    .andExpect(jsonPath("$.data.items[0].recommended").value(true))
+                    .andExpect(jsonPath("$.data.items[0].mismatchFields.length()").value(0));
+
+            String response = mvc.perform(post("/api/v1/plans/candidates")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"profileVersion":1,"lockedFields":{},"presetCode":"%s"}
+                                    """.formatted(testCase[0])))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                    .andExpect(jsonPath("$.data.candidate.generationSource").value("SYSTEM_PRESET"))
+                    .andExpect(jsonPath("$.data.candidate.plan.presetCode").value(testCase[0]))
+                    .andExpect(jsonPath("$.data.candidate.plan.days.length()").value(weeklyFrequency))
+                    .andReturn().getResponse().getContentAsString();
+
+            JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+            if (testCase[0].startsWith("BEGINNER_")) {
+                StreamSupport.stream(candidate.at("/plan/days").spliterator(), false)
+                        .flatMap(day -> StreamSupport.stream(day.path("exercises").spliterator(), false))
+                        .forEach(exercise -> {
+                            org.assertj.core.api.Assertions.assertThat(exercise.path("workSets").asInt())
+                                    .isEqualTo(2);
+                            org.assertj.core.api.Assertions.assertThat(exercise.path("targetRirMin").asInt())
+                                    .isEqualTo(3);
+                            org.assertj.core.api.Assertions.assertThat(exercise.path("targetRirMax").asInt())
+                                    .isEqualTo(4);
+                        });
+            } else {
+                org.assertj.core.api.Assertions.assertThat(
+                                candidate.at("/plan/days/0/exercises/0/workSets").asInt())
+                        .isEqualTo(4);
+                org.assertj.core.api.Assertions.assertThat(
+                                candidate.at("/plan/days/0/exercises/0/targetRirMin").asInt())
+                        .isEqualTo(1);
+                org.assertj.core.api.Assertions.assertThat(
+                                candidate.at("/plan/days/0/exercises/0/targetRirMax").asInt())
+                        .isEqualTo(3);
+            }
+            if ("BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1".equals(testCase[0])) {
+                org.assertj.core.api.Assertions.assertThat(
+                                candidate.at("/plan/movementImpactConstraint").asText())
+                        .isEqualTo("NO_JUMP");
+                mvc.perform(post("/api/v1/plans")
+                                .header("Authorization", "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"candidateId\":\""
+                                        + candidate.path("candidateId").asText() + "\"}"))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.data.activeVersion.plan.movementImpactConstraint")
+                                .value("NO_JUMP"))
+                        .andExpect(jsonPath("$.data.activeVersion.plan.days[*].exercises[*].workSets")
+                                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(2))))
+                        .andExpect(jsonPath("$.data.activeVersion.plan.days[*].exercises[*].targetRirMin")
+                                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(3))))
+                        .andExpect(jsonPath("$.data.activeVersion.plan.days[*].exercises[*].targetRirMax")
+                                .value(org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is(4))));
+            }
+            mvc.perform(post("/api/v1/plans/validate")
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(presetValidationRequest(candidate)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.valid").value(true));
+        }
+    }
+
+    @Test
     void rejectsUnsafePrescriptionWhenValidatingOrEditingASystemPreset() throws Exception {
         String token = login();
         configureProfile(token, 5, 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
@@ -274,7 +538,6 @@ class PlanCandidateEndpointIntegrationTest {
         assertPresetPrescriptionRejected(
                 token, candidate, exercise -> exercise.put("restSeconds", 301),
                 "REST_OUT_OF_RANGE", "/days/0/exercises/0/restSeconds");
-
         JsonNode created = objectMapper.readTree(mvc.perform(post("/api/v1/plans")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -299,6 +562,87 @@ class PlanCandidateEndpointIntegrationTest {
     }
 
     @Test
+    void rejectsOverlongUngroupedSystemPresetPrescription() throws Exception {
+        String token = login();
+        configureProfile(token, 4, 30, "FAT_LOSS", "BEGINNER", "HOME");
+
+        String response = mvc.perform(post("/api/v1/plans/candidates")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"profileVersion":1,"lockedFields":{},
+                                 "presetCode":"BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode candidate = objectMapper.readTree(response).at("/data/candidate");
+
+        assertPresetPrescriptionRejected(
+                token, candidate, exercise -> exercise.put("restSeconds", 300),
+                "SESSION_DURATION_EXCEEDED", "/days/0/estimatedMinutes");
+    }
+
+    @Test
+    void rejectsInvalidExecutionGroupsThroughValidationAndVersionCreation() throws Exception {
+        String token = login();
+        configureProfile(token, 5, 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
+        configureEquipment(token);
+
+        JsonNode candidate = generatePresetCandidate(token);
+        String planId = createPlan(token, candidate);
+
+        ObjectNode singleExerciseGroup = candidate.deepCopy();
+        ((ObjectNode) singleExerciseGroup.at("/plan/days/0/exercises/0"))
+                .put("restSeconds", 300)
+                .put("executionGroup", "FAKE_SINGLE")
+                .put("executionOrder", 1);
+        assertPresetPlanRejectedByValidationAndVersion(
+                token,
+                planId,
+                singleExerciseGroup,
+                "INVALID_EXECUTION_GROUP",
+                "/days/0/exercises/0/executionGroup");
+
+        ObjectNode duplicateOrder = candidate.deepCopy();
+        ((ObjectNode) duplicateOrder.at("/plan/days/0/exercises/5")).put("executionOrder", 1);
+        assertPresetPlanRejected(
+                token,
+                duplicateOrder,
+                "INVALID_EXECUTION_GROUP",
+                "/days/0/exercises/5/executionOrder");
+
+        ObjectNode incompleteOrder = candidate.deepCopy();
+        ((ObjectNode) incompleteOrder.at("/plan/days/0/exercises/5")).put("executionOrder", 3);
+        assertPresetPlanRejected(
+                token,
+                incompleteOrder,
+                "INVALID_EXECUTION_GROUP",
+                "/days/0/exercises/5/executionOrder");
+    }
+
+    @Test
+    void rejectsOverlongOrdinaryExerciseBesideAValidExecutionGroupThroughBothEndpoints()
+            throws Exception {
+        String token = login();
+        configureProfile(token, 5, 45, "HYPERTROPHY", "INTERMEDIATE", "GYM");
+        configureEquipment(token);
+
+        JsonNode candidate = generatePresetCandidate(token);
+        String planId = createPlan(token, candidate);
+        ObjectNode overlongCandidate = candidate.deepCopy();
+        ((ObjectNode) overlongCandidate.at("/plan/days/0/exercises/0"))
+                .put("restSeconds", 300);
+
+        assertPresetPlanRejectedByValidationAndVersion(
+                token,
+                planId,
+                overlongCandidate,
+                "SESSION_DURATION_EXCEEDED",
+                "/days/0/estimatedMinutes");
+    }
+
+    @Test
     void rejectsAnExplicitSplitThatDoesNotMatchTheSelectedFrequency() throws Exception {
         String token = login();
         configureProfile(token, 3);
@@ -319,7 +663,7 @@ class PlanCandidateEndpointIntegrationTest {
         IntStream.rangeClosed(2, 6).forEach(frequency -> {
             try {
                 String token = login();
-                configureProfile(token, frequency);
+                configureProfile(token, frequency, 60, "GENERAL_FITNESS", "BEGINNER", "HOME");
 
                 String response = mvc.perform(post("/api/v1/plans/candidates")
                                 .header("Authorization", "Bearer " + token)
@@ -329,7 +673,7 @@ class PlanCandidateEndpointIntegrationTest {
                         .andReturn().getResponse().getContentAsString();
 
                 JsonNode data = objectMapper.readTree(response).path("data");
-                if (frequency >= 4) {
+                if (frequency >= 5) {
                     org.assertj.core.api.Assertions.assertThat(data.path("status").asText())
                             .as("bodyweight frequency %s must not fake a professional upper-body split", frequency)
                             .isEqualTo("NO_CANDIDATE");
@@ -357,6 +701,21 @@ class PlanCandidateEndpointIntegrationTest {
                 org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
                         .noneMatch(issue -> "RECOVERY_WINDOW_TOO_SHORT"
                                 .equals(issue.path("reasonCode").asText()));
+                if (frequency == 4) {
+                    org.assertj.core.api.Assertions.assertThat(candidate.at("/plan/templateCode").asText())
+                            .isEqualTo("BODYWEIGHT_4_DAY_V1");
+                    org.assertj.core.api.Assertions.assertThat(candidate.path("validationIssues"))
+                            .noneMatch(issue -> "ERROR".equals(issue.path("severity").asText()));
+                    mvc.perform(post("/api/v1/plans/validate")
+                                    .header("Authorization", "Bearer " + token)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(validationRequest(candidate)))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.data.valid").value(true))
+                            .andExpect(jsonPath("$.data.validationIssues[*].severity")
+                                    .value(org.hamcrest.Matchers.not(
+                                            org.hamcrest.Matchers.hasItem("ERROR"))));
+                }
             } catch (Exception exception) {
                 throw new AssertionError(
                         "bodyweight candidate generation failed for weekly frequency " + frequency, exception);
@@ -756,6 +1115,59 @@ class PlanCandidateEndpointIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("CANDIDATE_READY"))
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(response).at("/data/candidate");
+    }
+
+    private String createPlan(String token, JsonNode candidate) throws Exception {
+        String response = mvc.perform(post("/api/v1/plans")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"candidateId\":\"" + candidate.path("candidateId").asText() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(response).at("/data/planId").asText();
+    }
+
+    private void assertPresetPlanRejectedByValidationAndVersion(
+            String token,
+            String planId,
+            ObjectNode unsafeCandidate,
+            String reasonCode,
+            String fieldPath) throws Exception {
+        assertPresetPlanRejected(token, unsafeCandidate, reasonCode, fieldPath);
+        mvc.perform(post("/api/v1/plans/{planId}/versions", planId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "baseVersionNumber", 1,
+                                "plan", unsafeCandidate.path("plan"),
+                                "locks", Map.of()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.data.validationIssues[*].severity")
+                        .value(org.hamcrest.Matchers.hasItem("ERROR")))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem(reasonCode)))
+                .andExpect(jsonPath("$.data.validationIssues[*].fieldPath")
+                        .value(org.hamcrest.Matchers.hasItem(fieldPath)));
+    }
+
+    private void assertPresetPlanRejected(
+            String token,
+            JsonNode unsafeCandidate,
+            String reasonCode,
+            String fieldPath) throws Exception {
+        mvc.perform(post("/api/v1/plans/validate")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(presetValidationRequest(unsafeCandidate)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.valid").value(false))
+                .andExpect(jsonPath("$.data.validationIssues[*].severity")
+                        .value(org.hamcrest.Matchers.hasItem("ERROR")))
+                .andExpect(jsonPath("$.data.validationIssues[*].reasonCode")
+                        .value(org.hamcrest.Matchers.hasItem(reasonCode)))
+                .andExpect(jsonPath("$.data.validationIssues[*].fieldPath")
+                        .value(org.hamcrest.Matchers.hasItem(fieldPath)));
     }
 
     private void assertPresetPrescriptionRejected(

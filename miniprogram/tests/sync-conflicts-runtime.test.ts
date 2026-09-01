@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const application = vi.hoisted(() => ({
   listSyncConflicts: vi.fn(),
   resolveSyncConflict: vi.fn(),
+  reconcileSyncConflicts: vi.fn(),
+  resolveSyncConflictWithLocalState: vi.fn(),
   workouts: {
     convergeConflict: vi.fn(),
     rememberConflictResolution: vi.fn(),
@@ -24,8 +26,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/progressCompositionRoot', () => ({
+  getProgressApplication: () => application,
 }))
 
 const { default: SyncConflictsPage } = await import(
@@ -89,6 +91,26 @@ describe('sync conflicts runtime interactions', () => {
     application.workouts.convergeConflict.mockResolvedValue(null)
     application.workouts.rememberConflictResolution.mockResolvedValue(true)
     application.workouts.pendingConflictResolutions.mockResolvedValue([])
+    application.reconcileSyncConflicts.mockImplementation(async () => {
+      const remembered = await application.workouts.pendingConflictResolutions()
+      for (const intent of remembered) {
+        const authoritative = await application.resolveSyncConflict(intent.conflictId, {
+          resolution: intent.resolution,
+          expectedVersion: intent.expectedConflictVersion,
+        })
+        await application.workouts.convergeConflict(authoritative)
+      }
+      return application.listSyncConflicts()
+    })
+    application.resolveSyncConflictWithLocalState.mockImplementation(async (intent) => {
+      await application.workouts.rememberConflictResolution(intent)
+      const authoritative = await application.resolveSyncConflict(intent.conflictId, {
+        resolution: intent.resolution,
+        expectedVersion: intent.expectedConflictVersion,
+      })
+      await application.workouts.convergeConflict(authoritative)
+      return authoritative
+    })
   })
 
   it.each([

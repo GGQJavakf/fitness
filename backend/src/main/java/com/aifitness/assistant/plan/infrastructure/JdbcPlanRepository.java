@@ -160,6 +160,10 @@ public final class JdbcPlanRepository implements PlanRepository {
         }
         summary.put("executionRules", plan.executionRules());
         summary.put("progressionRules", plan.progressionRules());
+        putNullable(
+                summary,
+                "movementImpactConstraint",
+                plan.movementImpactConstraint() == null ? null : plan.movementImpactConstraint().name());
         jdbc.update("""
                 INSERT INTO training_plan_version
                     (id, plan_id, version_no, source_type, split_type, frequency,
@@ -257,7 +261,8 @@ public final class JdbcPlanRepository implements PlanRepository {
                 templateCode, parseSplit(persistedSplit, templateCode),
                 String.valueOf(summary.get("name")), days, locks,
                 text(summary, "presetCode"), text(summary, "presetVersion"),
-                strings(summary.get("executionRules")), strings(summary.get("progressionRules")));
+                strings(summary.get("executionRules")), strings(summary.get("progressionRules")),
+                movementImpactConstraint(summary));
         Object warnings = summary.get("confirmedWarnings");
         Set<String> confirmed = warnings instanceof List<?> values
                 ? values.stream().map(String::valueOf).collect(java.util.stream.Collectors.toUnmodifiableSet())
@@ -357,6 +362,12 @@ public final class JdbcPlanRepository implements PlanRepository {
     private static String text(Map<String, Object> values, String key) {
         Object value = values.get(key);
         return value instanceof String text && !text.isBlank() ? text : null;
+    }
+
+    private static PlanDraft.MovementImpactConstraint movementImpactConstraint(
+            Map<String, Object> values) {
+        String value = text(values, "movementImpactConstraint");
+        return value == null ? null : PlanDraft.MovementImpactConstraint.valueOf(value);
     }
 
     private static Integer nullableNumber(Map<String, Object> values, String key) {

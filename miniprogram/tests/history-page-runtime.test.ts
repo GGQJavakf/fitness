@@ -14,6 +14,7 @@ const application = vi.hoisted(() => ({
   listProgressionRecommendations: vi.fn(),
   loadActivePlan: vi.fn(),
   applyProgressionRecommendation: vi.fn(),
+  applyProgressionRecommendationForActivePlan: vi.fn(),
   dismissProgressionRecommendation: vi.fn(),
   navigation: {
     open: vi.fn(),
@@ -34,8 +35,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/progressCompositionRoot', () => ({
+  getProgressApplication: () => application,
 }))
 
 const { default: HistoryPage } = await import('../src/presentation/pages/history')
@@ -99,6 +100,41 @@ describe('history page runtime interactions', () => {
       activeVersion: { versionNumber: 3 },
     })
     application.applyProgressionRecommendation.mockResolvedValue({})
+    const attempts = new Map<string, {
+      expectedVersion: number
+      acceptedWeightKg: number
+      idempotencyKey: string
+    }>()
+    application.applyProgressionRecommendationForActivePlan.mockImplementation(
+      async (id: string, acceptedWeightKg: number) => {
+        let attempt = attempts.get(id)
+        if (!attempt || attempt.acceptedWeightKg !== acceptedWeightKg) {
+          const plan = await application.loadActivePlan()
+          if (!plan) throw new Error('active plan is missing')
+          attempt = {
+            expectedVersion: plan.activeVersion.versionNumber,
+            acceptedWeightKg,
+            idempotencyKey: `progression-${id}-${acceptedWeightKg}-v${plan.activeVersion.versionNumber}`,
+          }
+          attempts.set(id, attempt)
+        }
+        try {
+          const result = await application.applyProgressionRecommendation(
+            id,
+            attempt.expectedVersion,
+            attempt.acceptedWeightKg,
+            attempt.idempotencyKey,
+          )
+          if (attempts.get(id) === attempt) attempts.delete(id)
+          return result
+        } catch (error) {
+          const uncertain = error instanceof ApplicationError
+            && ['NETWORK_ERROR', 'INVALID_RESPONSE', 'INTERNAL_ERROR'].includes(error.code)
+          if (!uncertain && attempts.get(id) === attempt) attempts.delete(id)
+          throw error
+        }
+      },
+    )
     application.dismissProgressionRecommendation.mockResolvedValue({})
     application.workouts.load.mockResolvedValue(undefined)
   })

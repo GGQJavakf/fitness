@@ -1,6 +1,7 @@
 import { ApplicationError, applicationErrorMessage } from '../../application/errors'
 import type {
   ActivePlanData,
+  CandidateCommitRequest,
   CreatePlanVersionRequest,
   PlanCandidateGenerationData,
   PlanGenerationContextData,
@@ -42,6 +43,13 @@ import type { ExerciseReplacementCandidate, ReplacedWorkoutSession, WorkoutRepla
 import type { components } from './schema.generated'
 import type { AiGeneratedContent } from '../../application/ai'
 import type { ExerciseContent, ExercisePreferenceProfile } from '../../application/content'
+import {
+  HandledSessionRefreshFailureError,
+  MAX_SESSION_REFRESH_LINEAGE_HOPS,
+  SessionRefreshInvalidatedError,
+  type SessionRefreshFailureLease,
+  type SessionRefreshCoordinator,
+} from './sessionRefreshCoordinator'
 import type {
   WorkoutRecoveryAssessment,
   WorkoutRecoveryCheckRequest,
@@ -80,8 +88,14 @@ export interface TransportPort {
 
 export interface SessionAccessPort {
   load(): Promise<Session | null>
+  loadImmediately?(): Session | null
   save(session: Session): Promise<void>
   clear(): Promise<void>
+}
+
+export interface RequestGenerationFence {
+  capture(): number
+  assertCurrent(generation: number): void
 }
 
 export type AuthenticationFailureCode = 'AUTHENTICATION_REQUIRED' | 'ACCESS_REVOKED'
@@ -124,6 +138,9 @@ type ExerciseDetailResponse = components['schemas']['ExerciseDetailResponse']
 export class FitnessApiClient implements OnboardingPersistencePort, PlanPersistencePort, PrivacyPort, WorkoutOperationSyncPort, WorkoutHistoryPort, WorkoutCompletionPort, WorkoutReplacementPort, ProgressionPort, WorkoutRecoveryPort, WorkoutSessionStartPort {
   private readonly baseUrl: string
   private refreshInFlight: Promise<Session> | null = null
+  private refreshInFlightGeneration: number | undefined
+  private localRefreshGeneration: number | undefined
+  private localRotationRevision = 0
   private readonly rotatedSessions = new Map<string, Session>()
 
   constructor(
@@ -133,28 +150,86 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     private readonly onAuthenticationFailure?: (
       code: AuthenticationFailureCode,
     ) => Promise<void> | void,
+    private readonly sessionRefreshCoordinator?: SessionRefreshCoordinator,
+    private readonly requestGeneration?: RequestGenerationFence,
   ) {
     this.baseUrl = normalizeBaseUrl(baseUrl)
   }
 
   async login(code: string): Promise<Session> {
-    const response = await this.request<ApiResponse<Session>>(
-      '/api/v1/auth/wechat/login',
-      'POST',
-      { code } satisfies components['schemas']['WechatLoginRequest'],
-      false,
-    )
-    const session = requireData(response.data)
-    this.rotatedSessions.clear()
-    return session
+    const generation = this.captureRequestGeneration()
+    try {
+      const response = await this.request<ApiResponse<Session>>(
+        '/api/v1/auth/wechat/login',
+        'POST',
+        { code } satisfies components['schemas']['WechatLoginRequest'],
+        false,
+        {},
+        true,
+        generation,
+      )
+      this.assertRequestGeneration(generation)
+      const session = requireData(response.data)
+      this.clearSessionRefreshState(generation)
+      this.assertRequestGeneration(generation)
+      return session
+    } catch (error) {
+      this.assertRequestGeneration(generation)
+      throw error
+    }
   }
 
   async logout(): Promise<void> {
-    await this.request<ApiResponse<Record<string, never>>>(
-      '/api/v1/auth/logout',
-      'POST',
-    )
-    this.rotatedSessions.clear()
+    const generation = this.captureRequestGeneration()
+    try {
+      await this.request<ApiResponse<Record<string, never>>>(
+        '/api/v1/auth/logout',
+        'POST',
+        undefined,
+        true,
+        {},
+        true,
+        generation,
+      )
+      this.assertRequestGeneration(generation)
+    } catch (error) {
+      this.assertRequestGeneration(generation)
+      this.clearSessionRefreshState(generation)
+      throw error
+    }
+    this.clearSessionRefreshState(generation)
+  }
+
+  prepareLogout(): () => Promise<void> {
+    const generation = this.captureRequestGeneration()
+    const loadImmediately = this.sessions.loadImmediately
+    if (!loadImmediately) {
+      throw new ApplicationError(
+        'AUTHENTICATION_REQUIRED',
+        applicationErrorMessage('AUTHENTICATION_REQUIRED'),
+      )
+    }
+    const session = loadImmediately()
+    this.assertRequestGeneration(generation)
+    if (!session) {
+      throw new ApplicationError(
+        'AUTHENTICATION_REQUIRED',
+        applicationErrorMessage('AUTHENTICATION_REQUIRED'),
+      )
+    }
+    const authorization = `Bearer ${session.accessToken}`
+    return async () => {
+      // This closure owns only the captured A-account credential. It deliberately
+      // has no session/refresh/auth-handler side effects after local purge starts.
+      await this.request<ApiResponse<Record<string, never>>>(
+        '/api/v1/auth/logout',
+        'POST',
+        undefined,
+        false,
+        { Authorization: authorization },
+        false,
+      )
+    }
   }
 
   async getProfileVersion(): Promise<number | null> {
@@ -278,6 +353,20 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       }
       throw error
     }
+  }
+
+  async commitCandidate(
+    request: CandidateCommitRequest,
+    idempotencyKey: string,
+  ): Promise<PlanVersionResultData> {
+    const response = await this.request<VersionResultResponse>(
+      '/api/v1/plans/candidate-commits',
+      'POST',
+      request satisfies components['schemas']['CandidateCommitRequest'],
+      true,
+      { 'Idempotency-Key': idempotencyKey },
+    )
+    return requireData(response.data)
   }
 
   async createPlanVersion(
@@ -519,24 +608,38 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
   async startWorkoutSession(
     request: StartWorkoutSessionRequest,
   ): Promise<WorkoutSessionData> {
-    const response = await this.request<WorkoutSessionResponse>(
-      '/api/v1/workout-sessions',
-      'POST',
-      request,
-      true,
-      { 'Idempotency-Key': request.clientSessionKey },
-    )
-    const session = response.data
-    if (session.status === 'IN_PROGRESS') return session
-    if (session.status !== 'CREATED') {
-      throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+    const generation = this.captureRequestGeneration()
+    try {
+      const response = await this.request<WorkoutSessionResponse>(
+        '/api/v1/workout-sessions',
+        'POST',
+        request,
+        true,
+        { 'Idempotency-Key': request.clientSessionKey },
+        true,
+        generation,
+      )
+      this.assertRequestGeneration(generation)
+      const session = response.data
+      if (session.status === 'IN_PROGRESS') return session
+      if (session.status !== 'CREATED') {
+        throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
+      }
+      const activated = await this.request<WorkoutSessionResponse>(
+        `/api/v1/workout-sessions/${encodeURIComponent(session.id)}/status`,
+        'PUT',
+        { status: 'IN_PROGRESS', expectedVersion: session.version },
+        true,
+        {},
+        true,
+        generation,
+      )
+      this.assertRequestGeneration(generation)
+      return activated.data
+    } catch (error) {
+      this.assertRequestGeneration(generation)
+      throw error
     }
-    const activated = await this.request<WorkoutSessionResponse>(
-      `/api/v1/workout-sessions/${encodeURIComponent(session.id)}/status`,
-      'PUT',
-      { status: 'IN_PROGRESS', expectedVersion: session.version },
-    )
-    return activated.data
   }
 
   async activateWorkoutSession(
@@ -605,6 +708,8 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     body?: unknown,
     authenticated = true,
     extraHeaders: Record<string, string> = {},
+    generationBound = authenticated,
+    expectedGeneration?: number,
   ): Promise<Response> {
     return (await this.requestWithMetadata<Response>(
       path,
@@ -612,6 +717,8 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       body,
       authenticated,
       extraHeaders,
+      generationBound,
+      expectedGeneration,
     )).data
   }
 
@@ -621,18 +728,34 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
     body?: unknown,
     authenticated = true,
     extraHeaders: Record<string, string> = {},
+    generationBound = authenticated,
+    expectedGeneration?: number,
   ): Promise<TransportResponse<Response>> {
+    const generation = generationBound
+      ? expectedGeneration ?? this.captureRequestGeneration()
+      : undefined
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...extraHeaders,
     }
+    const initialRotationRevision = authenticated
+      ? this.captureSessionRotationRevision(generation)
+      : 0
     let session: Session | null = null
     if (authenticated) {
-      session = await this.sessions.load()
+      try {
+        session = await this.sessions.load()
+      } catch (error) {
+        this.assertRequestGeneration(generation)
+        throw error
+      }
+      this.assertRequestGeneration(generation)
       if (!session) {
-        throw new ApplicationError(
-          'AUTHENTICATION_REQUIRED',
-          applicationErrorMessage('AUTHENTICATION_REQUIRED'),
+        throw await this.mapErrorForGeneration(
+          401,
+          { error: { code: 'AUTHENTICATION_REQUIRED', retryable: false } },
+          generation,
+          true,
         )
       }
       headers.Authorization = `Bearer ${session.accessToken}`
@@ -647,53 +770,274 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
         ...(body === undefined ? {} : { body }),
       })
     } catch {
+      this.assertRequestGeneration(generation)
       throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
         retryable: true,
       })
     }
+    this.assertRequestGeneration(generation)
 
     if (authenticated && response.statusCode === 401 && session) {
       if (terminalAuthenticationCode(response.data)) {
-        throw await this.mapError(response.statusCode, response.data)
+        throw await this.mapErrorForGeneration(
+          response.statusCode,
+          response.data,
+          generation,
+          true,
+        )
       }
-      const recovered = await this.recoverSession(session)
-      headers.Authorization = `Bearer ${recovered.accessToken}`
+      let recovered: Session
       try {
-        response = await this.transport.request({
-          url: `${this.baseUrl}${path}`,
-          method,
-          headers,
-          ...(body === undefined ? {} : { body }),
-        })
-      } catch {
-        throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
-          retryable: true,
-        })
+        recovered = await this.recoverSession(
+          session,
+          generation,
+          initialRotationRevision,
+        )
+      } catch (error) {
+        if (error instanceof HandledSessionRefreshFailureError) {
+          error.assertCurrent()
+          throw error.failure
+        }
+        this.assertRequestGeneration(generation)
+        throw error
+      }
+      this.assertRequestGeneration(generation)
+      const attemptedRecoverySessions: Session[] = []
+      while (true) {
+        attemptedRecoverySessions.push(recovered)
+        headers.Authorization = `Bearer ${recovered.accessToken}`
+        const retryRotationRevision = this.captureSessionRotationRevision(generation)
+        try {
+          response = await this.transport.request({
+            url: `${this.baseUrl}${path}`,
+            method,
+            headers,
+            ...(body === undefined ? {} : { body }),
+          })
+        } catch {
+          this.assertRequestGeneration(generation)
+          throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
+            retryable: true,
+          })
+        }
+        this.assertRequestGeneration(generation)
+        if (response.statusCode !== 401 || terminalAuthenticationCode(response.data)) break
+
+        let latestRecovery: Session | null
+        do {
+          latestRecovery = await this.resolveKnownLatestSession(recovered, generation)
+        } while (
+          !latestRecovery
+          && this.hasKnownSessionRecovery(recovered, generation)
+        )
+        if (!latestRecovery) {
+          if (this.hasSessionRotationAdvancedSince(retryRotationRevision, generation)) {
+            throw new SessionRefreshInvalidatedError()
+          }
+          break
+        }
+
+        const alreadyAttempted = attemptedRecoverySessions.some(
+          (attempted) => sameSessionIdentity(attempted, latestRecovery),
+        )
+        if (
+          alreadyAttempted
+          || attemptedRecoverySessions.length >= MAX_SESSION_REFRESH_LINEAGE_HOPS
+        ) {
+          // A newer session exists, so this stale request must not purge it. The
+          // caller can retry from the current store instead of chasing forever.
+          throw new SessionRefreshInvalidatedError()
+        }
+        recovered = latestRecovery
       }
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
+      this.assertRequestGeneration(generation)
       return response as TransportResponse<Response>
     }
-    throw await this.mapError(response.statusCode, response.data)
+    throw await this.mapErrorForGeneration(
+      response.statusCode,
+      response.data,
+      generation,
+      authenticated,
+    )
   }
 
-  private async recoverSession(failedSession: Session): Promise<Session> {
+  private async recoverSession(
+    failedSession: Session,
+    generation: number | undefined,
+    observedRotationRevision: number,
+  ): Promise<Session> {
+    this.synchronizeLocalRefreshGeneration(generation)
+    this.assertRequestGeneration(generation)
+    if (this.sessionRefreshCoordinator) {
+      const coordinator = this.sessionRefreshCoordinator
+      let recoveredSession: Session
+      try {
+        recoveredSession = await coordinator.recover(
+          failedSession,
+          (session) => this.requestRefreshedSession(session, generation),
+          observedRotationRevision,
+          (session) => this.saveRefreshedSession(session, generation),
+          (error) => this.handleRefreshFailure(
+            error,
+            generation,
+            () => this.captureFailureDeliveryLease(coordinator),
+          ),
+        )
+      } catch (error) {
+        if (error instanceof HandledSessionRefreshFailureError) {
+          error.assertCurrent()
+          throw error
+        }
+        this.assertRequestGeneration(generation)
+        throw error
+      }
+      this.assertRequestGeneration(generation)
+      return recoveredSession
+    }
     const rotatedSession = this.rotatedSessions.get(failedSession.refreshToken)
-    if (rotatedSession) return rotatedSession
-    return this.refreshSession(failedSession)
+    if (rotatedSession) {
+      this.assertRequestGeneration(generation)
+      return rotatedSession
+    }
+    if (this.hasSessionRotationAdvancedSince(observedRotationRevision, generation)) {
+      throw new SessionRefreshInvalidatedError()
+    }
+    return this.refreshSession(failedSession, generation)
   }
 
-  private async refreshSession(session: Session): Promise<Session> {
-    if (!this.refreshInFlight) {
-      this.refreshInFlight = this.performRefresh(session)
-        .finally(() => { this.refreshInFlight = null })
+  private async resolveKnownLatestSession(
+    failedSession: Session,
+    generation: number | undefined,
+  ): Promise<Session | null> {
+    this.synchronizeLocalRefreshGeneration(generation)
+    this.assertRequestGeneration(generation)
+    let latestSession: Session | null
+    if (this.sessionRefreshCoordinator) {
+      try {
+        latestSession = await this.sessionRefreshCoordinator.resolveKnownLatest(failedSession)
+      } catch (error) {
+        if (error instanceof HandledSessionRefreshFailureError) {
+          error.assertCurrent()
+          throw error.failure
+        }
+        this.assertRequestGeneration(generation)
+        throw error
+      }
+    } else {
+      latestSession = this.rotatedSessions.get(failedSession.refreshToken) ?? null
+    }
+    this.assertRequestGeneration(generation)
+    return latestSession
+  }
+
+  private hasKnownSessionRecovery(
+    failedSession: Session,
+    generation: number | undefined,
+  ): boolean {
+    this.synchronizeLocalRefreshGeneration(generation)
+    this.assertRequestGeneration(generation)
+    return this.sessionRefreshCoordinator
+      ? this.sessionRefreshCoordinator.hasKnownRecovery(failedSession)
+      : this.rotatedSessions.has(failedSession.refreshToken)
+  }
+
+  private captureSessionRotationRevision(
+    generation: number | undefined,
+  ): number {
+    this.synchronizeLocalRefreshGeneration(generation)
+    this.assertRequestGeneration(generation)
+    return this.sessionRefreshCoordinator
+      ? this.sessionRefreshCoordinator.captureRotationRevision()
+      : this.localRotationRevision
+  }
+
+  private hasSessionRotationAdvancedSince(
+    observedRevision: number,
+    generation: number | undefined,
+  ): boolean {
+    this.synchronizeLocalRefreshGeneration(generation)
+    this.assertRequestGeneration(generation)
+    return this.sessionRefreshCoordinator
+      ? this.sessionRefreshCoordinator.hasRotationAdvancedSince(observedRevision)
+      : this.localRotationRevision > observedRevision
+  }
+
+  private async refreshSession(
+    session: Session,
+    generation: number | undefined,
+  ): Promise<Session> {
+    if (!this.refreshInFlight || this.refreshInFlightGeneration !== generation) {
+      let refresh!: Promise<Session>
+      refresh = this.performRefresh(session, generation)
+        .catch(async (error: unknown) => {
+          const deliveryLease = await this.handleRefreshFailure(
+            error,
+            generation,
+            () => this.captureFailureDeliveryLease(),
+          )
+          if (deliveryLease) {
+            deliveryLease.assertCurrent()
+            throw new HandledSessionRefreshFailureError(error, deliveryLease)
+          }
+          throw error
+        })
+        .finally(() => {
+          if (this.refreshInFlight === refresh) {
+            this.refreshInFlight = null
+            this.refreshInFlightGeneration = undefined
+          }
+        })
+      this.refreshInFlight = refresh
+      this.refreshInFlightGeneration = generation
     }
     return this.refreshInFlight
   }
 
-  private async performRefresh(session: Session): Promise<Session> {
+  private async performRefresh(
+    session: Session,
+    generation: number | undefined,
+  ): Promise<Session> {
+    const refreshed = await this.requestAndSaveRefreshedSession(session, generation)
     const sourceRefreshToken = session.refreshToken
+    for (const previousRefreshToken of this.rotatedSessions.keys()) {
+      this.rotatedSessions.set(previousRefreshToken, refreshed)
+    }
+    this.rotatedSessions.set(sourceRefreshToken, refreshed)
+    this.localRotationRevision += 1
+    while (this.rotatedSessions.size > MAX_SESSION_REFRESH_LINEAGE_HOPS) {
+      const oldestRefreshToken = this.rotatedSessions.keys().next().value
+      if (typeof oldestRefreshToken !== 'string') break
+      this.rotatedSessions.delete(oldestRefreshToken)
+    }
+    return refreshed
+  }
+
+  private async requestAndSaveRefreshedSession(
+    session: Session,
+    generation: number | undefined,
+  ): Promise<Session> {
+    const refreshed = await this.requestRefreshedSession(session, generation)
+    await this.saveRefreshedSession(refreshed, generation)
+    return refreshed
+  }
+
+  private async saveRefreshedSession(
+    refreshed: Session,
+    generation: number | undefined,
+  ): Promise<void> {
+    this.assertRequestGeneration(generation)
+    await this.sessions.save(refreshed)
+    this.assertRequestGeneration(generation)
+  }
+
+  private async requestRefreshedSession(
+    session: Session,
+    generation: number | undefined,
+  ): Promise<Session> {
+    this.assertRequestGeneration(generation)
     let response: TransportResponse<unknown>
     try {
       response = await this.transport.request({
@@ -703,31 +1047,134 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
         body: { refreshToken: session.refreshToken },
       })
     } catch {
+      this.assertRequestGeneration(generation)
       throw new ApplicationError('NETWORK_ERROR', applicationErrorMessage('NETWORK_ERROR'), {
         retryable: true,
       })
     }
+    this.assertRequestGeneration(generation)
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw await this.mapError(response.statusCode, response.data)
+      throw await this.mapErrorForGeneration(
+        response.statusCode,
+        response.data,
+        generation,
+        false,
+      )
     }
     const refreshed = isSessionResponse(response.data)
     if (!refreshed) {
       throw new ApplicationError('INVALID_RESPONSE', applicationErrorMessage('INVALID_RESPONSE'))
     }
-    await this.sessions.save(refreshed)
-    for (const previousRefreshToken of this.rotatedSessions.keys()) {
-      this.rotatedSessions.set(previousRefreshToken, refreshed)
-    }
-    this.rotatedSessions.set(sourceRefreshToken, refreshed)
-    while (this.rotatedSessions.size > 8) {
-      const oldestRefreshToken = this.rotatedSessions.keys().next().value
-      if (typeof oldestRefreshToken !== 'string') break
-      this.rotatedSessions.delete(oldestRefreshToken)
-    }
     return refreshed
   }
 
-  private async mapError(statusCode: number, payload: unknown): Promise<ApplicationError> {
+  private async handleRefreshFailure(
+    error: unknown,
+    generation: number | undefined,
+    captureDeliveryLease: () => SessionRefreshFailureLease,
+  ): Promise<SessionRefreshFailureLease | null> {
+    if (
+      !(error instanceof ApplicationError)
+      || (error.code !== 'AUTHENTICATION_REQUIRED' && error.code !== 'ACCESS_REVOKED')
+    ) {
+      return null
+    }
+    const handling = this.handleAuthenticationFailureForGeneration(error.code, generation)
+    const deliveryLease = captureDeliveryLease()
+    try {
+      await handling
+    } catch (handlerError) {
+      throw new HandledSessionRefreshFailureError(handlerError, deliveryLease)
+    }
+    if (error.code === 'AUTHENTICATION_REQUIRED') {
+      try {
+        this.assertRequestGeneration(generation)
+      } catch (invalidationError) {
+        throw new HandledSessionRefreshFailureError(invalidationError, deliveryLease)
+      }
+    }
+    return deliveryLease
+  }
+
+  private captureFailureDeliveryLease(
+    coordinator?: SessionRefreshCoordinator,
+  ): SessionRefreshFailureLease {
+    const coordinatorLease = coordinator?.captureFailureDeliveryLease()
+    const expectedRevision = this.localRotationRevision
+    const expectedRequestGeneration = this.requestGeneration?.capture()
+    return {
+      assertCurrent: () => {
+        coordinatorLease?.assertCurrent()
+        if (this.localRotationRevision !== expectedRevision) {
+          throw new SessionRefreshInvalidatedError()
+        }
+        if (expectedRequestGeneration !== undefined) {
+          this.requestGeneration?.assertCurrent(expectedRequestGeneration)
+        }
+      },
+    }
+  }
+
+  private clearSessionRefreshState(generation?: number): void {
+    this.assertRequestGeneration(generation)
+    this.refreshInFlight = null
+    this.refreshInFlightGeneration = undefined
+    this.localRefreshGeneration = undefined
+    this.localRotationRevision += 1
+    this.rotatedSessions.clear()
+    this.sessionRefreshCoordinator?.clear()
+    this.assertRequestGeneration(generation)
+  }
+
+  private captureRequestGeneration(): number | undefined {
+    return this.requestGeneration?.capture()
+  }
+
+  private assertRequestGeneration(generation: number | undefined): void {
+    if (generation !== undefined) this.requestGeneration?.assertCurrent(generation)
+  }
+
+  private synchronizeLocalRefreshGeneration(generation: number | undefined): void {
+    if (generation === undefined) return
+    if (this.localRefreshGeneration === generation) return
+    this.localRefreshGeneration = generation
+    this.refreshInFlight = null
+    this.refreshInFlightGeneration = undefined
+    this.localRotationRevision += 1
+    this.rotatedSessions.clear()
+  }
+
+  private async mapErrorForGeneration(
+    statusCode: number,
+    payload: unknown,
+    generation: number | undefined,
+    handleAuthenticationFailure: boolean,
+  ): Promise<ApplicationError> {
+    this.assertRequestGeneration(generation)
+    if (handleAuthenticationFailure && authenticationFailureCode(statusCode, payload)) {
+      return this.mapError(statusCode, payload, generation, true)
+    }
+    try {
+      const error = await this.mapError(
+        statusCode,
+        payload,
+        generation,
+        handleAuthenticationFailure,
+      )
+      this.assertRequestGeneration(generation)
+      return error
+    } catch (error) {
+      this.assertRequestGeneration(generation)
+      throw error
+    }
+  }
+
+  private async mapError(
+    statusCode: number,
+    payload: unknown,
+    generation?: number,
+    handleAuthenticationFailure = true,
+  ): Promise<ApplicationError> {
     const apiError = isApiErrorResponse(payload) ? payload.error : undefined
     const serverCode: string | undefined = apiError?.code
     if (statusCode === 409 && apiError && serverCode === 'RECOVERY_CONFIRMATION_REQUIRED') {
@@ -756,41 +1203,102 @@ export class FitnessApiClient implements OnboardingPersistencePort, PlanPersiste
       return new WorkoutStartTerminalReplayError(terminalSession)
     }
     const code = mapErrorCode(statusCode, serverCode)
-    if (code === 'AUTHENTICATION_REQUIRED') {
-      this.rotatedSessions.clear()
-      await this.sessions.clear()
-      await this.onAuthenticationFailure?.(code)
-    } else if (code === 'ACCESS_REVOKED') {
-      this.rotatedSessions.clear()
-      if (this.onAuthenticationFailure) {
-        await this.onAuthenticationFailure(code)
-      } else {
-        await this.sessions.clear()
-      }
+    if (
+      handleAuthenticationFailure
+      && (code === 'AUTHENTICATION_REQUIRED' || code === 'ACCESS_REVOKED')
+    ) {
+      await this.handleAuthenticationFailureForGeneration(code, generation)
     }
     return new ApplicationError(code, applicationErrorMessage(code), {
       retryable: apiError?.retryable ?? statusCode >= 500,
       fieldPaths: apiError?.fieldErrors?.map((field) => field.path) ?? [],
     })
   }
+
+  private async handleAuthenticationFailureForGeneration(
+    code: AuthenticationFailureCode,
+    generation: number | undefined,
+  ): Promise<void> {
+    this.clearSessionRefreshState(generation)
+    if (this.onAuthenticationFailure) {
+      await this.onAuthenticationFailure(code)
+      return
+    }
+    this.assertRequestGeneration(generation)
+    await this.sessions.clear()
+    this.assertRequestGeneration(generation)
+  }
+}
+
+function sameSessionIdentity(left: Session, right: Session): boolean {
+  return left.accessToken === right.accessToken
+    && left.refreshToken === right.refreshToken
 }
 
 function normalizeBaseUrl(baseUrl: string): string {
   const normalized = baseUrl.trim().replace(/\/+$/, '')
-  let parsed: URL
-  try {
-    parsed = new URL(normalized)
-  } catch {
-    throw new Error('API base URL must use http or https')
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('API base URL must use http or https')
-  }
-  const loopbackHosts = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
-  if (parsed.protocol === 'http:' && !loopbackHosts.has(parsed.hostname.toLowerCase())) {
+  const parsed = parseHttpBaseUrl(normalized)
+  const hostname = parsed.hostname.toLowerCase()
+  const loopback = hostname === 'localhost'
+    || hostname === '127.0.0.1'
+    || hostname === '::1'
+    || hostname === '[::1]'
+  if (parsed.protocol === 'http:' && !loopback) {
     throw new Error('API base URL must use HTTPS for non-loopback hosts')
   }
   return normalized
+}
+
+function parseHttpBaseUrl(value: string): { protocol: 'http:' | 'https:'; hostname: string } {
+  const schemeSeparator = value.indexOf('://')
+  const protocol = value.slice(0, schemeSeparator).toLowerCase()
+  if (schemeSeparator <= 0 || (protocol !== 'http' && protocol !== 'https')) {
+    throw new Error('API base URL must use http or https')
+  }
+
+  const authorityStart = schemeSeparator + 3
+  let authorityEnd = value.length
+  for (const separator of ['/', '?', '#']) {
+    const index = value.indexOf(separator, authorityStart)
+    if (index >= 0 && index < authorityEnd) authorityEnd = index
+  }
+  const authority = value.slice(authorityStart, authorityEnd)
+  if (!authority || authority.indexOf('@') >= 0 || /[\s\\]/.test(authority)) {
+    throw new Error('API base URL must use http or https')
+  }
+
+  let hostname = authority
+  let port = ''
+  if (authority.charAt(0) === '[') {
+    const closingBracket = authority.indexOf(']')
+    if (closingBracket <= 1) throw new Error('API base URL must use http or https')
+    hostname = authority.slice(0, closingBracket + 1)
+    const suffix = authority.slice(closingBracket + 1)
+    if (suffix) {
+      if (suffix.charAt(0) !== ':' || suffix.length === 1) {
+        throw new Error('API base URL must use http or https')
+      }
+      port = suffix.slice(1)
+    }
+  } else {
+    const portSeparator = authority.lastIndexOf(':')
+    if (portSeparator >= 0) {
+      if (
+        authority.indexOf(':') !== portSeparator
+        || portSeparator === 0
+        || portSeparator === authority.length - 1
+      ) {
+        throw new Error('API base URL must use http or https')
+      }
+      hostname = authority.slice(0, portSeparator)
+      port = authority.slice(portSeparator + 1)
+    }
+  }
+
+  if (!hostname || (port && (!/^\d+$/.test(port) || Number(port) > 65_535))) {
+    throw new Error('API base URL must use http or https')
+  }
+  return { protocol: `${protocol}:` as 'http:' | 'https:', hostname }
 }
 
 function requireData<T>(value: T | null | undefined): T {
@@ -818,6 +1326,17 @@ function isApiErrorResponse(value: unknown): value is ApiErrorResponse {
 function terminalAuthenticationCode(value: unknown): 'ACCESS_REVOKED' | undefined {
   if (!isApiErrorResponse(value)) return undefined
   return value.error.code === 'ACCESS_REVOKED' ? value.error.code : undefined
+}
+
+function authenticationFailureCode(
+  statusCode: number,
+  value: unknown,
+): AuthenticationFailureCode | undefined {
+  const serverCode = isApiErrorResponse(value) ? value.error.code : undefined
+  const code = mapErrorCode(statusCode, serverCode)
+  return code === 'AUTHENTICATION_REQUIRED' || code === 'ACCESS_REVOKED'
+    ? code
+    : undefined
 }
 
 function isSessionResponse(value: unknown): Session | null {

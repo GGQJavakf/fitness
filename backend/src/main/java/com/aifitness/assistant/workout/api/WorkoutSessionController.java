@@ -65,12 +65,22 @@ public final class WorkoutSessionController {
         if (request == null || !idempotencyKey.equals(request.clientSessionKey())) {
             throw new IllegalArgumentException("Idempotency-Key must match clientSessionKey");
         }
+        ActiveWorkoutReplacementRequest replacementRequest = request.activeWorkoutReplacement();
+        if (replacementRequest != null
+                && (replacementRequest.sessionId() == null || replacementRequest.expectedVersion() == null
+                || replacementRequest.expectedVersion() < 0)) {
+            throw new IllegalArgumentException(
+                    "active workout replacement requires sessionId and a non-negative expectedVersion");
+        }
         String trainingDayCode = request.resolvedTrainingDayCode();
         WorkoutSessionStartService.StartResult result = starts.start(
                 user,
                 new WorkoutSessionService.StartCommand(
                         request.clientSessionKey(), request.planId(), request.planVersionNo(), trainingDayCode),
-                Optional.ofNullable(request.recoveryConfirmationToken()));
+                Optional.ofNullable(request.recoveryConfirmationToken()),
+                Optional.ofNullable(replacementRequest).map(replacement ->
+                        new WorkoutSessionStartService.ActiveWorkoutReplacement(
+                                replacement.sessionId(), replacement.expectedVersion())));
         if (result instanceof WorkoutSessionStartService.Started started) {
             return ResponseEntity.status(HttpStatus.CREATED).body(response(SessionData.from(started.session())));
         }
@@ -179,7 +189,19 @@ public final class WorkoutSessionController {
             int planVersionNo,
             String planDayId,
             String trainingDayCode,
-            String recoveryConfirmationToken) {
+            String recoveryConfirmationToken,
+            ActiveWorkoutReplacementRequest activeWorkoutReplacement) {
+        public StartRequest(
+                String clientSessionKey,
+                UUID planId,
+                int planVersionNo,
+                String planDayId,
+                String trainingDayCode,
+                String recoveryConfirmationToken) {
+            this(clientSessionKey, planId, planVersionNo, planDayId, trainingDayCode,
+                    recoveryConfirmationToken, null);
+        }
+
         String resolvedTrainingDayCode() {
             if (planDayId == null || planDayId.isBlank()) {
                 throw new IllegalArgumentException("planDayId is required for compatibility");
@@ -190,6 +212,8 @@ public final class WorkoutSessionController {
             return trainingDayCode == null || trainingDayCode.isBlank() ? planDayId : trainingDayCode;
         }
     }
+
+    public record ActiveWorkoutReplacementRequest(UUID sessionId, Long expectedVersion) {}
 
     public record StatusRequest(WorkoutStatus status, long expectedVersion) {}
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-import { runSingleFlight } from '../src/presentation/pages/home/loginSingleFlight'
+import { runSingleFlight } from '../src/subpackages/startup/pages/home/loginSingleFlight'
 
 const projectRoot = resolve(import.meta.dirname, '..')
 
@@ -12,7 +12,7 @@ function source(path: string): string {
 
 describe('home page product-quality contract', () => {
   it('communicates the product value and keeps safety boundaries explicit', () => {
-    const page = source('src/presentation/pages/home/index.tsx')
+    const page = source('src/subpackages/startup/pages/home/index.tsx')
 
     for (const label of ['科学计划', '规则计算', '长期进化']) {
       expect(page).toContain(label)
@@ -63,7 +63,7 @@ describe('home page product-quality contract', () => {
   })
 
   it('uses a restrained health-tech system with explicit safe-area handling', () => {
-    const styles = source('src/presentation/pages/home/index.scss')
+    const styles = source('src/subpackages/startup/pages/home/index.scss')
 
     for (const token of ['#082f28', '#0b5c4d', '#55d6a6', '#f7f8f3']) {
       expect(styles.toLowerCase()).toContain(token)

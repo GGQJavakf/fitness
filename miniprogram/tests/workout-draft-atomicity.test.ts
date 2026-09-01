@@ -72,6 +72,60 @@ describe('WeChat workout draft atomic storage', () => {
     expect(taro.removeStorage).toHaveBeenCalledWith({ key: firstRecordKey })
   })
 
+  it('atomically replaces an active workout without exposing an empty pointer', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => {
+      values.set(key, data)
+    })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => { values.delete(key) })
+    const store = createWechatWorkoutDraftStore()
+    await store.save(draft(1))
+
+    await store.replaceActive!('draft-0001', {
+      ...draft(1),
+      draftId: 'replacement-draft-0002',
+      clientSessionKey: 'replacement-session-key-0002',
+    })
+
+    await expect(store.loadActive()).resolves.toMatchObject({
+      draftId: 'replacement-draft-0002',
+      clientSessionKey: 'replacement-session-key-0002',
+    })
+    expect(values.has('fitness.workout.draft.active.v1')).toBe(true)
+    expect([...values.keys()].filter((key) => key.startsWith('fitness.workout.draft.record.')))
+      .toHaveLength(1)
+  })
+
+  it('keeps the previous workout active if the replacement pointer switch fails', async () => {
+    const values = new Map<string, unknown>()
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => {
+      values.set(key, data)
+    })
+    taro.getStorage.mockImplementation(async ({ key }: { key: string }) => {
+      if (!values.has(key)) throw { errMsg: 'getStorage:fail data not found' }
+      return { data: values.get(key) }
+    })
+    taro.removeStorage.mockImplementation(async ({ key }: { key: string }) => { values.delete(key) })
+    const store = createWechatWorkoutDraftStore()
+    await store.save(draft(1))
+    taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => {
+      if (key === 'fitness.workout.draft.active.v1') throw new Error('simulated pointer failure')
+      values.set(key, data)
+    })
+
+    await expect(store.replaceActive!('draft-0001', {
+      ...draft(1),
+      draftId: 'replacement-draft-0002',
+      clientSessionKey: 'replacement-session-key-0002',
+    })).rejects.toThrow('simulated pointer failure')
+
+    await expect(store.loadActive()).resolves.toMatchObject({ draftId: 'draft-0001' })
+  })
+
   it('rejects a stale revision instead of replacing a newer active draft', async () => {
     const values = new Map<string, unknown>()
     taro.setStorage.mockImplementation(async ({ key, data }: { key: string; data: unknown }) => { values.set(key, data) })

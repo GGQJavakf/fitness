@@ -95,6 +95,7 @@ describe('plan editor locks', () => {
       validatePlan,
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn().mockResolvedValue(activePlan),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     })
@@ -260,6 +261,7 @@ describe('plan editor locks', () => {
       validatePlan,
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn().mockResolvedValue(createActivePlan()),
+      commitCandidate: vi.fn(),
       createPlanVersion,
       previewRebalance: vi.fn(),
     })
@@ -310,6 +312,7 @@ describe('plan editor locks', () => {
       validatePlan,
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn().mockResolvedValue(createActivePlan()),
+      commitCandidate: vi.fn(),
       createPlanVersion,
       previewRebalance: vi.fn(),
     })
@@ -392,7 +395,7 @@ describe('plan editor locks', () => {
     expect(conflicted.workingCopy).toEqual(initial.workingCopy)
   })
 
-  it('keeps candidate editing local until save confirms the initial version', async () => {
+  it('keeps candidate editing local until one atomic save confirms version 1', async () => {
     const candidate = {
       candidateId: 'candidate-1',
       plan: { ...originalPlan, locks: {} },
@@ -422,28 +425,17 @@ describe('plan editor locks', () => {
         lockedFieldOutcomes: {},
       }),
     }
-    const createInitialPlan = vi.fn().mockResolvedValue({
-      planId: 'plan-1',
-      activeVersion: {
-        id: 'version-1',
-        planId: 'plan-1',
-        versionNumber: 1,
-        sourceType: 'INITIAL',
-        plan: candidate.plan,
-        ruleReference: candidate.ruleReference,
-        confirmedWarningCodes: [],
-        createdAt: '2026-07-24T00:00:00Z',
-      },
-    })
-    const createPlanVersion = vi.fn().mockImplementation(async (_planId, request) => ({
+    const createInitialPlan = vi.fn()
+    const createPlanVersion = vi.fn()
+    const commitCandidate = vi.fn().mockImplementation(async (request) => ({
       status: 'CREATED',
       plan: { ...request.plan, locks: request.locks },
       validationIssues: [],
       version: {
-        id: 'version-2',
+        id: 'version-1',
         planId: 'plan-1',
-        versionNumber: 2,
-        sourceType: 'USER_EDIT',
+        versionNumber: 1,
+        sourceType: 'INITIAL',
         plan: { ...request.plan, locks: request.locks },
         ruleReference: candidate.ruleReference,
         confirmedWarningCodes: [],
@@ -453,7 +445,8 @@ describe('plan editor locks', () => {
     const planPort: PlanPersistencePort = {
       validatePlan: vi.fn().mockResolvedValue({ valid: true, validationIssues: [] }),
       createInitialPlan,
-      getActivePlan: vi.fn(),
+      getActivePlan: vi.fn().mockResolvedValue(null),
+      commitCandidate,
       createPlanVersion,
       previewRebalance: vi.fn(),
     }
@@ -476,11 +469,13 @@ describe('plan editor locks', () => {
 
     await application.saveEditor()
 
-    expect(createInitialPlan).toHaveBeenCalledWith('candidate-1')
-    expect(createPlanVersion).toHaveBeenCalledWith('plan-1', expect.objectContaining({
-      baseVersionNumber: 1,
+    expect(commitCandidate).toHaveBeenCalledWith(expect.objectContaining({
+      candidateId: 'candidate-1',
+      expectedActiveVersionNumber: 0,
       locks: { [workSetsPath]: 'USER_LOCKED' },
-    }))
+    }), expect.stringMatching(/^candidate-commit-/))
+    expect(createInitialPlan).not.toHaveBeenCalled()
+    expect(createPlanVersion).not.toHaveBeenCalled()
   })
 
   it('keeps code-targeted edits stable when days and exercises are reordered', () => {
@@ -602,6 +597,7 @@ describe('plan editor locks', () => {
       validatePlan: vi.fn(),
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion,
       previewRebalance: vi.fn(),
     })
@@ -667,6 +663,7 @@ describe('plan editor locks', () => {
       validatePlan,
       createInitialPlan,
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion,
       previewRebalance: vi.fn(),
     })

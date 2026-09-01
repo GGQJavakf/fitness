@@ -1,19 +1,16 @@
 import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
-import { summarizeWorkout, type WorkoutFlowState } from '../../../application/workoutFlow'
+import { summarizeWorkout } from '../../../application/workoutFlow'
 import { ApplicationError } from '../../../application/errors'
 import type { PlanDay } from '../../../application/models'
-import { selectNextTrainingDayCode } from '../../../application/selectNextTrainingDay'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getWorkoutApplication } from '../../../platform/weapp/featureRoots/workoutCompositionRoot'
 import { exerciseDisplayName } from '../../copy'
 
-import './index.scss'
-
-const application = getWeappApplication()
 type Summary = ReturnType<typeof summarizeWorkout>
 
 export default function WorkoutSummaryPage() {
+  const application = getWorkoutApplication()
   const requestedSessionId = application.routeParameter('sessionId')
   const [summary, setSummary] = useState<Summary | null>(null)
   const [message, setMessage] = useState('正在整理本次训练…')
@@ -29,7 +26,6 @@ export default function WorkoutSummaryPage() {
   const [historicalLoadFailed, setHistoricalLoadFailed] = useState(false)
   const [historicalStatus, setHistoricalStatus] = useState<'COMPLETED' | 'ABORTED' | null>(null)
   const [advanceToNextTrainingDay, setAdvanceToNextTrainingDay] = useState(false)
-  const autoSettlementStarted = useRef(false)
   const completionInFlight = useRef(false)
   const summaryInFlight = useRef(false)
   const workoutLoadInFlight = useRef(false)
@@ -41,45 +37,90 @@ export default function WorkoutSummaryPage() {
   async function prepareNextDay(): Promise<void> {
     if (!nextTrainingDay) return
     try {
-      await application.nextTrainingDaySelection.remember(nextTrainingDay.code)
-      await application.navigation.replace('WORKOUT_PREPARE', {
-        trainingDayCode: nextTrainingDay.code,
-      })
+      await application.prepareNextTrainingDay(nextTrainingDay.code)
     } catch {
       if (mounted.current) setMessage('下一训练日暂时无法打开；训练记录已经保存，请返回计划后重试。')
     }
   }
 
   async function loadWorkout(): Promise<void> {
+    await runWorkoutWorkflow()
+  }
+
+  async function runWorkoutWorkflow(
+    completionType?: 'FULL' | 'EARLY_END',
+  ): Promise<void> {
     if (workoutLoadInFlight.current) return
+    if (completionInFlight.current || (completionType && settled)) return
     workoutLoadInFlight.current = true
+    completionInFlight.current = true
     const requestId = ++workoutLoadRequestId.current
+    setSettling(Boolean(completionType))
+    setSummarizing(true)
     setMessage('正在整理本次训练…')
     try {
-      const state = await application.workouts.load()
+      const result = await application.loadAndSettleWorkout(completionType)
       if (!mounted.current || requestId !== workoutLoadRequestId.current) return
-        if (!state) {
-          setMessage('暂时没有可以总结的训练。')
-          return
-        }
-        const nextSummary = summarizeWorkout(state)
-        setSummary(nextSummary)
-        if (nextSummary.complete) {
-          setMessage('训练已经完成，正在自动保存并生成回顾。')
-          if (!autoSettlementStarted.current) {
-            autoSettlementStarted.current = true
-            await completeWorkout(state, nextSummary, 'FULL')
-          }
-          return
-        }
+      if (result.kind === 'EMPTY') {
+        setMessage('暂时没有可以总结的训练。')
+        return
+      }
+      setSummary(result.summary)
+      if (result.kind === 'LOADED') {
         setMessage('已完成的内容会如实保存；提前结束不会触发自动加重。')
+        return
+      }
+      if (result.kind === 'SETTLEMENT_FAILED') {
+        reportSettlementFailure(result.error)
+        return
+      }
+
+      const completion = result.completion
+      setOrphanedWorkoutMissing(false)
+      completedTrainingDayCodeRef.current = completion.session.trainingDayCode ?? null
+      setAdvanceToNextTrainingDay(completion.complete)
+      setSettled(true)
+      setSummarySessionId(completion.session.id)
+      application.telemetry.track(completion.complete ? 'workout_completed' : 'workout_aborted', {
+        completedSetCount: result.summary.completedWorkSets,
+      })
+      application.telemetry.track('ai_summary_requested', { purpose: 'workout_summary' })
+      if (result.generatedSummary) {
+        const source = result.generatedSummary.status === 'DEGRADED' ? 'template' : 'provider'
+        setAiSummary(result.generatedSummary.content)
+        setSummarySource(source)
+        setMessage(source === 'template' ? '规则模板回顾已准备好。' : 'AI 生成回顾已准备好。')
+        application.telemetry.track('ai_summary_viewed', { source })
+      } else {
+        setAiSummary('个性化回顾暂不可用。训练记录已经保存，后续计划调整不受影响。')
+        setSummarySource('unavailable')
+        setMessage('训练记录已保存。')
+        application.telemetry.track('ai_summary_failed', { reason: 'unavailable' })
+      }
     } catch {
       if (mounted.current && requestId === workoutLoadRequestId.current) {
         setMessage('训练记录暂时无法读取，请稍后重试。')
       }
     } finally {
       workoutLoadInFlight.current = false
+      completionInFlight.current = false
+      if (mounted.current && requestId === workoutLoadRequestId.current) {
+        setSettling(false)
+        setSummarizing(false)
+      }
     }
+  }
+
+  function reportSettlementFailure(error: unknown): void {
+    const nextFailureCount = saveFailureCount + 1
+    setSaveFailureCount(nextFailureCount)
+    const reason = error instanceof ApplicationError && error.code === 'NETWORK_ERROR'
+      ? '当前无法连接训练服务'
+      : error instanceof ApplicationError && error.code === 'RESOURCE_NOT_FOUND'
+        ? '服务端没有找到对应训练会话'
+        : '服务端暂未确认这次保存'
+    setOrphanedWorkoutMissing(error instanceof ApplicationError && error.code === 'RESOURCE_NOT_FOUND')
+    setMessage(`第 ${nextFailureCount} 次保存失败：${reason}。本地训练记录仍然保留，可以稍后继续保存。`)
   }
 
   async function loadHistoricalWorkout(sessionId: string): Promise<void> {
@@ -140,30 +181,12 @@ export default function WorkoutSummaryPage() {
     }
   }
 
-  async function loadNextTrainingDay(completedDayCode?: string, attempt = 0): Promise<void> {
+  async function loadNextTrainingDay(completedDayCode?: string): Promise<void> {
     try {
-      const activePlan = await application.loadActivePlan()
-      if (!mounted.current) return
-      if (!activePlan) throw new Error('active plan is not visible after workout completion')
-      const days = activePlan.activeVersion.plan.days
-      let nextCode = ''
-      const completedIndex = completedDayCode
-        ? days.findIndex((day) => day.code === completedDayCode)
-        : -1
-      if (completedIndex >= 0) {
-        nextCode = days[(completedIndex + 1) % days.length]?.code ?? ''
-      } else {
-        const history = await application.listWorkoutHistory(undefined, 50)
-        nextCode = selectNextTrainingDayCode(days, history.items)
-      }
-      setNextTrainingDay(days.find((day) => day.code === nextCode) ?? null)
+      const nextDay = await application.loadNextTrainingDay(completedDayCode)
+      if (mounted.current) setNextTrainingDay(nextDay)
     } catch {
       if (!mounted.current) return
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)))
-        if (mounted.current) await loadNextTrainingDay(completedDayCode, attempt + 1)
-        return
-      }
       setNextTrainingDay(null)
     }
   }
@@ -189,46 +212,9 @@ export default function WorkoutSummaryPage() {
     }
   }, [settled, advanceToNextTrainingDay])
 
-  async function completeWorkout(
-    state: WorkoutFlowState,
-    nextSummary: Summary,
-    completionType: 'FULL' | 'EARLY_END',
-  ): Promise<void> {
-    if (completionInFlight.current || settled) return
-    completionInFlight.current = true
-    setSettling(true)
-    try {
-      const result = await application.workouts.complete(state, completionType)
-      setOrphanedWorkoutMissing(false)
-      setMessage(result.complete ? '本次训练已完成并保存。' : '已保存完成的部分；本次不会据此提高训练重量。')
-      completedTrainingDayCodeRef.current = result.session.trainingDayCode ?? null
-      setAdvanceToNextTrainingDay(result.complete)
-      setSettled(true)
-      setSummarySessionId(result.session.id)
-      application.telemetry.track(result.complete ? 'workout_completed' : 'workout_aborted', {
-        completedSetCount: nextSummary.completedWorkSets,
-      })
-      await loadAiSummary(result.session.id)
-    } catch (error) {
-      const nextFailureCount = saveFailureCount + 1
-      setSaveFailureCount(nextFailureCount)
-      const reason = error instanceof ApplicationError && error.code === 'NETWORK_ERROR'
-        ? '当前无法连接训练服务'
-        : error instanceof ApplicationError && error.code === 'RESOURCE_NOT_FOUND'
-          ? '服务端没有找到对应训练会话'
-          : '服务端暂未确认这次保存'
-      setOrphanedWorkoutMissing(error instanceof ApplicationError && error.code === 'RESOURCE_NOT_FOUND')
-      setMessage(`第 ${nextFailureCount} 次保存失败：${reason}。本地训练记录仍然保留，可以稍后继续保存。`)
-    } finally {
-      completionInFlight.current = false
-      setSettling(false)
-    }
-  }
-
   async function settle(): Promise<void> {
-    const state = await application.workouts.load()
-    if (!state || !summary) return
-    await completeWorkout(state, summary, summary.complete ? 'FULL' : 'EARLY_END')
+    if (!summary) return
+    await runWorkoutWorkflow(summary.complete ? 'FULL' : 'EARLY_END')
   }
 
   async function discardOrphanedWorkout(): Promise<void> {
@@ -236,11 +222,8 @@ export default function WorkoutSummaryPage() {
     completionInFlight.current = true
     setSettling(true)
     try {
-      const state = await application.workouts.load()
-      if (!state) throw new Error('the orphaned local workout is no longer active')
-      await application.workouts.discardOrphanedLocalWorkout(state)
+      await application.discardOrphanedWorkout()
       setOrphanedWorkoutMissing(false)
-      await application.navigation.replace('PLAN')
     } catch {
       setMessage('本地记录暂时无法放弃，已继续保留；请稍后重试。')
     } finally {

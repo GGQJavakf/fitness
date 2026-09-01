@@ -5,6 +5,7 @@ import com.aifitness.assistant.common.api.ApiErrorResponse;
 import com.aifitness.assistant.common.api.ErrorCode;
 import com.aifitness.assistant.common.api.ErrorMeta;
 import com.aifitness.assistant.plan.application.PlanCandidateService;
+import com.aifitness.assistant.plan.application.CandidateCommitService;
 import com.aifitness.assistant.plan.application.PlanVersionService;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,12 @@ public final class PlanExceptionHandler {
     @ExceptionHandler(PlanVersionService.ActivePlanAlreadyExistsException.class)
     ResponseEntity<ApiErrorResponse> activePlanExists() {
         return error(HttpStatus.CONFLICT, ErrorCode.VERSION_CONFLICT, "活动计划已存在", Map.of());
+    }
+
+    @ExceptionHandler(CandidateCommitService.IdempotencyKeyReusedException.class)
+    ResponseEntity<ApiErrorResponse> idempotencyKeyReused() {
+        return error(HttpStatus.CONFLICT, ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                "幂等键已用于不同请求", Map.of());
     }
 
     @ExceptionHandler({

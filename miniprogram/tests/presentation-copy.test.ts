@@ -8,6 +8,8 @@ import {
   locationDisplayName,
   planFieldDisplayName,
   planIssueDisplayMessage,
+  trainingDayDisplayName,
+  trainingSplitDisplayName,
   weightStatusDisplayName,
 } from '../src/presentation/copy'
 
@@ -18,6 +20,7 @@ describe('presentation copy', () => {
     expect(experienceDisplayName('INTERMEDIATE')).toBe('有训练经验')
     expect(locationDisplayName('GYM')).toBe('健身房')
     expect(weightStatusDisplayName('NEEDS_CALIBRATION')).toBe('自动设置起始重量')
+    expect(trainingSplitDisplayName('FULL_BODY')).toBe('全身训练')
   })
 
   it('shows reviewed exercise names and a readable fallback', () => {
@@ -25,6 +28,25 @@ describe('presentation copy', () => {
     expect(exerciseDisplayName('PRONE_W_RAISE')).toBe('俯卧 W 提拉')
     expect(exerciseDisplayName('PRONE_Y_RAISE')).toBe('俯卧 Y 提拉')
     expect(exerciseDisplayName('UNKNOWN_MOVEMENT')).toBe('Unknown movement')
+  })
+
+  it('localizes stable training day codes used when history has no stored display name', () => {
+    expect(trainingDayDisplayName('PUSH_A')).toBe('推 A')
+    expect(trainingDayDisplayName('PULL_B')).toBe('拉 B')
+    expect(trainingDayDisplayName('LEGS_A')).toBe('腿 A')
+    expect(trainingDayDisplayName('UPPER_B')).toBe('上肢 B')
+    expect(trainingDayDisplayName('LOWER_A')).toBe('下肢 A')
+    expect(trainingDayDisplayName('CHEST_A')).toBe('胸部重点 A')
+    expect(trainingDayDisplayName('BACK_A')).toBe('背部重点 A')
+    expect(trainingDayDisplayName('ARMS_A')).toBe('手臂重点 A')
+    expect(trainingDayDisplayName('SHOULDERS_A')).toBe('肩部重点 A')
+    expect(trainingDayDisplayName('BODYWEIGHT_C')).toBe('自重训练 C')
+    expect(trainingDayDisplayName('DAY_A')).toBe('训练日 A')
+    expect(trainingDayDisplayName('push_a')).toBe('推 A')
+    expect(trainingDayDisplayName('PULL-B')).toBe('拉 B')
+    expect(trainingDayDisplayName('CARDIO_A')).toBe('Cardio a')
+    expect(trainingDayDisplayName('PUSHUP_A')).toBe('Pushup a')
+    expect(trainingDayDisplayName('PUSH_')).toBe('Push')
   })
 
   it('gives every active catalog exercise a reviewed Chinese display name', () => {

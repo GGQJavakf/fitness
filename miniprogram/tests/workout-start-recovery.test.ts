@@ -116,6 +116,47 @@ describe('workout start recovery coordinator', () => {
     expect(workouts.startOrResume).toHaveBeenCalledWith(confirmed)
   })
 
+  it('coalesces repeated active-workout replacement taps into one authoritative command', async () => {
+    const workouts = {
+      loadStatus: vi.fn(),
+      startOrResume: vi.fn(),
+      replaceActiveAndStart: vi.fn().mockResolvedValue({ kind: 'STARTED', state }),
+    }
+    const coordinator = new WorkoutStartCoordinator(workouts)
+
+    const [first, repeated] = await Promise.all([
+      coordinator.replaceActive(state, request),
+      coordinator.replaceActive(state, request),
+    ])
+
+    expect(first).toEqual(repeated)
+    expect(workouts.replaceActiveAndStart).toHaveBeenCalledOnce()
+    expect(workouts.loadStatus).not.toHaveBeenCalled()
+    expect(workouts.startOrResume).not.toHaveBeenCalled()
+  })
+
+  it('returns a recovery challenge from replacement without running the legacy start path', async () => {
+    const workouts = {
+      loadStatus: vi.fn(),
+      startOrResume: vi.fn(),
+      replaceActiveAndStart: vi.fn().mockRejectedValue(
+        new WorkoutRecoveryConfirmationRequiredError(
+          warning,
+          'replacement-confirmation-token',
+          '2026-08-11T08:05:00Z',
+        ),
+      ),
+    }
+    const coordinator = new WorkoutStartCoordinator(workouts)
+
+    await expect(coordinator.replaceActive(state, request)).resolves.toMatchObject({
+      kind: 'RECOVERY_CONFIRMATION_REQUIRED',
+      confirmationToken: 'replacement-confirmation-token',
+    })
+    expect(workouts.replaceActiveAndStart).toHaveBeenCalledWith(state, request)
+    expect(workouts.startOrResume).not.toHaveBeenCalled()
+  })
+
   it('resumes an existing draft without applying a new-day recovery gate', async () => {
     const workouts = {
       loadStatus: vi.fn().mockResolvedValue({ kind: 'ACTIVE', state }),

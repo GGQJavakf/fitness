@@ -23,8 +23,10 @@ import {
   isOrdinaryAiFallbackError,
   type AiPlanGenerator,
 } from './cloudbaseAi'
-import type { UserScopedLocalDataPort } from './localPrivacyLifecycle'
 import { normalizeSafeTrainingPreference } from './trainingPreferenceSafety'
+
+export { createStartupUseCases } from './startup'
+export type { AppDestination, Session, StartupPorts } from './startup'
 
 export const ONBOARDING_STEPS = [
   'SAFETY',
@@ -112,32 +114,6 @@ export interface OnboardingPersistencePort {
   ): Promise<PlanCandidateGenerationData>
 }
 
-export interface Session {
-  accessToken: string
-  refreshToken: string
-  expiresAt: string
-}
-
-export type AppDestination = 'LOGIN' | 'ONBOARDING' | 'PLAN' | 'HOME' | 'WORKOUT_SESSION'
-
-export interface StartupPorts {
-  sessionStore: {
-    load(): Promise<Session | null>
-    save(session: Session): Promise<void>
-    clear(): Promise<void>
-  }
-  wechatLogin: { getCode(): Promise<string> }
-  auth: { login(code: string): Promise<Session> }
-  workout: {
-    hasActive(): Promise<boolean>
-    getStartupState?(): Promise<'NONE' | 'ACTIVE' | 'RECOVERY_REQUIRED'>
-  }
-  profile: { exists(): Promise<boolean> }
-  plan: { hasActivePlan(): Promise<boolean> }
-  navigation: { replace(destination: AppDestination): Promise<void> | void }
-  localUserData?: UserScopedLocalDataPort & { activate(): void }
-}
-
 export interface CandidateExerciseViewModel {
   exerciseCode: string
   workSets: number
@@ -159,6 +135,10 @@ export interface CandidateViewModel {
   canContinue: boolean
   generationSource?: PlanGenerationSource
   generationLabel?: string
+  name?: string
+  trainingSplit?: TrainingSplit
+  executionRules: string[]
+  progressionRules: string[]
   explanationMessage: string
   notices: string[]
   days: Array<{
@@ -181,6 +161,7 @@ export interface CandidateViewModel {
 const allowedDurations: readonly number[] = [30, 45, 60, 75, 90]
 
 const splitFrequencies: Readonly<Record<TrainingSplit, readonly number[]>> = {
+  FULL_BODY: [2, 3],
   UPPER_LOWER: [2, 4],
   PUSH_PULL_LEGS: [3, 6],
   BODY_PART_FIVE_DAY: [5],
@@ -188,7 +169,7 @@ const splitFrequencies: Readonly<Record<TrainingSplit, readonly number[]>> = {
 
 export function recommendedTrainingSplit(experience: ExperienceLevel): TrainingSplit {
   return ({
-    BEGINNER: 'UPPER_LOWER',
+    BEGINNER: 'FULL_BODY',
     INTERMEDIATE: 'PUSH_PULL_LEGS',
     ADVANCED: 'BODY_PART_FIVE_DAY',
   } as const)[experience]
@@ -204,10 +185,19 @@ export function defaultFrequencyForSplit(split: TrainingSplit): number {
 
 export function resolveTrainingSplit(draft: Pick<OnboardingDraft, 'trainingSplit' | 'weeklyFrequency' | 'experience'>): TrainingSplit {
   if (draft.trainingSplit) return draft.trainingSplit
+  if (draft.experience === 'BEGINNER'
+    && (draft.weeklyFrequency === 2 || draft.weeklyFrequency === 3)) return 'FULL_BODY'
   if (draft.weeklyFrequency === 2 || draft.weeklyFrequency === 4) return 'UPPER_LOWER'
   if (draft.weeklyFrequency === 3 || draft.weeklyFrequency === 6) return 'PUSH_PULL_LEGS'
   if (draft.weeklyFrequency === 5) return 'BODY_PART_FIVE_DAY'
   return recommendedTrainingSplit(draft.experience ?? 'BEGINNER')
+}
+
+export function planGenerationTrainingSplit(
+  draft: Pick<OnboardingDraft, 'equipment' | 'location' | 'trainingSplit' | 'weeklyFrequency' | 'experience'>,
+): TrainingSplit | undefined {
+  if (draft.location === 'HOME' || draft.equipment.length === 0) return undefined
+  return resolveTrainingSplit(draft)
 }
 
 export function createOnboardingState(): OnboardingState {
@@ -277,45 +267,57 @@ export function validateOnboardingDraft(draft: OnboardingDraft): string[] {
   return ONBOARDING_STEPS.flatMap((step) => validateStep(step, draft))
 }
 
+export interface UserStateOperationGuard {
+  assertCurrent(): void
+}
+
 export async function saveProfileAndGenerateCandidate(
   port: OnboardingPersistencePort,
   draft: OnboardingDraft,
   aiGenerator?: AiPlanGenerator,
+  userState?: UserStateOperationGuard,
 ): Promise<PlanCandidateGenerationData> {
+  userState?.assertCurrent()
   const errors = validateOnboardingDraft(draft)
   if (errors.length > 0) {
     throw new Error(errors[0])
   }
 
-  const [profileVersion, equipmentVersion, preferencesVersion] = await Promise.all([
-    port.getProfileVersion(),
-    port.getEquipmentVersion(),
-    port.getPreferencesVersion(),
-  ])
+  const [profileVersion, equipmentVersion, preferencesVersion] = await runUserStateOperation(
+    userState,
+    () => Promise.all([
+      port.getProfileVersion(),
+      port.getEquipmentVersion(),
+      port.getPreferencesVersion(),
+    ]),
+  )
 
-  const profile = await port.saveProfile({
-    experience: draft.experience!,
-    goal: draft.goal!,
-    weeklyFrequency: draft.weeklyFrequency!,
-    sessionMinutes: draft.sessionMinutes!,
-    location: draft.location!,
-    expectedVersion: profileVersion ?? 0,
-  })
-  await port.saveEquipment({
-    items: draft.equipment,
-    expectedVersion: equipmentVersion ?? 0,
-  })
+  const profile = await runUserStateOperation(userState, () => port.saveProfile({
+      experience: draft.experience!,
+      goal: draft.goal!,
+      weeklyFrequency: draft.weeklyFrequency!,
+      sessionMinutes: draft.sessionMinutes!,
+      location: draft.location!,
+      expectedVersion: profileVersion ?? 0,
+    }))
+  await runUserStateOperation(userState, () => port.saveEquipment({
+      items: draft.equipment,
+      expectedVersion: equipmentVersion ?? 0,
+    }))
   if (preferencesVersion === null || draft.preferencesTouched) {
-    await port.savePreferences({
-      items: draft.preferences,
-      expectedVersion: preferencesVersion ?? 0,
-    })
+    await runUserStateOperation(userState, () => port.savePreferences({
+        items: draft.preferences,
+        expectedVersion: preferencesVersion ?? 0,
+      }))
   }
 
   const additionalRequirements = draft.additionalRequirements?.trim() ?? ''
-  const trainingSplit = resolveTrainingSplit(draft)
+  const trainingSplit = planGenerationTrainingSplit(draft)
   if (draft.aiConsentGranted !== true) {
-    return requestFallback(port, profile.version, trainingSplit, additionalRequirements)
+    return runUserStateOperation(
+      userState,
+      () => requestFallback(port, profile.version, trainingSplit, additionalRequirements),
+    )
   }
   if (!aiGenerator || !port.getPlanGenerationContext) {
     throw new AiDiagnosticError(
@@ -326,24 +328,33 @@ export async function saveProfileAndGenerateCandidate(
   }
 
   try {
-    const loadedContext = await port.getPlanGenerationContext(profile.version)
+    const loadedContext = await runUserStateOperation(
+      userState,
+      () => port.getPlanGenerationContext!(profile.version),
+    )
     const context: PlanGenerationContextData = {
       ...loadedContext,
       profile: { ...loadedContext.profile, trainingSplit },
     }
     let repairIssues: ValidationIssue[] | undefined
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const aiProposal = await aiGenerator.generate(context, {
-        consentGranted: true,
-        repairIssues,
-      })
-      const generated = await port.generateCandidate({
-        profileVersion: profile.version,
-        trainingSplit,
-        additionalRequirements,
-        aiProposal,
-        fallbackAllowed: false,
-      })
+      const aiProposal = await runUserStateOperation(
+        userState,
+        () => aiGenerator.generate(context, {
+          consentGranted: true,
+          repairIssues,
+        }),
+      )
+      const generated = await runUserStateOperation(
+        userState,
+        () => port.generateCandidate({
+          profileVersion: profile.version,
+          ...(trainingSplit ? { trainingSplit } : {}),
+          additionalRequirements,
+          aiProposal,
+          fallbackAllowed: false,
+        }),
+      )
       if (generated.status === 'CANDIDATE_READY' && generated.candidate) return generated
       if (attempt === 1) return generated
       repairIssues = generated.validationIssues
@@ -354,9 +365,28 @@ export async function saveProfileAndGenerateCandidate(
       'AI plan repair attempts were exhausted without a validation result',
     )
   } catch (error) {
+    userState?.assertCurrent()
     if (isOrdinaryAiFallbackError(error)) {
-      return requestFallback(port, profile.version, trainingSplit, additionalRequirements)
+      return runUserStateOperation(
+        userState,
+        () => requestFallback(port, profile.version, trainingSplit, additionalRequirements),
+      )
     }
+    throw error
+  }
+}
+
+async function runUserStateOperation<T>(
+  userState: UserStateOperationGuard | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  userState?.assertCurrent()
+  try {
+    const result = await operation()
+    userState?.assertCurrent()
+    return result
+  } catch (error) {
+    userState?.assertCurrent()
     throw error
   }
 }
@@ -364,12 +394,12 @@ export async function saveProfileAndGenerateCandidate(
 function requestFallback(
   port: OnboardingPersistencePort,
   profileVersion: number,
-  trainingSplit: TrainingSplit,
+  trainingSplit: TrainingSplit | undefined,
   additionalRequirements: string,
 ): Promise<PlanCandidateGenerationData> {
   return port.generateCandidate({
     profileVersion,
-    trainingSplit,
+    ...(trainingSplit ? { trainingSplit } : {}),
     additionalRequirements,
     fallbackAllowed: true,
   })
@@ -383,6 +413,8 @@ export function buildCandidateViewModel(
     return {
       status: 'NO_CANDIDATE',
       canContinue: false,
+      executionRules: [],
+      progressionRules: [],
       explanationMessage: '',
       notices: [],
       days: [],
@@ -406,6 +438,10 @@ export function buildCandidateViewModel(
       : generationSource === 'SYSTEM_PRESET'
         ? '系统个人预设 · 完整处方已载入'
         : '规则生成计划 · 已通过安全校验',
+    name: candidate.plan.name,
+    trainingSplit: candidate.plan.trainingSplit,
+    executionRules: [...(candidate.plan.executionRules ?? [])],
+    progressionRules: [...(candidate.plan.progressionRules ?? [])],
     explanationMessage: explanationMessage(candidate.explanationStatus, candidate.explanation),
     notices: candidateNotices(candidate.validationIssues),
     days: candidate.plan.days.map((day) => ({
@@ -463,6 +499,9 @@ function candidateNotices(issues: ValidationIssue[]): string[] {
 }
 
 function candidateUnavailableReason(reasonCodes: string[]): string {
+  if (reasonCodes.includes('PRESET_PROFILE_MISMATCH')) {
+    return '该系统预设与当前档案不匹配，请按预设标注调整训练经验、目标、每周训练天数、场地和单次时长后重试。'
+  }
   if (reasonCodes.includes('RECOVERY_WINDOW_TOO_SHORT')) {
     return '当前每周训练频率会让相同主肌群恢复不足，请降低训练频率后重试。'
   }
@@ -473,14 +512,14 @@ function candidateUnavailableReason(reasonCodes: string[]): string {
     return '当前训练分化与每周训练天数不匹配，请重新选择分化或训练频率。'
   }
   if (reasonCodes.includes('INSUFFICIENT_ELIGIBLE_EXERCISES')) {
-    return '当前器械和动作排除设置下，可用的安全动作不足以组成完整训练，请减少排除动作或补充可用器械后重试。'
+    return '当前可用器械对应的安全动作不足以组成完整训练，请补充器械或调整训练条件后重试。'
   }
   if (reasonCodes.some((code) => (
     code === 'NO_ELIGIBLE_TEMPLATE'
     || code === 'EQUIPMENT_UNAVAILABLE'
     || code === 'EXERCISE_NOT_ELIGIBLE'
   ))) {
-    return '当前器械或动作排除设置无法组成安全计划，请调整后重试。'
+    return '当前场地、器械和训练频率暂无可执行的安全计划，请调整训练条件后重试。'
   }
   return '当前资料不足以生成安全候选，请调整器械或训练频率后重试。'
 }
@@ -497,56 +536,8 @@ function candidateUnavailableAction(reasonCodes: string[]): CandidateViewModel['
     }
   }
   return {
-    label: '返回调整器械或排除设置',
+    label: '返回调整训练条件',
     route: 'ONBOARDING_EQUIPMENT',
-  }
-}
-
-export function createStartupUseCases(ports: StartupPorts) {
-  async function resolveDestination(): Promise<AppDestination> {
-    const workoutState = ports.workout.getStartupState
-      ? await ports.workout.getStartupState()
-      : await ports.workout.hasActive() ? 'ACTIVE' : 'NONE'
-    if (workoutState === 'ACTIVE' || workoutState === 'RECOVERY_REQUIRED') {
-      return 'WORKOUT_SESSION'
-    }
-    if (!await ports.profile.exists()) {
-      return 'ONBOARDING'
-    }
-    return await ports.plan.hasActivePlan() ? 'PLAN' : 'ONBOARDING'
-  }
-
-  async function navigate(destination: AppDestination): Promise<AppDestination> {
-    await ports.navigation.replace(destination)
-    return destination
-  }
-
-  return {
-    async start(): Promise<AppDestination> {
-      const session = await ports.sessionStore.load()
-      if (!session) {
-        return navigate('LOGIN')
-      }
-      return navigate(await resolveDestination())
-    },
-
-    async login(): Promise<AppDestination> {
-      const code = await ports.wechatLogin.getCode()
-      ports.localUserData?.activate()
-      try {
-        const session = await ports.auth.login(code)
-        await ports.sessionStore.save(session)
-        return navigate(await resolveDestination())
-      } catch (error) {
-        await ports.localUserData?.purge('LOGIN_ROLLBACK').catch(() => undefined)
-        throw error
-      }
-    },
-
-    async authenticationExpired(): Promise<AppDestination> {
-      await ports.sessionStore.clear()
-      return navigate('LOGIN')
-    },
   }
 }
 

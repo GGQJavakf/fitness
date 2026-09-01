@@ -97,7 +97,7 @@ node scripts/verify.mjs --target staging-experience
 - 远程地址必须是单一 IP 字面量和显式端口，并同时显式开启 `allow-remote`；多主机、
   故障转移、负载均衡、复制 URL 和 DNS 主机名均会被拒绝；
 - packaged smoke 只接受同一次 Maven `verify` 中由迁移测试写入的一次性验证标记；标记同时
-  绑定规范化 JDBC URL、库名、MySQL `server_uuid` 及 V001-V024 的 Flyway checksum，消费后
+  绑定规范化 JDBC URL、库名、MySQL `server_uuid` 及 V001-V025 的 Flyway checksum，消费后
   立即删除。因此不能跳过空库迁移，单独把 smoke 指向任意已有库；
 - 默认使用 `VERIFY_IDENTITY`。如果现有实例证书没有匹配的 DNS/IP SAN，只能显式开启
   `allow-pinned-ca`，使用数据库管理员或云平台通过可信渠道提供并核验指纹的 CA 证书构建

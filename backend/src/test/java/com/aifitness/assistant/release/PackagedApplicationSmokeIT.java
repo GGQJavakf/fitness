@@ -1,6 +1,8 @@
 package com.aifitness.assistant.release;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.aifitness.assistant.identity.domain.AuthenticatedUserId;
 import com.aifitness.assistant.identity.infrastructure.JdbcSessionStore;
@@ -12,13 +14,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mysql.cj.jdbc.MysqlDataSource;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -56,9 +58,6 @@ class PackagedApplicationSmokeIT {
     private static final String VERIFICATION_RUN_ID_PROPERTY = "fitness.verification.run-id";
     private static final String VALIDATION_MARKER_PROPERTY = "fitness.verification.marker";
     private static final ObjectMapper JSON = new ObjectMapper();
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(2))
-            .build();
 
     @Test
     void packagedJarStartsWithStagingProfileAndServesTheConsumerContract() throws Exception {
@@ -69,6 +68,24 @@ class PackagedApplicationSmokeIT {
         }
     }
 
+    @Test
+    void smokeHttpClientUsesBoundedTimeoutsAndDoesNotFollowRedirects() throws Exception {
+        HttpURLConnection connection = mock(HttpURLConnection.class);
+
+        configureConnection(
+                connection,
+                "test-access-token",
+                "https://public-browser.example",
+                Duration.ofSeconds(5));
+
+        verify(connection).setConnectTimeout(2000);
+        verify(connection).setReadTimeout(5000);
+        verify(connection).setInstanceFollowRedirects(false);
+        verify(connection).setRequestMethod("GET");
+        verify(connection).setRequestProperty("Authorization", "Bearer test-access-token");
+        verify(connection).setRequestProperty("Origin", "https://public-browser.example");
+    }
+
     private static void verifyPackagedApplication(Path jar, SmokeDatabase database) throws Exception {
         int port = freePort();
         Path log = Path.of("target", "packaged-application-smoke.log");
@@ -77,7 +94,7 @@ class PackagedApplicationSmokeIT {
             JsonNode health = waitForHealth(port, application, log);
             assertThat(health.at("/status").asText()).isEqualTo("UP");
             assertThat(health.at("/components/db/status").asText()).isEqualTo("UP");
-            HttpResponse<String> beansResponse = get(port, "/actuator/beans", null);
+            SimpleHttpResponse beansResponse = get(port, "/actuator/beans", null);
             assertThat(beansResponse.statusCode()).isEqualTo(200);
             JsonNode beans = JSON.readTree(beansResponse.body());
             assertThat(beans.at("/contexts/application/beans/dataSource/type").asText())
@@ -97,15 +114,15 @@ class PackagedApplicationSmokeIT {
                     "..", "contract", "consumer-samples", "exercise-list.json").toFile());
             String path = fixture.at("/request/path").asText();
 
-            HttpResponse<String> anonymous = get(port, path, null);
+            SimpleHttpResponse anonymous = get(port, path, null);
             assertThat(anonymous.statusCode()).isEqualTo(401);
 
-            HttpResponse<String> authenticated = get(
+            SimpleHttpResponse authenticated = get(
                     port, path, accessToken, "https://public-browser.example");
             assertThat(authenticated.statusCode()).isEqualTo(fixture.at("/expectedStatus").asInt());
-            assertThat(authenticated.headers().firstValue("content-type").orElse(""))
+            assertThat(authenticated.contentType())
                     .startsWith("application/json");
-            assertThat(authenticated.headers().firstValue("access-control-allow-origin")).isEmpty();
+            assertThat(authenticated.accessControlAllowOrigin()).isNull();
             JsonNode response = JSON.readTree(authenticated.body());
             for (JsonNode pointer : fixture.withArray("requiredResponsePointers")) {
                 assertThat(response.at(pointer.asText()).isMissingNode())
@@ -155,13 +172,10 @@ class PackagedApplicationSmokeIT {
                                 + log.toAbsolutePath());
             }
             try {
-                HttpResponse<String> response = HTTP.send(
-                        HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(2)).GET().build(),
-                        HttpResponse.BodyHandlers.ofString());
+                SimpleHttpResponse response = get(uri, null, null, Duration.ofSeconds(2));
                 if (response.statusCode() == 200) return JSON.readTree(response.body());
-            } catch (IOException | InterruptedException exception) {
+            } catch (IOException exception) {
                 lastFailure = exception;
-                if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
             }
             Thread.sleep(250);
         }
@@ -178,20 +192,58 @@ class PackagedApplicationSmokeIT {
                 .accessToken();
     }
 
-    private static HttpResponse<String> get(int port, String path, String accessToken)
-            throws IOException, InterruptedException {
+    private static SimpleHttpResponse get(int port, String path, String accessToken)
+            throws IOException {
         return get(port, path, accessToken, null);
     }
 
-    private static HttpResponse<String> get(int port, String path, String accessToken, String origin)
-            throws IOException, InterruptedException {
-        HttpRequest.Builder request = HttpRequest.newBuilder(
-                URI.create("http://127.0.0.1:" + port + path))
-                .timeout(Duration.ofSeconds(5))
-                .GET();
-        if (accessToken != null) request.header("Authorization", "Bearer " + accessToken);
-        if (origin != null) request.header("Origin", origin);
-        return HTTP.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    private static SimpleHttpResponse get(
+            int port, String path, String accessToken, String origin) throws IOException {
+        return get(
+                URI.create("http://127.0.0.1:" + port + path),
+                accessToken,
+                origin,
+                Duration.ofSeconds(5));
+    }
+
+    private static SimpleHttpResponse get(
+            URI uri, String accessToken, String origin, Duration readTimeout) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+        configureConnection(connection, accessToken, origin, readTimeout);
+        try {
+            int statusCode = connection.getResponseCode();
+            InputStream responseStream = statusCode >= 400
+                    ? connection.getErrorStream()
+                    : connection.getInputStream();
+            String body;
+            if (responseStream == null) {
+                body = "";
+            } else {
+                try (responseStream) {
+                    body = new String(responseStream.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+            return new SimpleHttpResponse(
+                    statusCode,
+                    body,
+                    connection.getHeaderField("Content-Type"),
+                    connection.getHeaderField("Access-Control-Allow-Origin"));
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private static void configureConnection(
+            HttpURLConnection connection,
+            String accessToken,
+            String origin,
+            Duration readTimeout) throws IOException {
+        connection.setConnectTimeout(Math.toIntExact(Duration.ofSeconds(2).toMillis()));
+        connection.setReadTimeout(Math.toIntExact(readTimeout.toMillis()));
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestMethod("GET");
+        if (accessToken != null) connection.setRequestProperty("Authorization", "Bearer " + accessToken);
+        if (origin != null) connection.setRequestProperty("Origin", origin);
     }
 
     private static DataSource dataSource(SmokeDatabase database) {
@@ -508,6 +560,12 @@ class PackagedApplicationSmokeIT {
     private static boolean isWindows() {
         return System.getProperty("os.name").toLowerCase().contains("win");
     }
+
+    private record SimpleHttpResponse(
+            int statusCode,
+            String body,
+            String contentType,
+            String accessControlAllowOrigin) {}
 
     static final class SmokeDatabase implements AutoCloseable {
         private final String jdbcUrl;

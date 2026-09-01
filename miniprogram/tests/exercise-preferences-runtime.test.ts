@@ -14,8 +14,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/accountCompositionRoot', () => ({
+  getAccountApplication: () => application,
 }))
 
 const { default: ExercisePreferencesPage } = await import(

@@ -2,13 +2,19 @@ import { createElement } from 'react'
 import TestRenderer, { act, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { WorkoutReplacementWorkflowError } from '../src/application/workoutReplacementWorkflow'
+
 const application = vi.hoisted(() => ({
   routeParameter: vi.fn(),
   loadActivePlan: vi.fn(),
   listWorkoutHistory: vi.fn(),
-  workoutStart: { start: vi.fn(), cancelUncreatedStart: vi.fn() },
+  workoutStart: { start: vi.fn(), replaceActive: vi.fn(), cancelUncreatedStart: vi.fn() },
   workouts: { abandonActive: vi.fn() },
   nextTrainingDaySelection: { consume: vi.fn() },
+  loadWorkoutPreparation: vi.fn(),
+  startWorkout: vi.fn(),
+  abandonAndStartWorkout: vi.fn(),
+  cancelWorkoutStartAndOpenPlan: vi.fn(),
   navigation: { open: vi.fn(), replace: vi.fn() },
   telemetry: { track: vi.fn() },
 }))
@@ -19,8 +25,8 @@ vi.mock('@tarojs/components', () => ({
   View: 'view',
 }))
 
-vi.mock('../src/platform/weapp/compositionRoot', () => ({
-  getWeappApplication: () => application,
+vi.mock('../src/platform/weapp/featureRoots/workoutCompositionRoot', () => ({
+  getWorkoutApplication: () => application,
 }))
 
 const { default: WorkoutPreparePage } = await import('../src/presentation/pages/workout-prepare')
@@ -107,6 +113,39 @@ describe('workout prepare recovery interaction', () => {
     application.routeParameter.mockReturnValue(undefined)
     application.loadActivePlan.mockResolvedValue(activePlan)
     application.listWorkoutHistory.mockResolvedValue({ items: [] })
+    application.loadWorkoutPreparation.mockImplementation(async () => {
+      let historyUnavailable = false
+      const [plan, history] = await Promise.all([
+        application.loadActivePlan(),
+        application.listWorkoutHistory(undefined, 50).catch(() => {
+          historyUnavailable = true
+          return { items: [] }
+        }),
+      ])
+      const rememberedTrainingDayCode = await application.nextTrainingDaySelection.consume()
+      return { plan, history, historyUnavailable, rememberedTrainingDayCode }
+    })
+    application.startWorkout.mockImplementation(async (input) => {
+      const result = await application.workoutStart.start(input)
+      if (result.kind === 'STARTED' || result.kind === 'RESUMED') {
+        await application.navigation.replace('WORKOUT_SESSION')
+      }
+      return result
+    })
+    application.abandonAndStartWorkout.mockImplementation(async (state, input, observer) => {
+      observer?.onPhaseChanged('ENDING_ACTIVE')
+      const result = await application.workoutStart.replaceActive(state, input)
+      if (result.kind === 'STARTED' || result.kind === 'RESUMED') {
+        observer?.onPhaseChanged('OPENING_NEW')
+        await application.navigation.replace('WORKOUT_SESSION')
+      }
+      return result
+    })
+    application.cancelWorkoutStartAndOpenPlan.mockImplementation(async (input) => {
+      await application.workoutStart.cancelUncreatedStart(input)
+      await application.navigation.replace('PLAN')
+      return true
+    })
   })
 
   it('uses the next training day explicitly passed by the completed workout summary', async () => {
@@ -447,6 +486,133 @@ describe('workout prepare recovery interaction', () => {
       start.resolve({ kind: 'STARTED', state: { exercises: [] } })
       await flushPage()
     })
+    expect(application.navigation.replace).toHaveBeenCalledWith('WORKOUT_SESSION')
+  })
+
+  it('keeps replacement and page-opening progress visible until navigation completes', async () => {
+    application.workoutStart.start.mockResolvedValueOnce({
+      kind: 'RESUME_REQUIRED',
+      state: { clientSessionKey: 'unfinished-workout', exercises: [] },
+    })
+    const replacement = deferred<{ kind: 'STARTED'; state: { exercises: never[] } }>()
+    application.abandonAndStartWorkout.mockReturnValueOnce(replacement.promise)
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutPreparePage))
+      await flushPage()
+    })
+    if (!renderer) throw new Error('workout prepare page did not render')
+
+    await act(async () => {
+      button(renderer!, '开始热身').props.onClick()
+      await flushPage()
+    })
+
+    const replaceAction = button(renderer, '结束原训练并开始新的')
+    act(() => {
+      replaceAction.props.onClick()
+      replaceAction.props.onClick()
+    })
+    const endingAction = button(renderer, '正在结束原训练…')
+    expect(endingAction.props.loading).toBe(true)
+    expect(endingAction.props.disabled).toBe(true)
+    expect(application.abandonAndStartWorkout).toHaveBeenCalledOnce()
+
+    const observer = application.abandonAndStartWorkout.mock.calls[0][2]
+    act(() => observer.onPhaseChanged('OPENING_NEW'))
+    const openingAction = button(renderer, '正在打开新训练…')
+    expect(openingAction.props.loading).toBe(true)
+    expect(openingAction.props.disabled).toBe(true)
+
+    await act(async () => {
+      replacement.resolve({ kind: 'STARTED', state: { exercises: [] } })
+      await flushPage()
+    })
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('正在打开新训练')
+  })
+
+  it('offers recovery when the replacement started but its page handoff failed', async () => {
+    application.workoutStart.start.mockResolvedValueOnce({
+      kind: 'RESUME_REQUIRED',
+      state: { clientSessionKey: 'unfinished-workout', exercises: [] },
+    })
+    application.abandonAndStartWorkout.mockImplementationOnce(async (_state, _input, observer) => {
+      observer.onPhaseChanged('OPENING_NEW')
+      const failure = new Error('workout page handoff failed')
+      throw new WorkoutReplacementWorkflowError('OPENING_NEW', failure)
+    })
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutPreparePage))
+      await flushPage()
+    })
+    if (!renderer) throw new Error('workout prepare page did not render')
+
+    await act(async () => {
+      button(renderer!, '开始热身').props.onClick()
+      await flushPage()
+    })
+    await act(async () => {
+      button(renderer!, '结束原训练并开始新的').props.onClick()
+      await flushPage()
+    })
+
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('结束原训练并开始新的')
+    expect(JSON.stringify(renderer.toJSON())).toContain('新训练已创建')
+    expect(button(renderer, '开始热身').props.disabled).toBe(false)
+
+    application.workoutStart.start.mockResolvedValueOnce({
+      kind: 'STARTED',
+      state: { exercises: [] },
+    })
+    await act(async () => {
+      button(renderer!, '开始热身').props.onClick()
+      await flushPage()
+    })
+    expect(application.navigation.replace).toHaveBeenCalledWith('WORKOUT_SESSION')
+  })
+
+  it('submits a replacement recovery confirmation through the atomic replacement path', async () => {
+    application.workoutStart.start.mockResolvedValueOnce({
+      kind: 'RESUME_REQUIRED',
+      state: { clientSessionKey: 'unfinished-workout', exercises: [] },
+    })
+    application.workoutStart.replaceActive
+      .mockResolvedValueOnce({
+        kind: 'RECOVERY_CONFIRMATION_REQUIRED',
+        assessment: warning,
+        confirmationToken: 'replacement-confirmation-token',
+        confirmationExpiresAt: '2026-08-11T08:05:00Z',
+      })
+      .mockResolvedValueOnce({ kind: 'STARTED', state: { exercises: [] } })
+    let renderer: ReactTestRenderer | undefined
+    await act(async () => {
+      renderer = TestRenderer.create(createElement(WorkoutPreparePage))
+      await flushPage()
+    })
+    if (!renderer) throw new Error('workout prepare page did not render')
+
+    await act(async () => {
+      button(renderer!, '开始热身').props.onClick()
+      await flushPage()
+    })
+    await act(async () => {
+      button(renderer!, '结束原训练并开始新的').props.onClick()
+      await flushPage()
+    })
+    expect(JSON.stringify(renderer.toJSON())).toContain('恢复窗口尚未满足')
+
+    await act(async () => {
+      button(renderer!, '仍继续本次训练').props.onClick()
+      await flushPage()
+    })
+
+    expect(application.workoutStart.replaceActive).toHaveBeenCalledTimes(2)
+    expect(application.workoutStart.replaceActive).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clientSessionKey: 'unfinished-workout' }),
+      expect.objectContaining({ recoveryConfirmationToken: 'replacement-confirmation-token' }),
+    )
+    expect(application.workoutStart.start).toHaveBeenCalledOnce()
     expect(application.navigation.replace).toHaveBeenCalledWith('WORKOUT_SESSION')
   })
 })

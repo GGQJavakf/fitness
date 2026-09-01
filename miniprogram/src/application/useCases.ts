@@ -2,6 +2,7 @@ import { ApplicationError } from './errors'
 import type { AiPlanGenerator } from './cloudbaseAi'
 import type {
   ActivePlanData,
+  CandidateCommitRequest,
   PlanCandidateGenerationData,
   PlanValidationDraft,
   PlanExerciseOption,
@@ -81,6 +82,19 @@ export interface FitnessApplication {
   movePlanDay(dayCode: string, direction: -1 | 1): PlanEditorState
 }
 
+interface PendingCandidateCommit {
+  editorSessionId: number
+  candidateId: string
+  request: CandidateCommitRequest
+  idempotencyKey: string
+  warningConfirmationToken?: string
+}
+
+interface CandidateCommitInFlight {
+  editorSessionId: number
+  candidateId: string
+}
+
 export function createFitnessApplication(
   onboardingPort: OnboardingPersistencePort,
   planPort: PlanPersistencePort,
@@ -97,6 +111,33 @@ export function createFitnessApplication(
   let onboardingCompletion: Promise<CandidateViewModel> | null = null
   let pendingOnboardingRoute: OnboardingAdjustmentRoute | null = null
   let userStateGeneration = 0
+  let activePlanLoaded = false
+  let pendingCandidateCommit: PendingCandidateCommit | null = null
+  let candidateCommitInFlight: CandidateCommitInFlight | null = null
+
+  function assertUserStateGeneration(expectedGeneration: number): void {
+    if (userStateGeneration !== expectedGeneration) {
+      throw new ApplicationError(
+        'AUTHENTICATION_REQUIRED',
+        '账号状态已更新，本次旧请求结果已失效',
+      )
+    }
+  }
+
+  async function awaitCurrentUserState<T>(
+    expectedGeneration: number,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    assertUserStateGeneration(expectedGeneration)
+    try {
+      const result = await operation()
+      assertUserStateGeneration(expectedGeneration)
+      return result
+    } catch (error) {
+      assertUserStateGeneration(expectedGeneration)
+      throw error
+    }
+  }
 
   function requireEditor(): PlanEditorState {
     if (!editor) {
@@ -118,6 +159,7 @@ export function createFitnessApplication(
       progressionRules: state.workingCopy.progressionRules
         ? [...state.workingCopy.progressionRules]
         : undefined,
+      movementImpactConstraint: state.workingCopy.movementImpactConstraint,
       days: state.workingCopy.days.map((day) => ({
         ...day,
         exercises: day.exercises.map((exercise) => ({ ...exercise })),
@@ -149,28 +191,54 @@ export function createFitnessApplication(
   }
 
   async function activateCurrentCandidate(): Promise<ActivePlanData> {
+    const activationGeneration = userStateGeneration
     const candidateId = candidateData?.candidate?.candidateId
     if (!candidateId) {
       throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
     }
+    if (candidateCommitInFlight || pendingCandidateCommit) {
+      throw new ApplicationError(
+        'VALIDATION_FAILED',
+        '候选编辑正在原子保存或等待确认，请勿同时直接激活',
+      )
+    }
     if (activePlan && activatedCandidateId === candidateId) return activePlan
     const pendingActivation = candidateActivations.get(candidateId)
-    if (pendingActivation) return pendingActivation
+    if (pendingActivation) {
+      const activatedPlan = await awaitCurrentUserState(
+        activationGeneration,
+        () => pendingActivation,
+      )
+      assertCandidateStillCurrent(candidateId)
+      return activatedPlan
+    }
 
     const promise = planPort.createInitialPlan(candidateId)
     candidateActivations.set(candidateId, promise)
     try {
-      const activatedPlan = await promise
-      if (candidateData?.candidate?.candidateId === candidateId) {
-        activePlan = activatedPlan
-        activatedCandidateId = candidateId
-        editor = editorWithActivePlan(activatedPlan)
-      }
+      const activatedPlan = await awaitCurrentUserState(activationGeneration, () => promise)
+      assertCandidateStillCurrent(candidateId)
+      activePlan = activatedPlan
+      activePlanLoaded = true
+      activatedCandidateId = candidateId
+      pendingCandidateCommit = null
+      editor = editorWithActivePlan(activatedPlan)
+      editorSessionId += 1
+      editorCandidateId = null
       return activatedPlan
     } finally {
       if (candidateActivations.get(candidateId) === promise) {
         candidateActivations.delete(candidateId)
       }
+    }
+  }
+
+  function assertCandidateStillCurrent(expectedCandidateId: string): void {
+    if (candidateData?.candidate?.candidateId !== expectedCandidateId) {
+      throw new ApplicationError(
+        'VALIDATION_FAILED',
+        '推荐方案已更新，本次旧计划未激活',
+      )
     }
   }
 
@@ -180,6 +248,9 @@ export function createFitnessApplication(
       candidateData = null
       onboardingDraft = null
       activePlan = null
+      activePlanLoaded = false
+      pendingCandidateCommit = null
+      candidateCommitInFlight = null
       editor = null
       activatedCandidateId = null
       candidateActivations.clear()
@@ -195,15 +266,17 @@ export function createFitnessApplication(
       const submittedDraft = cloneOnboardingDraft(draft)
       const submission = (async () => {
         onboardingDraft = { ...submittedDraft, aiConsentGranted: false }
-        const generated = await saveProfileAndGenerateCandidate(
-          onboardingPort,
-          submittedDraft,
-          aiPlanGenerator,
+        const generated = await awaitCurrentUserState(
+          completionGeneration,
+          () => saveProfileAndGenerateCandidate(
+            onboardingPort,
+            submittedDraft,
+            aiPlanGenerator,
+            { assertCurrent: () => assertUserStateGeneration(completionGeneration) },
+          ),
         )
-        if (completionGeneration !== userStateGeneration) {
-          throw new ApplicationError('AUTHENTICATION_REQUIRED', '账号已退出，本次建档结果未保留')
-        }
         candidateData = generated
+        pendingCandidateCommit = null
         editorSessionId += 1
         editorCandidateId = null
         return buildCandidateViewModel(candidateData)
@@ -237,23 +310,32 @@ export function createFitnessApplication(
     },
 
     listPlanPresets() {
-      return onboardingPort.listPlanPresets()
+      const generation = userStateGeneration
+      return awaitCurrentUserState(generation, () => onboardingPort.listPlanPresets())
     },
 
     async selectPlanPreset(presetCode) {
-      const profileVersion = await onboardingPort.getProfileVersion()
+      const generation = userStateGeneration
+      const profileVersion = await awaitCurrentUserState(
+        generation,
+        () => onboardingPort.getProfileVersion(),
+      )
       if (profileVersion === null) {
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先完成训练档案，再选择系统预设')
       }
-      const generated = await onboardingPort.generateCandidate({
-        profileVersion,
-        presetCode,
-        lockedFields: {},
-        fallbackAllowed: false,
-      })
+      const generated = await awaitCurrentUserState(
+        generation,
+        () => onboardingPort.generateCandidate({
+          profileVersion,
+          presetCode,
+          lockedFields: {},
+          fallbackAllowed: false,
+        }),
+      )
       candidateData = generated
       activatedCandidateId = null
       editor = null
+      pendingCandidateCommit = null
       editorSessionId += 1
       editorCandidateId = null
       return buildCandidateViewModel(generated)
@@ -279,6 +361,7 @@ export function createFitnessApplication(
         ...editor,
         lockedFieldOutcomes: { ...candidate.lockedFieldOutcomes },
       }
+      pendingCandidateCommit = null
       editorSessionId += 1
       editorCandidateId = candidate.candidateId
       return editor
@@ -286,11 +369,9 @@ export function createFitnessApplication(
 
     async loadActivePlan() {
       const loadGeneration = userStateGeneration
-      const loaded = await planPort.getActivePlan()
-      if (loadGeneration !== userStateGeneration) {
-        throw new ApplicationError('AUTHENTICATION_REQUIRED', '账号已退出，本次计划结果未保留')
-      }
+      const loaded = await awaitCurrentUserState(loadGeneration, () => planPort.getActivePlan())
       activePlan = loaded
+      activePlanLoaded = true
       return activePlan
     },
 
@@ -303,6 +384,7 @@ export function createFitnessApplication(
         return null
       }
       editor = editorWithActivePlan(activePlan)
+      pendingCandidateCommit = null
       editorSessionId += 1
       editorCandidateId = null
       return editor
@@ -323,19 +405,24 @@ export function createFitnessApplication(
     },
 
     async validateEditor() {
+      const generation = userStateGeneration
       const state = requireEditor()
       const ruleReference = activePlan?.activeVersion.ruleReference
         ?? candidateData?.candidate?.ruleReference
       if (!ruleReference) throw new ApplicationError('RESOURCE_NOT_FOUND', '计划规则版本不存在')
-      const result = await planPort.validatePlan(
-        validationDraft(state),
-        ruleReference,
+      const result = await awaitCurrentUserState(
+        generation,
+        () => planPort.validatePlan(
+          validationDraft(state),
+          ruleReference,
+        ),
       )
       editor = applyValidation(state, result)
       return editor
     },
 
     async saveEditor() {
+      const generation = userStateGeneration
       let state = requireEditor()
       const savingEditorSessionId = editorSessionId
       const savingCandidateId = editorCandidateId
@@ -348,7 +435,10 @@ export function createFitnessApplication(
         }
         state = applyPreSaveValidation(
           state,
-          await planPort.validatePlan(validationDraft(state), ruleReference),
+          await awaitCurrentUserState(
+            generation,
+            () => planPort.validatePlan(validationDraft(state), ruleReference),
+          ),
         )
         assertEditorSession(savingEditorSessionId, savingCandidateId)
         editor = state
@@ -357,30 +447,103 @@ export function createFitnessApplication(
           if (!savingCandidateId) {
             throw new ApplicationError('RESOURCE_NOT_FOUND', '候选计划不存在，请重新生成')
           }
-          const pendingWorkingCopy = state.workingCopy
-          const pendingLockCommands = state.lockCommands
-          const pendingValidation = state.validationResult
-          const activatedPlan = await activateCurrentCandidate()
-          assertEditorSession(savingEditorSessionId, savingCandidateId)
-          activePlan = activatedPlan
-          activatedCandidateId = savingCandidateId
-          const baseEditor = editorWithActivePlan(activatedPlan)
-          const hasPlanChanges = JSON.stringify(pendingWorkingCopy) !== JSON.stringify(activatedPlan.activeVersion.plan)
-          const hasLockChanges = Object.keys(pendingLockCommands).length > 0
-          if (!hasPlanChanges && !hasLockChanges) {
-            editor = baseEditor
+          if (candidateActivations.has(savingCandidateId) || candidateCommitInFlight) {
+            throw new ApplicationError(
+              'VALIDATION_FAILED',
+              '候选计划正在激活或保存，请等待当前操作完成',
+            )
+          }
+          const commitInFlight: CandidateCommitInFlight = {
+            editorSessionId: savingEditorSessionId,
+            candidateId: savingCandidateId,
+          }
+          candidateCommitInFlight = commitInFlight
+          try {
+            if (!activePlanLoaded) {
+              const loaded = await awaitCurrentUserState(
+                generation,
+                () => planPort.getActivePlan(),
+              )
+              assertEditorSession(savingEditorSessionId, savingCandidateId)
+              activePlan = loaded
+              activePlanLoaded = true
+            }
+
+            const saveCommand = buildSaveCommand(state)
+            const semanticRequest = snapshotCandidateCommitRequest({
+              candidateId: savingCandidateId,
+              expectedActiveVersionNumber: activePlan?.activeVersion.versionNumber ?? 0,
+              plan: saveCommand.plan,
+              locks: saveCommand.locks,
+            })
+            const semanticKey = candidateCommitIdempotencyKey(semanticRequest)
+            const pendingForSession = pendingCandidateCommit
+              && pendingCandidateCommit.editorSessionId === savingEditorSessionId
+              && pendingCandidateCommit.candidateId === savingCandidateId
+              && pendingCandidateCommit.request.expectedActiveVersionNumber
+                === semanticRequest.expectedActiveVersionNumber
+              ? pendingCandidateCommit
+              : null
+            const warningConfirmationToken = saveCommand.warningConfirmationToken
+            const confirmsPendingWarning = Boolean(
+              warningConfirmationToken
+                && pendingForSession?.warningConfirmationToken === warningConfirmationToken,
+            )
+            const attempt = confirmsPendingWarning
+                || pendingForSession?.idempotencyKey === semanticKey
+              ? pendingForSession as PendingCandidateCommit
+              : {
+                  editorSessionId: savingEditorSessionId,
+                  candidateId: savingCandidateId,
+                  request: semanticRequest,
+                  idempotencyKey: semanticKey,
+                }
+            pendingCandidateCommit = attempt
+            const request = snapshotCandidateCommitRequest({
+              ...attempt.request,
+              ...(warningConfirmationToken ? { warningConfirmationToken } : {}),
+            })
+            const result = await awaitCurrentUserState(
+              generation,
+              () => planPort.commitCandidate(
+                request,
+                attempt.idempotencyKey,
+              ),
+            )
+            assertEditorSession(savingEditorSessionId, savingCandidateId)
+            if (result.status === 'WARNING_CONFIRMATION_REQUIRED'
+                && result.warningConfirmationToken
+                && pendingCandidateCommit === attempt) {
+              pendingCandidateCommit = {
+                ...attempt,
+                warningConfirmationToken: result.warningConfirmationToken,
+              }
+            } else if (pendingCandidateCommit === attempt) {
+              pendingCandidateCommit = null
+            }
+            const resultState = result.version
+              ? { ...state, planId: result.version.planId }
+              : state
+            editor = applyVersionResult(resultState, result)
+            if (result.version) {
+              activePlan = {
+                planId: result.version.planId,
+                activeVersion: result.version,
+              }
+              activePlanLoaded = true
+              activatedCandidateId = savingCandidateId
+            }
             return editor
+          } finally {
+            if (candidateCommitInFlight === commitInFlight) {
+              candidateCommitInFlight = null
+            }
           }
-          state = {
-            ...baseEditor,
-            workingCopy: pendingWorkingCopy,
-            lockCommands: pendingLockCommands,
-            locks: { ...baseEditor.baseLocks, ...pendingLockCommands },
-            validationResult: pendingValidation,
-          }
-          editor = state
         }
-        const result = await planPort.createPlanVersion(state.planId, buildSaveCommand(state))
+        const result = await awaitCurrentUserState(
+          generation,
+          () => planPort.createPlanVersion(state.planId, buildSaveCommand(state)),
+        )
         assertEditorSession(savingEditorSessionId, savingCandidateId)
         editor = applyVersionResult(state, result)
         if (result.version) {
@@ -388,7 +551,13 @@ export function createFitnessApplication(
         }
         return editor
       } catch (error) {
+        assertUserStateGeneration(generation)
+        assertEditorSession(savingEditorSessionId, savingCandidateId)
         if (error instanceof ApplicationError && error.code === 'VERSION_CONFLICT') {
+          if (pendingCandidateCommit?.editorSessionId === savingEditorSessionId
+              && pendingCandidateCommit.candidateId === savingCandidateId) {
+            pendingCandidateCommit = null
+          }
           editor = markVersionConflict(state, error.message)
           return editor
         }
@@ -402,6 +571,7 @@ export function createFitnessApplication(
     },
 
     async previewRebalance() {
+      const generation = userStateGeneration
       const state = requireEditor()
       if (!state.planId) {
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存候选计划，再请求重新优化预览')
@@ -411,25 +581,36 @@ export function createFitnessApplication(
         warningConfirmationToken: undefined,
         warningConfirmed: false,
       })
-      const result = await planPort.previewRebalance(state.planId, command)
+      const result = await awaitCurrentUserState(
+        generation,
+        () => planPort.previewRebalance(state.planId, command),
+      )
       editor = applyRebalancePreview(state, result)
       return editor
     },
 
     async listPlanExerciseOptions(dayCode) {
+      const generation = userStateGeneration
       const state = requireEditor()
       if (!state.planId || !planPort.listExerciseOptions) {
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再调整动作结构')
       }
-      return planPort.listExerciseOptions(state.planId, dayCode)
+      return awaitCurrentUserState(
+        generation,
+        () => planPort.listExerciseOptions!(state.planId, dayCode),
+      )
     },
 
     async listPlanExerciseReplacements(dayCode, sourceExerciseCode) {
+      const generation = userStateGeneration
       const state = requireEditor()
       if (!state.planId || !planPort.listPlanExerciseReplacements) {
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再替换动作')
       }
-      return planPort.listPlanExerciseReplacements(state.planId, dayCode, sourceExerciseCode)
+      return awaitCurrentUserState(
+        generation,
+        () => planPort.listPlanExerciseReplacements!(state.planId, dayCode, sourceExerciseCode),
+      )
     },
 
     addPlanExercise(dayCode, option) {
@@ -453,12 +634,16 @@ export function createFitnessApplication(
     },
 
     async listPlanDayOptions() {
+      const generation = userStateGeneration
       const state = requireEditor()
       if (!state.planId || !planPort.listDayOptions) {
         throw new ApplicationError('RESOURCE_NOT_FOUND', '请先保存计划，再调整训练日结构')
       }
       const currentCodes = new Set(state.workingCopy.days.map((day) => day.code))
-      return (await planPort.listDayOptions(state.planId))
+      return (await awaitCurrentUserState(
+        generation,
+        () => planPort.listDayOptions!(state.planId),
+      ))
         .filter((option) => !currentCodes.has(option.code))
     },
 
@@ -489,4 +674,68 @@ function cloneOnboardingDraft(draft: OnboardingDraft): OnboardingDraft {
     })),
     preferences: draft.preferences.map((preference) => ({ ...preference })),
   }
+}
+
+function snapshotCandidateCommitRequest(
+  request: CandidateCommitRequest,
+): CandidateCommitRequest {
+  return {
+    candidateId: request.candidateId,
+    expectedActiveVersionNumber: request.expectedActiveVersionNumber,
+    plan: {
+      ...request.plan,
+      executionRules: request.plan.executionRules
+        ? [...request.plan.executionRules]
+        : undefined,
+      progressionRules: request.plan.progressionRules
+        ? [...request.plan.progressionRules]
+        : undefined,
+      days: request.plan.days.map((day) => ({
+        ...day,
+        exercises: day.exercises.map((exercise) => ({ ...exercise })),
+      })),
+    },
+    locks: { ...request.locks },
+    ...(request.warningConfirmationToken
+      ? { warningConfirmationToken: request.warningConfirmationToken }
+      : {}),
+  }
+}
+
+function candidateCommitIdempotencyKey(request: CandidateCommitRequest): string {
+  const semanticPayload = canonicalJson({
+    candidateId: request.candidateId,
+    expectedActiveVersionNumber: request.expectedActiveVersionNumber,
+    plan: request.plan,
+    locks: request.locks,
+  })
+  return `candidate-commit-${semanticHash(semanticPayload)}`
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value) ?? 'null'
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(',')}]`
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, item]) => item !== undefined)
+    .sort(([left], [right]) => left === right ? 0 : left < right ? -1 : 1)
+  return `{${entries
+    .map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`)
+    .join(',')}}`
+}
+
+function semanticHash(value: string): string {
+  return [0x811c9dc5, 0x9e3779b9, 0x85ebca6b, 0xc2b2ae35]
+    .map((seed) => {
+      let hash = seed
+      for (let index = 0; index < value.length; index += 1) {
+        hash = Math.imul(hash ^ value.charCodeAt(index), 0x01000193)
+      }
+      hash ^= hash >>> 16
+      return (hash >>> 0).toString(16).padStart(8, '0')
+    })
+    .join('')
 }

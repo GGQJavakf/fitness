@@ -2,16 +2,13 @@ import { Button, Text, View } from '@tarojs/components'
 import { useEffect, useRef, useState } from 'react'
 
 import type { components } from '../../../infrastructure/api/schema.generated'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
+import { getProgressApplication } from '../../../platform/weapp/featureRoots/progressCompositionRoot'
 import { evidenceFieldDisplayName, evidenceRows, evidenceValueDisplayName } from '../../copy'
-
-import './index.scss'
 
 type Conflict = components['schemas']['SyncConflictData']
 type Resolution = components['schemas']['ResolveSyncConflictRequest']['resolution']
-const application = getWeappApplication()
-
 export default function SyncConflictsPage() {
+  const application = getProgressApplication()
   const [items, setItems] = useState<Conflict[]>([])
   const [message, setMessage] = useState('正在检查训练记录…')
   const [busyId, setBusyId] = useState('')
@@ -26,15 +23,7 @@ export default function SyncConflictsPage() {
     const requestId = ++reloadRequestIdRef.current
     setLoading(true)
     try {
-      const remembered = await application.workouts.pendingConflictResolutions()
-      for (const intent of remembered) {
-        const result = await application.resolveSyncConflict(intent.conflictId, {
-          resolution: intent.resolution,
-          expectedVersion: intent.expectedConflictVersion,
-        })
-        await application.workouts.convergeConflict(result)
-      }
-      const value = await application.listSyncConflicts()
+      const value = await application.reconcileSyncConflicts()
       if (requestId !== reloadRequestIdRef.current) return
       setItems(value)
       setMessage(value.length ? '发现不同版本的训练记录，请选择要保留的内容。' : '所有训练记录都已同步。')
@@ -64,17 +53,12 @@ export default function SyncConflictsPage() {
     setBusyId(conflict.id)
     setMessage('正在保存你的选择…')
     try {
-      await application.workouts.rememberConflictResolution({
+      await application.resolveSyncConflictWithLocalState({
         conflictId: conflict.id,
         clientKey: conflict.entityKey,
         resolution,
         expectedConflictVersion: conflict.version,
       })
-      const result = await application.resolveSyncConflict(
-        conflict.id,
-        { resolution, expectedVersion: conflict.version },
-      )
-      await application.workouts.convergeConflict(result)
       application.telemetry.track('sync_conflict_resolved', {
         resolution: ({ KEEP_LOCAL: 'keep_local', KEEP_SERVER: 'keep_server', KEEP_BOTH: 'keep_both' } as const)[resolution],
       })

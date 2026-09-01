@@ -6,8 +6,14 @@ import {
 } from 'react'
 
 import { recoverWeappHome } from './platform/weapp/appRecovery'
+import { initializeSharedPlatformKernel } from './platform/weapp/sharedPlatformKernel'
+import { recordStartupFailure } from './platform/weapp/startupDiagnostics'
 
 import './app.scss'
+
+// Keep the user-scope and refresh coordinators in the main package so ordinary
+// subpackages share one lightweight platform kernel without pulling in business code.
+initializeSharedPlatformKernel()
 
 interface AppErrorBoundaryState {
   failed: boolean
@@ -28,7 +34,7 @@ class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBoundaryStat
   }
 
   componentDidCatch(): void {
-    // Keep the fallback free of raw exception details and user-scoped data.
+    recordStartupFailure('APP_RENDER', 'RENDER')
   }
 
   private returnHome = (): void => {

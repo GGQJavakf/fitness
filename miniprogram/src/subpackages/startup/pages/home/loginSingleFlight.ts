@@ -1,4 +1,4 @@
-type SingleFlightState = { current: boolean }
+interface SingleFlightState { current: boolean }
 
 export async function runSingleFlight(
   state: SingleFlightState,

@@ -497,6 +497,47 @@
   margin: 0 0 20px;
 }
 
+.session-motion-opt-in {
+  align-items: center;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 18px 20px;
+}
+
+.session-motion-opt-in__title,
+.session-motion-opt-in__description {
+  display: block;
+}
+
+.session-motion-opt-in__title {
+  color: #0b2f28;
+  font-size: 23px;
+  font-weight: 720;
+}
+
+.session-motion-opt-in__description {
+  color: #68776f;
+  font-size: 22px;
+  line-height: 1.5;
+  margin-top: 6px;
+}
+
+.session-motion-guide-toggle {
+  background: #edf7f2;
+  border: 1px solid #c5ddd2;
+  border-radius: 14px;
+  color: #0f6b57;
+  font-size: 22px;
+  margin: 10px 0 0;
+  min-height: 58px;
+  padding: 0 16px;
+}
+
+.session-motion-opt-in .session-motion-guide-toggle {
+  margin: 0;
+}
+
 .session-exercise-guidance {
   margin-top: 10px;
   padding: 18px 20px;
@@ -647,7 +688,7 @@
 }
 
 .rest-controls {
-  margin-top: -54px;
+  margin-top: 0;
   border-color: transparent;
 }
 
@@ -718,5 +759,13 @@
 
   .session-exercise-coaching {
     grid-template-columns: 1fr;
+  }
+
+  .session-motion-opt-in {
+    grid-template-columns: 1fr;
+  }
+
+  .session-motion-opt-in .session-motion-guide-toggle {
+    width: 100%;
   }
 }

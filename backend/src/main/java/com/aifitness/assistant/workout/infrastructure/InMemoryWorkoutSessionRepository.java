@@ -118,5 +118,23 @@ public final class InMemoryWorkoutSessionRepository implements WorkoutSessionRep
                 .toList();
     }
 
+    synchronized Snapshot snapshot() {
+        return new Snapshot(new HashMap<>(sessions), new HashMap<>(keys));
+    }
+
+    synchronized void restore(Snapshot snapshot) {
+        sessions.clear();
+        sessions.putAll(snapshot.sessions());
+        keys.clear();
+        keys.putAll(snapshot.keys());
+    }
+
+    record Snapshot(Map<UUID, WorkoutSession> sessions, Map<UserKey, UUID> keys) {
+        Snapshot {
+            sessions = Map.copyOf(sessions);
+            keys = Map.copyOf(keys);
+        }
+    }
+
     private record UserKey(UUID userId, String clientSessionKey) {}
 }

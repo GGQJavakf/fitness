@@ -132,6 +132,238 @@ class ValidatedConfigValidationTest {
     }
 
     @Test
+    void authoritativePersonaPresetsDeclareExperienceGoalAndPrimarySources() throws IOException {
+        JsonNode document = readValidated("plan-presets-v1.json");
+        Set<String> sourceReferences = new HashSet<>();
+        document.at("/metadata/sourceReferences").forEach(source -> sourceReferences.add(source.asText()));
+        Map<String, JsonNode> presets = new java.util.LinkedHashMap<>();
+        document.path("presets").forEach(preset -> presets.put(preset.path("code").asText(), preset));
+
+        assertThat(sourceReferences).contains(
+                "https://pubmed.ncbi.nlm.nih.gov/41843416/",
+                "https://pubmed.ncbi.nlm.nih.gov/39277776/",
+                "https://www.cdc.gov/healthy-weight-growth/physical-activity/",
+                "https://odphp.health.gov/sites/default/files/2019-09/Physical_Activity_Guidelines_2nd_edition.pdf");
+        assertThat(presets.keySet()).contains(
+                "INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1",
+                "BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1",
+                "BEGINNER_3_DAY_FAT_LOSS_HOME_V1",
+                "BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1");
+        assertThat(presets.get("BEGINNER_3_DAY_FAT_LOSS_HOME_V1").path("goal").asText())
+                .isEqualTo("FAT_LOSS");
+        assertThat(presets.get("BEGINNER_3_DAY_FAT_LOSS_HOME_V1").path("experience").asText())
+                .isEqualTo("BEGINNER");
+        assertThat(presets.get("BEGINNER_3_DAY_FAT_LOSS_HOME_V1").path("trainingSplit").asText())
+                .isEqualTo("FULL_BODY");
+        assertThat(presets.get("BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1")
+                .path("trainingSplit").asText()).isEqualTo("FULL_BODY");
+        assertThat(document.path("presets")).allSatisfy(preset ->
+                assertThat(preset.hasNonNull("trainingSplit")).isTrue());
+    }
+
+    @Test
+    void presetProvenanceSchemaRequiresUniqueSourcesAndHonestProfessionalReviewStatus()
+            throws IOException {
+        JsonNode valid = readValidated("plan-presets-v1.json");
+
+        assertInvalid("plan-preset.schema.json", without(valid, "/metadata/sources"));
+        assertInvalid("plan-preset.schema.json", without(valid, "/presets/0/sourceIds"));
+        assertInvalid("plan-preset.schema.json", without(valid, "/presets/0/contentStatus"));
+        assertInvalid("plan-preset.schema.json", without(valid, "/presets/0/professionalReviewStatus"));
+
+        JsonNode duplicate = valid.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ArrayNode) duplicate.at("/presets/1/sourceIds"))
+                .add("ACSM_RT_POSITION_2026");
+        assertInvalid("plan-preset.schema.json", duplicate);
+
+        JsonNode pendingWithReview = valid.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) pendingWithReview.at("/presets/0"))
+                .put("reviewRecordId", "review-001")
+                .put("reviewedAt", "2026-08-31T00:00:00Z");
+        assertInvalid("plan-preset.schema.json", pendingWithReview);
+
+        JsonNode approvedWithoutRecord = withText(
+                valid, "/presets/0/professionalReviewStatus", "APPROVED");
+        assertInvalid("plan-preset.schema.json", approvedWithoutRecord);
+
+        JsonNode approved = approvedWithoutRecord.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) approved.at("/presets/0"))
+                .put("reviewRecordId", "review-001")
+                .put("reviewedAt", "2026-08-31T00:00:00Z");
+        assertThat(validate("plan-preset.schema.json", approved)).isEmpty();
+
+        JsonNode publicWithoutProfessionalApproval = withText(
+                valid, "/presets/0/contentStatus", "PUBLIC_RELEASE_APPROVED");
+        assertInvalid("plan-preset.schema.json", publicWithoutProfessionalApproval);
+    }
+
+    @Test
+    void everyPresetExerciseResolvesToAnActiveVersionedExercise() throws IOException {
+        JsonNode presetsDocument = readValidated("plan-presets-v1.json");
+        JsonNode exercisesDocument = readValidated("exercises-v1.json");
+        Set<String> activeExerciseCodes = new HashSet<>();
+        exercisesDocument.path("exercises").forEach(exercise -> {
+            if (exercise.path("active").asBoolean(false)) {
+                activeExerciseCodes.add(exercise.path("code").asText());
+            }
+        });
+
+        presetsDocument.path("presets").forEach(preset ->
+                preset.path("days").forEach(day ->
+                        day.path("exercises").forEach(exercise ->
+                                assertThat(activeExerciseCodes)
+                                        .as("preset %s day %s exercise %s",
+                                                preset.path("code").asText(),
+                                                day.path("code").asText(),
+                                                exercise.path("exerciseCode").asText())
+                                        .contains(exercise.path("exerciseCode").asText()))));
+    }
+
+    @Test
+    void personaPresetsRespectExperienceAndHomeEquipmentBoundaries() throws IOException {
+        JsonNode presetsDocument = readValidated("plan-presets-v1.json");
+        JsonNode exercisesDocument = readValidated("exercises-v1.json");
+        Map<String, JsonNode> exercises = new java.util.LinkedHashMap<>();
+        exercisesDocument.path("exercises").forEach(exercise ->
+                exercises.put(exercise.path("code").asText(), exercise));
+        Map<String, Integer> experienceRanks = Map.of(
+                "BEGINNER", 1,
+                "INTERMEDIATE", 2,
+                "ADVANCED", 3);
+
+        presetsDocument.path("presets").forEach(preset ->
+                preset.path("days").forEach(day ->
+                        day.path("exercises").forEach(slot -> {
+                            JsonNode exercise = exercises.get(slot.path("exerciseCode").asText());
+                            assertThat(experienceRanks.get(exercise.path("difficulty").asText()))
+                                    .as("preset %s exercise %s difficulty",
+                                            preset.path("code").asText(),
+                                            exercise.path("code").asText())
+                                    .isLessThanOrEqualTo(experienceRanks.get(
+                                            preset.path("experience").asText()));
+                            if ("HOME".equals(preset.path("location").asText())) {
+                                assertThat(StreamSupport.stream(
+                                                exercise.path("equipment").spliterator(), false)
+                                        .map(JsonNode::asText))
+                                        .as("home preset %s exercise %s equipment",
+                                                preset.path("code").asText(),
+                                                exercise.path("code").asText())
+                                        .containsOnly("BODYWEIGHT");
+                            }
+                        })));
+    }
+
+    @Test
+    void everyAuthoritativePersonaPresetDayFitsItsDeclaredAndProfileSessionDuration() throws IOException {
+        JsonNode presets = readValidated("plan-presets-v1.json").path("presets");
+        Set<String> authoritativePersonaPresetCodes = Set.of(
+                "INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1",
+                "BEGINNER_3_DAY_HYPERTROPHY_GYM_LOWER_FOCUS_V1",
+                "BEGINNER_3_DAY_FAT_LOSS_HOME_V1",
+                "BEGINNER_4_DAY_FAT_LOSS_HOME_LOW_IMPACT_V1");
+        JsonNode duration = readValidated("rule-config-v1.json").at("/parameters/duration");
+        int secondsPerWorkSet = duration.path("secondsPerWorkSet").asInt();
+        int secondsPerWarmupSet = duration.path("secondsPerWarmupSet").asInt();
+        int secondsPerTransition = duration.path("secondsPerExerciseTransition").asInt();
+        int generalWarmupSeconds = duration.path("generalWarmupSeconds").asInt();
+        int rampWarmupSets = duration.path("rampWarmupSetsPerSession").asInt();
+
+        presets.forEach(preset -> {
+            if (!authoritativePersonaPresetCodes.contains(preset.path("code").asText())) {
+                return;
+            }
+            preset.path("days").forEach(day -> {
+            boolean loadedExercisePresent = StreamSupport.stream(
+                            day.path("exercises").spliterator(), false)
+                    .anyMatch(exercise -> !"BODYWEIGHT".equals(exercise.path("weightStatus").asText()));
+            int warmupSeconds = generalWarmupSeconds
+                    + (loadedExercisePresent ? rampWarmupSets * secondsPerWarmupSet : 0);
+            int calculatedSeconds = warmupSeconds
+                    + estimatedSeconds(day, secondsPerWorkSet, secondsPerTransition);
+            int declaredMaximumSeconds = day.at("/estimatedMinutes/max").asInt() * 60;
+            int profileMaximumSeconds = preset.path("sessionMinutes").asInt() * 60;
+            String description = preset.path("code").asText() + "/" + day.path("code").asText();
+
+            assertThat(calculatedSeconds)
+                    .as(description + " calculated duration must fit declared maximum")
+                    .isLessThanOrEqualTo(declaredMaximumSeconds);
+            assertThat(calculatedSeconds)
+                    .as(description + " calculated duration must fit profile session limit")
+                    .isLessThanOrEqualTo(profileMaximumSeconds);
+            assertThat(declaredMaximumSeconds)
+                    .as(description + " declared maximum must fit profile session limit")
+                    .isLessThanOrEqualTo(profileMaximumSeconds);
+            });
+        });
+    }
+
+    @Test
+    void everyPresetDeclaresAMaximumWithinItsProfileSessionDuration() throws IOException {
+        readValidated("plan-presets-v1.json").path("presets").forEach(preset ->
+                preset.path("days").forEach(day -> assertThat(day.at("/estimatedMinutes/max").asInt())
+                        .as(preset.path("code").asText() + "/" + day.path("code").asText())
+                        .isLessThanOrEqualTo(preset.path("sessionMinutes").asInt())));
+    }
+
+    @Test
+    void onlyTheFourDayBodyweightTemplateDeclaresTheDedicatedUpperFocus() throws IOException {
+        JsonNode templates = readValidated("plan-templates-v1.json").path("templates");
+        JsonNode fourDay = StreamSupport.stream(templates.spliterator(), false)
+                .filter(template -> "BODYWEIGHT_4_DAY_V1".equals(template.path("code").asText()))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(StreamSupport.stream(fourDay.path("days").spliterator(), false)
+                .map(day -> day.path("focus").asText())
+                .toList())
+                .containsExactly("LOWER", "BODYWEIGHT_UPPER", "LOWER", "BODYWEIGHT_UPPER");
+        assertThat(StreamSupport.stream(templates.spliterator(), false)
+                .filter(template -> !"BODYWEIGHT_4_DAY_V1".equals(template.path("code").asText()))
+                .flatMap(template -> StreamSupport.stream(template.path("days").spliterator(), false))
+                .map(day -> day.path("focus").asText())
+                .filter("BODYWEIGHT_UPPER"::equals))
+                .isEmpty();
+    }
+
+    @Test
+    void intermediateFourDayPresetKeepsReviewedVolumeWithoutClaimingAnExactPerMuscleTarget()
+            throws IOException {
+        JsonNode presetsDocument = readValidated("plan-presets-v1.json");
+        JsonNode exercisesDocument = readValidated("exercises-v1.json");
+        JsonNode preset = StreamSupport.stream(presetsDocument.path("presets").spliterator(), false)
+                .filter(candidate -> "INTERMEDIATE_4_DAY_HYPERTROPHY_GYM_V1"
+                        .equals(candidate.path("code").asText()))
+                .findFirst()
+                .orElseThrow();
+        Map<String, JsonNode> exercises = new java.util.LinkedHashMap<>();
+        exercisesDocument.path("exercises").forEach(exercise ->
+                exercises.put(exercise.path("code").asText(), exercise));
+        Map<String, Integer> weeklySetsByPrimaryMuscle = new java.util.LinkedHashMap<>();
+
+        preset.path("days").forEach(day -> day.path("exercises").forEach(slot -> {
+            JsonNode exercise = exercises.get(slot.path("exerciseCode").asText());
+            int workSets = slot.path("workSets").asInt();
+            exercise.path("primaryMuscles").forEach(muscle ->
+                    weeklySetsByPrimaryMuscle.merge(muscle.asText(), workSets, Integer::sum));
+        }));
+
+        assertThat(weeklySetsByPrimaryMuscle)
+                .containsEntry("CHEST", 8)
+                .containsEntry("BACK", 8)
+                .containsEntry("LATS", 6)
+                .containsEntry("QUADRICEPS", 11)
+                .containsEntry("HAMSTRINGS", 7);
+        String executionRules = StreamSupport.stream(
+                        preset.path("executionRules").spliterator(), false)
+                .map(JsonNode::asText)
+                .collect(java.util.stream.Collectors.joining("，"));
+        assertThat(executionRules)
+                .contains("主要肌群分散为每周两次刺激")
+                .doesNotContain("10 组/肌群/周")
+                .doesNotContain("每个主要肌群每周约 10 个直接工作组");
+    }
+
+    @Test
     void templatesResolveCompletelyAgainstTheVersionedExerciseCatalog() throws IOException {
         JsonNode templatesDocument = readValidated("plan-templates-v1.json");
         JsonNode exercisesDocument = readValidated("exercises-v1.json");
@@ -139,7 +371,7 @@ class ValidatedConfigValidationTest {
         exercisesDocument.path("exercises").forEach(exercise -> exerciseCodes.add(exercise.path("code").asText()));
 
         assertThat(templatesDocument.path("metadata").path("ruleVersion").asText()).isEqualTo("1.6.0");
-        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.8.0");
+        assertThat(templatesDocument.path("metadata").path("contentVersion").asText()).isEqualTo("1.9.0");
         templatesDocument.path("templates").forEach(template -> {
             assertThat(template.path("days")).hasSize(template.path("sessionsPerWeek").asInt());
             template.path("days").forEach(day -> day.path("exercises").forEach(slot ->

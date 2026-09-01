@@ -214,6 +214,29 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
         '409': {$ref: '#/components/responses/VersionConflict'}
         default: {$ref: '#/components/responses/DefaultError'}
+  /api/v1/plans/candidate-commits:
+    post:
+      tags: [Plans]
+      operationId: commitPlanCandidate
+      description: 将候选编辑结果直接创建为唯一的新活动版本；首次提交创建 v1，已有活动计划时创建 N+1，中间状态不可见。
+      parameters:
+        - {$ref: './schemas/common.yaml#/components/parameters/IdempotencyKey'}
+      requestBody: {$ref: '#/components/requestBodies/PlanCandidateCommit'}
+      responses:
+        '200':
+          description: 存在警告，必须以同一 Idempotency-Key 携带 warningConfirmationToken 再次确认
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
+        '201':
+          description: 候选编辑结果已原子创建并切换为活动版本
+          content:
+            application/json:
+              schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanVersionResultResponse'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '409': {$ref: '#/components/responses/VersionConflict'}
+        default: {$ref: '#/components/responses/DefaultError'}
   /api/v1/plans/presets:
     get:
       tags: [Plans]
@@ -866,6 +889,7 @@ components:
     EquipmentUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/UpdateEquipmentRequest'}}}}
     PreferencesUpdate: {required: true, content: {application/json: {schema: {$ref: './schemas/profile.yaml#/components/schemas/UpdatePreferencesRequest'}}}}
     PlanCandidates: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/PlanCandidateRequest'}}}}
+    PlanCandidateCommit: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/CandidateCommitRequest'}}}}
     PlanValidation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/ValidatePlanRequest'}}}}
     PlanCreation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/CreatePlanRequest'}}}}
     PlanVersionCreation: {required: true, content: {application/json: {schema: {$ref: './schemas/plan.yaml#/components/schemas/CreatePlanVersionRequest'}}}}

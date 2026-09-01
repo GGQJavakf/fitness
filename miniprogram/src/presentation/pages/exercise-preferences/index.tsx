@@ -3,13 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ExerciseContent } from '../../../application/content'
 import type { ExercisePreference } from '../../../application/models'
-import { getWeappApplication } from '../../../platform/weapp/compositionRoot'
-
-import './index.scss'
-
-const application = getWeappApplication()
+import { getAccountApplication } from '../../../platform/weapp/featureRoots/accountCompositionRoot'
 
 export default function ExercisePreferencesPage() {
+  const application = getAccountApplication()
   const [exercises, setExercises] = useState<readonly ExerciseContent[]>([])
   const [preferences, setPreferences] = useState<readonly ExercisePreference[]>([])
   const [version, setVersion] = useState(0)

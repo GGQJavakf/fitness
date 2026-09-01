@@ -187,7 +187,10 @@ describe('P0 onboarding flow', () => {
         candidateId: 'candidate-1',
         plan: {
           templateCode: 'full-body',
+          trainingSplit: 'PUSH_PULL_LEGS',
           name: '全身训练',
+          executionRules: ['动作按计划顺序完成。'],
+          progressionRules: ['达到目标次数后再增加重量。'],
           days: [{
             code: 'day-a',
             name: '训练日 A',
@@ -223,6 +226,10 @@ describe('P0 onboarding flow', () => {
 
     expect(degraded.canContinue).toBe(true)
     expect(degraded.generationLabel).toBe('规则生成计划 · 已通过安全校验')
+    expect(degraded.name).toBe('全身训练')
+    expect(degraded.trainingSplit).toBe('PUSH_PULL_LEGS')
+    expect(degraded.executionRules).toEqual(['动作按计划顺序完成。'])
+    expect(degraded.progressionRules).toEqual(['达到目标次数后再增加重量。'])
     expect(degraded.explanationMessage).toBe('已按你的资料、训练目标和可用器械生成规则计划。')
     expect(degraded.notices).toEqual([
       expect.stringContaining('充分恢复'),
@@ -240,10 +247,10 @@ describe('P0 onboarding flow', () => {
     })
     expect(noCandidate.canContinue).toBe(false)
     expect(noCandidate.action).toEqual({
-      label: '返回调整器械或排除设置',
+      label: '返回调整训练条件',
       route: 'ONBOARDING_EQUIPMENT',
     })
-    expect(noCandidate.reason).toBe('当前器械或动作排除设置无法组成安全计划，请调整后重试。')
+    expect(noCandidate.reason).toBe('当前场地、器械和训练频率暂无可执行的安全计划，请调整训练条件后重试。')
 
     const insufficientRecovery = buildCandidateViewModel({
       status: 'NO_CANDIDATE',
@@ -269,7 +276,20 @@ describe('P0 onboarding flow', () => {
       }],
       lockedFieldOutcomes: {},
     })
-    expect(insufficientExercises.reason).toContain('安全动作不足以组成完整训练')
+    expect(insufficientExercises.reason).toBe('当前可用器械对应的安全动作不足以组成完整训练，请补充器械或调整训练条件后重试。')
+
+    const presetProfileMismatch = buildCandidateViewModel({
+      status: 'NO_CANDIDATE',
+      validationIssues: [{
+        severity: 'ERROR',
+        reasonCode: 'PRESET_PROFILE_MISMATCH',
+        fieldPath: '/presetCode',
+      }],
+      lockedFieldOutcomes: {},
+    })
+    expect(presetProfileMismatch.reason).toBe(
+      '该系统预设与当前档案不匹配，请按预设标注调整训练经验、目标、每周训练天数、场地和单次时长后重试。',
+    )
   })
 
   it('resumes a recovery NO_CANDIDATE at schedule without dropping the submitted draft', async () => {
@@ -295,6 +315,7 @@ describe('P0 onboarding flow', () => {
       validatePlan: vi.fn(),
       createInitialPlan: vi.fn(),
       getActivePlan: vi.fn(),
+      commitCandidate: vi.fn(),
       createPlanVersion: vi.fn(),
       previewRebalance: vi.fn(),
     })
@@ -367,6 +388,47 @@ describe('P0 startup and WeChat session', () => {
       sessionStore,
       vi.fn(),
     )).not.toThrow()
+    expect(() => new FitnessApiClient(
+      'ftp://api.example.com',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).toThrow('http or https')
+    expect(() => new FitnessApiClient(
+      'https://user:secret@api.example.com',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).toThrow('http or https')
+    expect(() => new FitnessApiClient(
+      'https://api.example.com:70000',
+      transport,
+      sessionStore,
+      vi.fn(),
+    )).toThrow('http or https')
+  })
+
+  it('constructs the API client when the WeChat runtime has no browser URL global', () => {
+    const transport = { request: vi.fn() }
+    const sessionStore = { load: vi.fn(), save: vi.fn(), clear: vi.fn() }
+    const urlDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'URL')
+    Object.defineProperty(globalThis, 'URL', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    })
+
+    try {
+      expect(() => new FitnessApiClient(
+        'https://api.example.com',
+        transport,
+        sessionStore,
+        vi.fn(),
+      )).not.toThrow()
+    } finally {
+      if (urlDescriptor) Object.defineProperty(globalThis, 'URL', urlDescriptor)
+      else Reflect.deleteProperty(globalThis, 'URL')
+    }
   })
 
   it('restores a session and navigates incomplete profiles through the application use case', async () => {
@@ -450,7 +512,7 @@ describe('P0 startup and WeChat session', () => {
     expect(save).not.toHaveBeenCalledWith(expect.stringContaining('temporary-wechat-code'))
   })
 
-  it('checks local-data activation before issuing a remote session and rolls back failed login', async () => {
+  it('keeps local data locked until remote login succeeds and rolls back failed login', async () => {
     const activate = vi.fn()
     const purge = vi.fn().mockResolvedValue(undefined)
     const login = vi.fn().mockRejectedValue(new Error('remote login failed'))
@@ -467,8 +529,8 @@ describe('P0 startup and WeChat session', () => {
 
     await expect(createStartupUseCases(ports).login()).rejects.toThrow('remote login failed')
 
-    expect(activate).toHaveBeenCalledOnce()
-    expect(activate.mock.invocationCallOrder[0]).toBeLessThan(login.mock.invocationCallOrder[0])
+    expect(login).toHaveBeenCalledOnce()
+    expect(activate).not.toHaveBeenCalled()
     expect(purge).toHaveBeenCalledWith('LOGIN_ROLLBACK')
     expect(ports.sessionStore.save).not.toHaveBeenCalled()
   })
@@ -477,7 +539,11 @@ describe('P0 startup and WeChat session', () => {
     const login = vi.fn()
     const blocked = new Error('local storage blocked')
     const ports: StartupPorts = {
-      sessionStore: { load: vi.fn(), save: vi.fn(), clear: vi.fn() },
+      sessionStore: {
+        load: vi.fn().mockRejectedValue(blocked),
+        save: vi.fn(),
+        clear: vi.fn(),
+      },
       wechatLogin: { getCode: vi.fn().mockResolvedValue('temporary-wechat-code') },
       auth: { login },
       workout: { hasActive: vi.fn() },
@@ -485,13 +551,14 @@ describe('P0 startup and WeChat session', () => {
       plan: { hasActivePlan: vi.fn() },
       navigation: { replace: vi.fn() },
       localUserData: {
-        activate: vi.fn(() => { throw blocked }),
-        purge: vi.fn(),
+        activate: vi.fn(),
+        purge: vi.fn().mockRejectedValue(blocked),
       },
     }
 
     await expect(createStartupUseCases(ports).login()).rejects.toBe(blocked)
     expect(login).not.toHaveBeenCalled()
+    expect(ports.localUserData?.activate).not.toHaveBeenCalled()
   })
 
   it('resumes an active local workout before requesting remote profile or plan state', async () => {
@@ -524,7 +591,7 @@ describe('P0 startup and WeChat session', () => {
 
   it('clears expired sessions, returns to login, and never exposes the server message', async () => {
     const clear = vi.fn()
-    const authenticationExpired = vi.fn()
+    const authenticationExpired = vi.fn(async () => clear())
     const client = new FitnessApiClient(
       'http://127.0.0.1:8080',
       {
